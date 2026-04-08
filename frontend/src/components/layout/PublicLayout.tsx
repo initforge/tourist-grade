@@ -1,0 +1,141 @@
+import React from 'react';
+import { Outlet, Link, useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../../store/useAuthStore';
+
+const roleRedirects: Record<string, string> = {
+  admin: '/admin',
+  manager: '/manager',
+  coordinator: '/coordinator',
+  sales: '/sales',
+  customer: '/',
+};
+
+export function PublicLayout() {
+  const user = useAuthStore(s => s.user);
+  const isAuthenticated = useAuthStore(s => s.isAuthenticated);
+  const logout = useAuthStore(s => s.logout);
+  const login = useAuthStore(s => s.login);
+  const navigate = useNavigate();
+
+  const handleSetRole = (role: 'admin' | 'manager' | 'coordinator' | 'sales' | 'customer') => {
+    login(role);
+    navigate(roleRedirects[role]);
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-[var(--color-background)]">
+      {/* Top Utility Bar */}
+      <div className="bg-[var(--color-primary)] text-white text-xs py-2 px-8 flex justify-between items-center hidden md:flex">
+        <div className="flex gap-6">
+          <span className="flex items-center gap-2"><span className="material-symbols-outlined text-[14px]">call</span> Hotline: 1900 1234</span>
+          <span className="flex items-center gap-2"><span className="material-symbols-outlined text-[14px]">mail</span> Email: booking@travela.vn</span>
+        </div>
+        <div className="flex gap-4 items-center">
+          <span className="font-sans uppercase tracking-widest font-bold text-[10px] opacity-80 border-r border-white/20 pr-4 mr-0">Tiếng Việt</span>
+
+          {/* Debug Menu: Fast switch roles */}
+          {!isAuthenticated ? (
+            <div className="flex gap-2 text-white/50">
+              <span className="cursor-pointer hover:text-white" onClick={() => handleSetRole('customer')}>[Set: Cus]</span>
+              <span className="cursor-pointer hover:text-white" onClick={() => handleSetRole('sales')}>[Set: Sales]</span>
+              <span className="cursor-pointer hover:text-white" onClick={() => handleSetRole('coordinator')}>[Set: Coord]</span>
+              <span className="cursor-pointer hover:text-white" onClick={() => handleSetRole('manager')}>[Set: Mng]</span>
+              <span className="cursor-pointer hover:text-white" onClick={() => handleSetRole('admin')}>[Set: Admin]</span>
+            </div>
+          ) : (
+             <span className="text-[var(--color-secondary)]">Xin chào, {user?.name} ({user?.role})</span>
+          )}
+        </div>
+      </div>
+
+      {/* Main Navbar */}
+      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-[var(--color-surface)] shadow-sm">
+        <div className="container mx-auto px-6 h-20 flex items-center justify-between">
+          <Link to="/" className="text-2xl font-serif font-semibold tracking-tighter text-[var(--color-tertiary)] flex items-center gap-2">
+            <svg className="w-8 h-8" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 22h20L12 2zm0 3.8L18.4 19H5.6L12 5.8z"/></svg>
+            TRAVELA
+          </Link>
+          
+          <nav className="hidden md:flex gap-8 text-[var(--color-primary)] font-medium text-sm">
+            <Link to="/tours" className="hover:text-[var(--color-tertiary)] transition-colors">Tất Cả Tour</Link>
+            <Link to="/about" className="hover:text-[var(--color-tertiary)] transition-colors">Về Chúng Tôi</Link>
+            <Link to="/blog" className="hover:text-[var(--color-tertiary)] transition-colors">Cẩm Nang</Link>
+            <Link to="/booking/lookup" className="hover:text-[var(--color-secondary)] transition-colors font-semibold">Tra Cứu Đã Đặt</Link>
+          </nav>
+
+          <div className="flex items-center gap-4">
+            {!isAuthenticated ? (
+              <Link to="/login" className="px-5 py-2.5 rounded-full border border-[var(--color-primary)] text-[var(--color-primary)] text-sm font-medium hover:bg-[var(--color-primary)] hover:text-white transition-all">
+                Đăng Nhập
+              </Link>
+            ) : (
+              <div className="flex items-center gap-4">
+                {user?.role !== 'customer' && (
+                  <Link to={roleRedirects[user?.role || 'admin']} className="text-sm font-medium text-[var(--color-tertiary)] hover:underline">
+                    Vào Trang Quản Trị →
+                  </Link>
+                )}
+                {user?.role === 'customer' && (
+                  <div className="flex items-center gap-4 border-r border-[#D0C5AF]/40 pr-4 mr-2">
+                    <Link to="/customer/bookings" className="text-sm font-medium hover:text-[var(--color-tertiary)] transition-colors">Lịch sử Tour</Link>
+                    <Link to="/customer/wishlist" className="text-sm font-medium hover:text-[var(--color-tertiary)] transition-colors">Yêu thích</Link>
+                    <Link to="/customer/profile" className="text-sm font-medium hover:text-[var(--color-tertiary)] transition-colors">Tài khoản</Link>
+                  </div>
+                )}
+                <button onClick={handleLogout} className="text-sm font-medium text-red-500 hover:text-red-700">Đăng Xuất</button>
+                <img src={user?.avatar} alt="avatar" className="w-10 h-10 rounded-full border border-[var(--color-surface)] bg-gray-100" />
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 w-full">
+        <Outlet />
+      </main>
+
+      <footer className="bg-[var(--color-primary)] text-white/70 py-16">
+        <div className="container mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-12">
+          <div>
+            <h3 className="text-2xl font-serif text-white mb-6 flex items-center gap-2">
+               <svg className="w-6 h-6 text-[var(--color-secondary)]" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 22h20L12 2zm0 3.8L18.4 19H5.6L12 5.8z"/></svg>
+               TRAVELA
+            </h3>
+            <p className="text-sm leading-relaxed text-white/60">Trải nghiệm kỳ nghỉ Đông Dương đẳng cấp với dịch vụ cá nhân hóa và sự sang trọng tuyệt đối.</p>
+          </div>
+          <div>
+            <h4 className="text-white font-medium mb-4">Về Chúng Tôi</h4>
+            <ul className="space-y-2 text-sm">
+              <li><Link to="/about" className="hover:text-white transition-colors">Câu chuyện thương hiệu</Link></li>
+              <li><Link to="/about" className="hover:text-white transition-colors">Cam kết chất lượng</Link></li>
+              <li><Link to="/blog" className="hover:text-white transition-colors">Tuyển dụng</Link></li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="text-white font-medium mb-4">Hỗ Trợ</h4>
+            <ul className="space-y-2 text-sm">
+              <li><Link to="/booking/lookup" className="hover:text-[var(--color-secondary)] transition-colors">Tra cứu hóa đơn</Link></li>
+              <li><Link to="/about" className="hover:text-white transition-colors">Chính sách hủy đổi</Link></li>
+              <li><Link to="/about" className="hover:text-white transition-colors">Bảo mật thông tin</Link></li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="text-white font-medium mb-4">Chứng Nhận</h4>
+            <div className="flex gap-4 opacity-50">
+              <div className="w-16 h-8 border border-white/20 flex items-center justify-center text-[10px]">VN-Pay</div>
+              <div className="w-16 h-8 border border-white/20 flex items-center justify-center text-[10px]">IATA</div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-16 pt-8 border-t border-white/10 text-center text-xs text-white/40">
+          © 2026 Travela Luxury. All rights reserved.
+        </div>
+      </footer>
+    </div>
+  );
+}

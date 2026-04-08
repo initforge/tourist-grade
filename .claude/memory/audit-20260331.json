@@ -1,0 +1,210 @@
+{
+  "generated": "2026-03-31",
+  "audits": {
+    "security_audit": {
+      "scope": "src/**/*.ts,src/**/*.tsx",
+      "hardcoded_secrets": [],
+      "xss_patterns": [],
+      "gitignore_issues": [
+        {
+          "file": ".gitignore",
+          "issue": "Missing .env and .env.* entries",
+          "detail": ".gitignore does not contain entries for .env, .env.local, .env.production, or similar environment variable files. If a .env file is created with real credentials during future backend integration, it could be accidentally committed.",
+          "line": null
+        }
+      ],
+      "priority": "P1"
+    },
+    "api_audit": {
+      "scope": "src/**/*.ts,src/**/*.tsx",
+      "findings": [
+        {
+          "type": "no_backend_api",
+          "files_affected": [],
+          "detail": "No backend API layer exists. The project uses mock data exclusively via src/data/*. All API-related references are: (1) api.dicebear.com avatar URLs in mock user data (src/data/users.ts, src/pages/admin/AdminUsers.tsx) — seed-based, no API key required; (2) a single comment in BookingHistory.tsx:16 referencing 'In a real app, this would submit to API'. No fetch, axios, or HTTP client imports found.",
+          "note": "This is expected for the current stage (mock data + frontend). Documented as graduation project tech debt."
+        }
+      ],
+      "priority": "P1"
+    },
+    "dx_audit": {
+      "scope": "src/**/*.ts,src/**/*.tsx",
+      "any_type_count": 0,
+      "any_type_files": [],
+      "missing_returns": [],
+      "empty_catches": [],
+      "console_logs": [],
+      "priority": "P0"
+    },
+    "deploy_audit": {
+      "scope": "project root + frontend/src",
+      "dockerfile": false,
+      "docker_compose": false,
+      "env_example": false,
+      "ci_workflow": false,
+      "hardcoded_urls": [
+        {
+          "pattern": "api.dicebear.com — avatar seeds",
+          "files": ["src/data/users.ts (5 instances)", "src/pages/admin/AdminUsers.tsx (2 instances)"],
+          "severity": "P2 — seed-based, no API key, acceptable for mock data"
+        },
+        {
+          "pattern": "picsum.photos — placeholder tour images",
+          "files": ["src/data/tours.ts (6 instances)"],
+          "severity": "P2 — public placeholder service, acceptable for mock data"
+        },
+        {
+          "pattern": "images.unsplash.com — editorial/stock images",
+          "files": [
+            "src/data/mockData.ts (6 instances)",
+            "src/pages/public/AboutUs.tsx (2 instances)",
+            "src/pages/public/TourList.tsx (6 instances)",
+            "src/pages/public/BookingCheckout.tsx (1 instance)",
+            "src/pages/customer/Wishlist.tsx (2 instances)",
+            "src/pages/customer/Profile.tsx (1 instance)",
+            "src/pages/admin/AdminSuppliers.tsx (4 instances)",
+            "src/pages/public/BlogDetail.tsx (5 instances)",
+            "src/pages/public/Landing.tsx (10 instances)",
+            "src/pages/public/TourDetail.tsx (4 instances)",
+            "src/pages/admin/AdminTourProgramDetail.tsx (2 instances)",
+            "src/pages/admin/AdminTourPrograms.tsx (4 instances)",
+            "src/pages/admin/AdminActiveTours.tsx (3 instances)",
+            "src/data/bookings.ts (1 instance)"
+          ],
+          "severity": "P1 — these are production CDN URLs embedded in source; for a graduation demo this is acceptable, but a real deployment needs an image CDN config via env var"
+        }
+      ],
+      "hardcoded_ports": [],
+      "notes": [
+        "No backend = no real API to hardcode (mock data only).",
+        "All external URLs are public CDN image assets (unsplash, picsum, dicebear) — acceptable for frontend-only mock stage.",
+        "No localhost:3000 or 127.0.0.1:8080 patterns found in source."
+      ],
+      "priority": "P1"
+    },
+    "dead_code_audit": {
+      "scope": "frontend/src/**/*.ts,frontend/src/**/*.tsx",
+      "total_files_scanned": 48,
+      "orphans": [],
+      "stale_files": [],
+      "files_with_duplicate_local_utils": [
+        {
+          "file": "src/pages/admin/BookingManagement.tsx",
+          "line": 49,
+          "detail": "Local `formatDate()` duplicates `utils.ts formatDate()`. Migrate to `import { formatDate } from '@/lib/utils'`."
+        },
+        {
+          "file": "src/pages/admin/SalesBookingDetail.tsx",
+          "line": 32,
+          "detail": "Local `formatDate()` duplicates `utils.ts formatDate()`. Migrate to `import { formatDate } from '@/lib/utils'`."
+        }
+      ],
+      "notes": [
+        "All 48 source files are imported or used by App.tsx router. Zero orphaned files.",
+        "No file exceeds 300 days since last write (oldest = 5 days, tours.ts + utils.ts + useAuthStore.ts + main.tsx).",
+        "src/assets/vite.svg is referenced in index.html (not in src grep scope) — not orphaned.",
+        "src/lib/utils.ts is used internally by BookingManagement.tsx and SalesBookingDetail.tsx (self + internal use).",
+        "Duplicate local formatDate() in two admin pages — candidates for P2 cleanup."
+      ],
+      "priority": "P2 — zero orphans, duplicate local util functions worth cleaning up"
+    },
+    "file_audit": {
+      "scope": "frontend/src/**/*.ts,frontend/src/**/*.tsx",
+      "total_files": 51,
+      "files_gt_300l": [
+        {
+          "path": "src/pages/admin/SalesBookingDetail.tsx",
+          "lines": 419,
+          "priority": "P1",
+          "note": "Known P2 tech debt in CLAUDE.md — candidate for sub-component extraction"
+        },
+        {
+          "path": "src/pages/admin/AdminTourProgramWizard.tsx",
+          "lines": 352,
+          "priority": "P1",
+          "note": "Known P2 tech debt in CLAUDE.md — multi-step form candidate for sub-component extraction"
+        },
+        {
+          "path": "src/pages/admin/AdminSuppliers.tsx",
+          "lines": 307,
+          "priority": "P1"
+        }
+      ],
+      "files_gt_1000l": [],
+      "empty_dirs": [],
+      "duplicates": [],
+      "orphans": [],
+      "notes": [
+        "No empty directories in src/",
+        "No duplicate filenames across different directories",
+        "No orphaned files — all 51 source files are reachable via App.tsx router"
+      ]
+    },
+    "tech_audit": {
+      "scope": "package.json vs src/ imports",
+      "unused_deps": [
+        {
+          "package": "lucide-react",
+          "version": "^1.7.0",
+          "priority": "P1",
+          "reason": "Zero import occurrences across all src/ files. All icon work uses @ant-design/icons instead."
+        },
+        {
+          "package": "framer-motion",
+          "version": "^12.38.0",
+          "priority": "P1",
+          "reason": "Zero import occurrences. motion. directive not used anywhere. Removing this alone should materially reduce the 924 KB bundle."
+        }
+      ],
+      "dep_lt_3_uses": [
+        {
+          "package": "@ant-design/icons",
+          "version": "^6.1.0",
+          "priority": "P1",
+          "uses": 0,
+          "reason": "Never imported directly — antd icons are accessed through the antd package (e.g. antd Button, antd Table). No '@ant-design/icons' import string found in any src/ file."
+        },
+        {
+          "package": "clsx",
+          "version": "^2.1.1",
+          "priority": "P1",
+          "uses": 1,
+          "reason": "Only used inside src/lib/utils.ts (cn() function). Used exactly once."
+        },
+        {
+          "package": "tailwind-merge",
+          "version": "^3.5.0",
+          "priority": "P1",
+          "uses": 1,
+          "reason": "Only used inside src/lib/utils.ts (cn() function). Both clsx and tailwind-merge serve the same single-purpose cn() function."
+        }
+      ],
+      "outdated_major": [],
+      "peer_dep_warnings": [
+        {
+          "package": "recharts",
+          "version": "^3.8.1",
+          "priority": "P2",
+          "detail": "recharts@3.x may have a peer dep on react@^18.x. Project uses react@^19.2.4. Worth verifying after backend landing when npm install --legacy-peer-deps can be tested."
+        }
+      ],
+      "issues": [
+        {
+          "type": "clsx_tailwind_merge_duplication",
+          "priority": "P1",
+          "detail": "clsx and tailwind-merge both installed, both only used in src/lib/utils.ts cn(). In a Tailwind v4 project (no @apply), clsx alone is sufficient. tailwind-merge is only needed when merging Tailwind @apply rules. Consolidate to clsx-only to remove one dependency."
+        },
+        {
+          "type": "bundle_size",
+          "priority": "P1",
+          "detail": "924 KB JS bundle (CLAUDE.md tech debt #4). framer-motion (~60 KB gzipped) and lucide-react (~20 KB gzipped) are both unused and can be removed immediately. These two alone should save ~80 KB gzipped."
+        },
+        {
+          "type": "peer_dep_unverified",
+          "priority": "P2",
+          "detail": "Cannot verify peer dep conflicts without running npm install. Recommended: npm install --legacy-peer-deps after backend landing to surface any react@19 vs recharts/react@18 conflicts."
+        }
+      ]
+    }
+  }
+}
