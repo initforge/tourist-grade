@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Pagination, Modal, Checkbox, DatePicker, Button } from 'antd';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
@@ -7,10 +7,10 @@ import { mockBookings, type Booking } from '../../data/bookings';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type BookingTab = 'pending_confirm' | 'confirmed' | 'completed' | 'cancelled';
+type BookingTab = 'pending_confirm' | 'booked' | 'confirmed' | 'completed' | 'cancelled';
 type ConfirmSubFilter = 'all' | 'pending_book' | 'pending_cancel';
 type RefundSubFilter = 'all' | 'pending' | 'refunded' | 'not_required';
-type ExportReportType = 'all' | 'pending_confirm' | 'confirmed' | 'completed' | 'cancelled';
+type ExportReportType = 'all' | 'pending_confirm' | 'booked' | 'confirmed' | 'completed' | 'cancelled';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -18,13 +18,14 @@ const PAGE_SIZE = 10;
 
 const TABS: { key: BookingTab; label: string; icon: string }[] = [
   { key: 'pending_confirm', label: 'Cần xác nhận', icon: 'pending_actions' },
-  { key: 'confirmed',      label: 'Đã xác nhận',  icon: 'check_circle' },
+  { key: 'booked',          label: 'Đã đặt',       icon: 'check_circle' },
+  { key: 'confirmed',      label: 'Đã xác nhận',  icon: 'verified' },
   { key: 'completed',     label: 'Hoàn thành',    icon: 'task_alt' },
   { key: 'cancelled',     label: 'Đã hủy',        icon: 'cancel' },
 ];
 
 const CONFIRM_SUB_FILTERS: { key: ConfirmSubFilter; label: string }[] = [
-  { key: 'all',           label: 'Tất cả' },
+  { key: 'all',            label: 'Tất cả' },
   { key: 'pending_book',  label: 'Cần xác nhận đơn đặt' },
   { key: 'pending_cancel', label: 'Cần xác nhận hủy' },
 ];
@@ -36,11 +37,11 @@ const REFUND_SUB_FILTERS: { key: RefundSubFilter; label: string }[] = [
   { key: 'not_required', label: 'Không cần hoàn' },
 ];
 
-// Label & style for paymentStatus (50% = partial, 100% = paid)
+// Label & style for paymentStatus (partial = 50%, paid = 100%)
 const PAYMENT_LABEL: Record<string, string> = {
   unpaid:   'Chưa thanh toán',
-  partial:  'Đã cọc',
-  paid:     'Đã thanh toán',
+  partial:  '50%',
+  paid:     '100%',
   refunded: 'Đã hoàn tiền',
 };
 const PAYMENT_STYLE: Record<string, string> = {
@@ -98,7 +99,7 @@ function passengerCount(booking: Booking) {
   const adults   = booking.passengers.filter(p => p.type === 'adult').length;
   const children = booking.passengers.filter(p => p.type === 'child').length;
   const infants  = booking.passengers.filter(p => p.type === 'infant').length;
-  return `${adults} NL / ${children} TE / ${infants} EB`;
+  return `${adults} Người lớn / ${children} Trẻ em / ${infants} Em bé`;
 }
 
 // ── Excel Export Helpers ───────────────────────────────────────────────────────
@@ -156,9 +157,11 @@ function downloadExcel(content: string, filename: string) {
 
 export default function BookingManagement() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  // ── State ────────────────────────────────────────────────────────────────
-  const [activeTab,        setActiveTab]        = useState<BookingTab>('pending_confirm');
+  // ── State — đọc tab từ URL để giữ đúng tab khi back từ detail ──
+  const initialTab = (searchParams.get('tab') as BookingTab) ?? 'pending_confirm';
+  const [activeTab,        setActiveTab]        = useState<BookingTab>(initialTab);
   const [confirmSubFilter, setConfirmSubFilter] = useState<ConfirmSubFilter>('all');
   const [refundSubFilter,  setRefundSubFilter]  = useState<RefundSubFilter>('all');
   const [searchKeyword,   setSearchKeyword]    = useState('');
@@ -183,6 +186,7 @@ export default function BookingManagement() {
   // ── Tab change ────────────────────────────────────────────────────────────
   const handleTabChange = (tab: BookingTab) => {
     setActiveTab(tab);
+    setSearchParams({ tab });
     setCurrentPage(1);
     setConfirmSubFilter('all');
     setRefundSubFilter('all');
@@ -204,10 +208,12 @@ export default function BookingManagement() {
     switch (activeTab) {
       case 'pending_confirm':
         return bookings.filter(b => b.status === 'pending' || b.status === 'pending_cancel');
+      case 'booked':
+        return bookings.filter(b => b.status === 'booked');
       case 'confirmed':
         return bookings.filter(b => b.status === 'confirmed');
       case 'completed':
-        return bookings.filter(b => b.status === 'completed');
+        return bookings.filter(b => b.status === 'completed' && b.paymentStatus === 'paid');
       case 'cancelled':
         return bookings.filter(b => b.status === 'cancelled');
     }
@@ -262,8 +268,9 @@ export default function BookingManagement() {
   // Tab counts
   const tabCounts = useMemo(() => ({
     pending_confirm: bookings.filter(b => b.status === 'pending' || b.status === 'pending_cancel').length,
+    booked:         bookings.filter(b => b.status === 'booked').length,
     confirmed:      bookings.filter(b => b.status === 'confirmed').length,
-    completed:       bookings.filter(b => b.status === 'completed').length,
+    completed:       bookings.filter(b => b.status === 'completed' && b.paymentStatus === 'paid').length,
     cancelled:       bookings.filter(b => b.status === 'cancelled').length,
   }), [bookings]);
 
@@ -288,7 +295,7 @@ export default function BookingManagement() {
       ];
     }
 
-    if (activeTab === 'confirmed') {
+    if (activeTab === 'booked') {
       return [
         ...base,
         { label: 'TT thanh toán',  className: 'w-28 text-center' },
@@ -296,7 +303,7 @@ export default function BookingManagement() {
       ];
     }
 
-    if (activeTab === 'completed') {
+    if (activeTab === 'confirmed' || activeTab === 'completed') {
       return [
         ...base,
         { label: 'TT thanh toán',  className: 'w-28 text-center' },
@@ -335,8 +342,15 @@ export default function BookingManagement() {
     if (!confirmModal.booking) return;
     setBookings(prev => prev.map(b => {
       if (b.id !== confirmModal.booking!.id) return b;
-      if (b.status === 'pending') return { ...b, status: 'confirmed' as const };
-      if (b.status === 'pending_cancel') return { ...b, status: 'cancelled' as const };
+      if (b.status === 'pending') return { ...b, status: 'booked' as const };
+      if (b.status === 'pending_cancel') {
+        return {
+          ...b,
+          status: 'cancelled' as const,
+          refundStatus: 'pending' as const,
+          paymentStatus: 'refunded' as const,
+        };
+      }
       return b;
     }));
     setConfirmModal({ open: false, booking: null });
@@ -350,7 +364,7 @@ export default function BookingManagement() {
         return { ...b, status: 'cancelled' as const, cancellationReason: reason };
       }
       if (b.status === 'pending_cancel') {
-        return { ...b, status: 'confirmed' as const };
+        return { ...b, status: 'booked' as const };
       }
       return b;
     }));
@@ -363,6 +377,7 @@ export default function BookingManagement() {
       const rows = bookings.filter(b => {
         switch (type) {
           case 'pending_confirm': return b.status === 'pending' || b.status === 'pending_cancel';
+          case 'booked':          return b.status === 'booked';
           case 'confirmed':       return b.status === 'confirmed';
           case 'completed':      return b.status === 'completed';
           case 'cancelled':      return b.status === 'cancelled';
@@ -370,6 +385,7 @@ export default function BookingManagement() {
         }
       });
       const tab: BookingTab = type === 'pending_confirm' ? 'pending_confirm'
+        : type === 'booked' ? 'booked'
         : type === 'confirmed' ? 'confirmed'
         : type === 'completed' ? 'completed'
         : 'cancelled';
@@ -532,7 +548,7 @@ export default function BookingManagement() {
               ) : paginated.map(booking => (
                 <tr
                   key={booking.id}
-                  onClick={() => navigate(`/sales/bookings/${booking.id}`)}
+                  onClick={() => navigate(`/sales/bookings/${booking.id}?tab=${activeTab}`)}
                   className="hover:bg-[#FAFAF5] transition-colors cursor-pointer border-l-2 border-transparent hover:border-[#D4AF37]"
                 >
                   {/* Mã đơn */}
@@ -608,6 +624,24 @@ export default function BookingManagement() {
                             Từ chối
                           </button>
                         </div>
+                      </td>
+                    </>
+                  )}
+
+                  {activeTab === 'booked' && (
+                    <>
+                      {/* TT thanh toán */}
+                      <td className="px-4 py-4 text-center">
+                        <span className={`inline-block px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded ${PAYMENT_STYLE[booking.paymentStatus] ?? ''}`}>
+                          {PAYMENT_LABEL[booking.paymentStatus] ?? booking.paymentStatus}
+                        </span>
+                      </td>
+
+                      {/* Trạng thái đơn */}
+                      <td className="px-4 py-4">
+                        <span className={`inline-block px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded ${ORDER_STATUS_STYLE[booking.status] ?? ''}`}>
+                          {ORDER_STATUS_LABEL[booking.status] ?? booking.status}
+                        </span>
                       </td>
                     </>
                   )}
@@ -724,7 +758,7 @@ export default function BookingManagement() {
           Chọn loại báo cáo muốn xuất (có thể chọn nhiều):
         </p>
         <div className="space-y-3">
-          {(['pending_confirm', 'confirmed', 'completed', 'cancelled'] as ExportReportType[]).map(type => (
+          {(['pending_confirm', 'booked', 'confirmed', 'completed', 'cancelled'] as ExportReportType[]).map(type => (
             <Checkbox
               key={type}
               checked={exportReportTypes.includes(type)}
@@ -738,6 +772,7 @@ export default function BookingManagement() {
             >
               <span className="text-sm">
                 {type === 'pending_confirm' ? 'Cần xác nhận'
+                  : type === 'booked'        ? 'Đã đặt'
                   : type === 'confirmed'      ? 'Đã xác nhận'
                   : type === 'completed'      ? 'Hoàn thành'
                   : 'Đã hủy'}

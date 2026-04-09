@@ -5,7 +5,6 @@ import { mockBookings, type Passenger } from '../../data/bookings';
 import { useAuthStore } from '../../store/useAuthStore';
 import type { Tour, DepartureScheduleEntry } from '../../data/tours';
 
-type PaymentRatio = 0.5 | 1;
 
 interface ContactInfo {
   name: string;
@@ -27,9 +26,11 @@ export default function BookingCheckout() {
   const [step, setStep] = useState<1 | 2>(1);
   const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState(false);
-  const [paymentRatio, setPaymentRatio] = useState<PaymentRatio>(1);
   const [paymentMethod, setPaymentMethod] = useState<'bank' | 'card'>('bank');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Số phòng
+  const [roomCounts, setRoomCounts] = useState({ single: 0, double: 1, triple: 0 });
 
   // Contact
   const [contact, setContact] = useState<ContactInfo>({
@@ -57,7 +58,7 @@ export default function BookingCheckout() {
   const buildPassengers = (): Passenger[] => {
     const list: Passenger[] = [];
     for (let i = 0; i < counts.adult; i++) {
-      list.push({ type: 'adult', name: '', dob: '', gender: 'male', nationality: 'Việt Nam' });
+      list.push({ type: 'adult', name: '', dob: '', gender: 'male', nationality: 'Việt Nam', singleRoomSupplement: 0 });
     }
     for (let i = 0; i < counts.child; i++) {
       list.push({ type: 'child', name: '', dob: '', gender: 'male', nationality: 'Việt Nam' });
@@ -74,7 +75,7 @@ export default function BookingCheckout() {
   const syncPassengers = (newCounts: typeof counts) => {
     const list: Passenger[] = [];
     for (let i = 0; i < newCounts.adult; i++) {
-      list.push({ type: 'adult', name: '', dob: '', gender: 'male', nationality: 'Việt Nam' });
+      list.push({ type: 'adult', name: '', dob: '', gender: 'male', nationality: 'Việt Nam', singleRoomSupplement: 0 });
     }
     for (let i = 0; i < newCounts.child; i++) {
       list.push({ type: 'child', name: '', dob: '', gender: 'male', nationality: 'Việt Nam' });
@@ -85,7 +86,7 @@ export default function BookingCheckout() {
     setPassengers(list);
   };
 
-  const updatePassenger = (idx: number, field: keyof Passenger, value: string) => {
+  const updatePassenger = (idx: number, field: keyof Passenger, value: string | number) => {
     setPassengers(prev => {
       const next = [...prev];
       next[idx] = { ...next[idx], [field]: value };
@@ -94,13 +95,17 @@ export default function BookingCheckout() {
   };
 
   // Pricing
-  const priceAdult = schedule?.priceAdjusted ?? tour?.price.adult ?? 0;
+  const priceAdult = schedule?.priceAdult ?? tour?.price.adult ?? 0;
   const priceChild = tour?.price.child ?? 0;
   const priceInfant = tour?.price.infant ?? 0;
+  const singleRoomPrice = 500000; // mock phụ thu phòng đơn
+  const totalSingleRoomSupplement = passengers
+    .filter(p => p.type === 'adult' && p.singleRoomSupplement)
+    .reduce((sum, p) => sum + (p.singleRoomSupplement ?? 0), 0);
   const discount = promoApplied ? Math.round(priceAdult * 0.1) : 0; // mock 10%
-  const subtotal = counts.adult * priceAdult + counts.child * priceChild + counts.infant * priceInfant - discount;
-  const paymentAmount = Math.round(subtotal * paymentRatio);
-  const remainingAmount = subtotal - paymentAmount;
+  const subtotal = counts.adult * priceAdult + counts.child * priceChild + counts.infant * priceInfant + totalSingleRoomSupplement - discount;
+  const paymentAmount = subtotal;
+  const remainingAmount = 0;
 
   // Validate step 1
   const canProceedStep1 = contact.name.trim() && contact.phone.trim() && contact.email.trim()
@@ -152,6 +157,7 @@ export default function BookingCheckout() {
         status: 'completed' as const,
         paidAt: new Date().toISOString(),
       }],
+      roomCounts,
       promoCode: promoApplied ? promoCode : undefined,
       discountAmount: discount,
       createdAt: new Date().toISOString(),
@@ -416,6 +422,25 @@ export default function BookingCheckout() {
                               placeholder="Việt Nam"
                             />
                           </div>
+                          {/* Phụ thu phòng đơn (chỉ người lớn) */}
+                          {p.type === 'adult' && (
+                            <div>
+                              <label className="block text-[10px] font-label uppercase tracking-widest text-primary/60 mb-1">
+                                Phụ thu phòng đơn
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  value={p.singleRoomSupplement ?? 0}
+                                  onChange={e => updatePassenger(idx, 'singleRoomSupplement', Number(e.target.value))}
+                                  className="w-full bg-transparent border-t-0 border-x-0 border-b border-outline-variant focus:border-[var(--color-secondary)] px-0 py-2 text-sm transition-all"
+                                  placeholder="0"
+                                  min={0}
+                                />
+                                <span className="text-xs text-primary/40">VNĐ</span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -515,31 +540,6 @@ export default function BookingCheckout() {
                     </div>
                   </section>
 
-                  {/* Payment ratio */}
-                  <section className="bg-white border border-outline-variant/30 p-6">
-                    <h3 className="font-headline text-lg text-primary mb-4">Tỷ lệ thanh toán</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      {([1, 0.5] as PaymentRatio[]).map(r => (
-                        <button
-                          key={r}
-                          onClick={() => setPaymentRatio(r)}
-                          className={`p-4 border text-center transition-colors ${
-                            paymentRatio === r
-                              ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/5'
-                              : 'border-outline-variant/30 hover:border-outline-variant'
-                          }`}
-                        >
-                          <p className="text-2xl font-headline font-bold text-primary">{r === 1 ? '100%' : '50%'}</p>
-                          <p className="text-xs text-primary/50 mt-1">
-                            {r === 1
-                              ? 'Thanh toán toàn bộ'
-                              : `Cọc ${Math.round(subtotal * 0.5).toLocaleString('vi-VN')}đ`}
-                          </p>
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-
                   {/* Submit */}
                   <div className="flex gap-4">
                     <button
@@ -629,6 +629,12 @@ export default function BookingCheckout() {
                         <span>{(counts.infant * priceInfant).toLocaleString('vi-VN')}đ</span>
                       </div>
                     )}
+                    {totalSingleRoomSupplement > 0 && (
+                      <div className="flex justify-between text-sm text-amber-600">
+                        <span>Phụ thu phòng đơn</span>
+                        <span>+{totalSingleRoomSupplement.toLocaleString('vi-VN')}đ</span>
+                      </div>
+                    )}
                     {promoApplied && (
                       <div className="flex justify-between text-sm text-emerald-600">
                         <span>Mã giảm giá (-10%)</span>
@@ -677,18 +683,6 @@ export default function BookingCheckout() {
                         {subtotal.toLocaleString('vi-VN')}đ
                       </span>
                     </div>
-                    {paymentRatio < 1 && (
-                      <div className="flex justify-between text-xs">
-                        <span className="text-primary/50">Thanh toán ngay (50%)</span>
-                        <span className="font-medium text-primary">{paymentAmount.toLocaleString('vi-VN')}đ</span>
-                      </div>
-                    )}
-                    {paymentRatio < 1 && (
-                      <div className="flex justify-between text-xs">
-                        <span className="text-primary/50">Còn lại</span>
-                        <span className="text-primary/70">{remainingAmount.toLocaleString('vi-VN')}đ</span>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>

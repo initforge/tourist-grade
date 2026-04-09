@@ -5,12 +5,14 @@ export interface Passenger {
   gender: 'male' | 'female';
   cccd?: string;
   nationality?: string;
+  /** Phụ thu phòng đơn cho người lớn (VNĐ) */
+  singleRoomSupplement?: number;
 }
 
 export interface PaymentTransaction {
   id: string;
   amount: number;
-  method: 'cash' | 'vnpay' | 'stripe';
+  method: 'vnpay' | 'stripe';
   status: 'pending' | 'completed' | 'failed';
   paidAt: string;
   transactionRef?: string;
@@ -43,7 +45,7 @@ export interface Booking {
   totalAmount: number;
   paidAmount: number;
   remainingAmount: number;
-  paymentMethod: 'cash' | 'vnpay' | 'stripe';
+  paymentMethod: 'vnpay' | 'stripe';
   paymentType: 'online' | 'offline';
   paymentStatus: 'unpaid' | 'partial' | 'paid' | 'refunded';
   paymentTransactions: PaymentTransaction[];
@@ -53,6 +55,31 @@ export interface Booking {
   /** For pending_cancel: the cancellation reason submitted by customer */
   cancellationReason?: string;
   cancelledAt?: string;
+
+  /** Số lượng phòng (đơn / đôi / ba) */
+  roomCounts?: {
+    single: number;
+    double: number;
+    triple: number;
+  };
+
+  /** Người xác nhận đơn đặt (status: booked → confirmed) */
+  confirmedBy?: string;
+  confirmedAt?: string;
+
+  /** Người xác nhận yêu cầu hủy (status: pending_cancel → cancelled) */
+  cancelledConfirmedBy?: string;
+  cancelledConfirmedAt?: string;
+
+  /** Người hoàn tiền */
+  refundedBy?: string;
+  refundedAt?: string;
+
+  /** Người chỉnh sửa bill hoàn tiền (sau khi đã hoàn) */
+  refundBillEditedBy?: string;
+  refundBillEditedAt?: string;
+
+  /** Số tiền hoàn */
   refundAmount?: number;
 }
 
@@ -69,7 +96,7 @@ export const mockBookings: Booking[] = [
     status: 'pending',       // pending = Cần xác nhận đơn đặt
     refundStatus: 'none',
     passengers: [
-      { type: 'adult', name: 'Lê Văn C', dob: '1990-03-15', gender: 'male', cccd: '001090034567', nationality: 'Việt Nam' },
+      { type: 'adult', name: 'Lê Văn C', dob: '1990-03-15', gender: 'male', cccd: '001090034567', nationality: 'Việt Nam', singleRoomSupplement: 500000 },
       { type: 'adult', name: 'Phạm Thị D', dob: '1992-07-22', gender: 'female', cccd: '001092078901', nationality: 'Việt Nam' },
       { type: 'child', name: 'Lê Minh E', dob: '2018-01-10', gender: 'male' }
     ],
@@ -81,8 +108,8 @@ export const mockBookings: Booking[] = [
     totalAmount: 56000000,
     paidAmount: 0,
     remainingAmount: 56000000,
-    paymentMethod: 'cash',
-    paymentType: 'offline',
+    paymentMethod: 'vnpay',
+    paymentType: 'online',
     paymentStatus: 'unpaid',
     paymentTransactions: [],
     createdAt: '2026-03-24T14:20:00Z'
@@ -98,7 +125,7 @@ export const mockBookings: Booking[] = [
     status: 'pending',       // pending = Cần xác nhận đơn đặt (partial payment)
     refundStatus: 'none',
     passengers: [
-      { type: 'adult', name: 'Cao Đức S', dob: '1989-11-02', gender: 'male', cccd: '001089011234', nationality: 'Việt Nam' }
+      { type: 'adult', name: 'Cao Đức S', dob: '1989-11-02', gender: 'male', cccd: '001089011234', nationality: 'Việt Nam', singleRoomSupplement: 800000 }
     ],
     contactInfo: {
       name: 'Cao Đức S',
@@ -114,6 +141,7 @@ export const mockBookings: Booking[] = [
     paymentTransactions: [
       { id: 'TX010-1', amount: 16000000, method: 'stripe', status: 'completed', paidAt: '2026-03-26T20:40:00Z', transactionRef: 'STR17000002' }
     ],
+    roomCounts: { single: 1, double: 0, triple: 0 },
     createdAt: '2026-03-26T20:30:00Z'
   },
 
@@ -152,6 +180,8 @@ export const mockBookings: Booking[] = [
     ],
     cancellationReason: 'Thay đổi kế hoạch công tác',
     cancelledAt: '2026-04-05T10:00:00Z',
+    cancelledConfirmedBy: 'Nhân Viên Kinh Doanh',
+    cancelledConfirmedAt: '2026-04-05T10:30:00Z',
     refundAmount: 25600000,
     createdAt: '2026-03-26T08:15:00Z'
   },
@@ -171,6 +201,7 @@ export const mockBookings: Booking[] = [
       { type: 'adult', name: 'Nguyễn Văn A', dob: '1985-05-12', gender: 'male', cccd: '001085012345', nationality: 'Việt Nam' },
       { type: 'adult', name: 'Trần Thị B', dob: '1987-08-20', gender: 'female', cccd: '001087067890', nationality: 'Việt Nam' }
     ],
+    roomCounts: { single: 1, double: 0, triple: 0 },
     contactInfo: {
       name: 'Nguyễn Văn A',
       email: 'nguyenvana@gmail.com',
@@ -186,6 +217,8 @@ export const mockBookings: Booking[] = [
     paymentTransactions: [
       { id: 'TX001-1', amount: 9000000, method: 'vnpay', status: 'completed', paidAt: '2026-03-25T10:45:00Z', transactionRef: 'VNP17000001' }
     ],
+    confirmedBy: 'Nhân Viên Kinh Doanh',
+    confirmedAt: '2026-03-25T11:00:00Z',
     createdAt: '2026-03-25T10:30:00Z'
   },
   {
@@ -199,7 +232,7 @@ export const mockBookings: Booking[] = [
     status: 'confirmed',     // partial payment (50%)
     refundStatus: 'none',
     passengers: [
-      { type: 'adult', name: 'Vương Minh Q', dob: '1991-03-18', gender: 'male', cccd: '001091034567', nationality: 'Việt Nam' },
+      { type: 'adult', name: 'Vương Minh Q', dob: '1991-03-18', gender: 'male', cccd: '001091034567', nationality: 'Việt Nam', singleRoomSupplement: 600000 },
       { type: 'adult', name: 'Lý Thị R', dob: '1993-07-25', gender: 'female', cccd: '001093078901', nationality: 'Việt Nam' }
     ],
     contactInfo: {
@@ -219,6 +252,41 @@ export const mockBookings: Booking[] = [
     promoCode: 'TRAVELA50',
     discountAmount: 0,
     createdAt: '2026-03-26T18:00:00Z'
+  },
+
+  // ── Đã đặt (booked) — NV đã xác nhận, chưa confirmed ──────────────────────
+  {
+    id: 'B011',
+    bookingCode: 'BK-773420',
+    tourId: 'T001',
+    tourName: 'Hạ Long - Kỳ quan Thế giới',
+    tourDate: '2026-10-18',
+    tourDuration: '3N2Đ',
+    userId: 'U005',
+    status: 'booked',
+    refundStatus: 'none',
+    passengers: [
+      { type: 'adult', name: 'Võ Thanh P', dob: '1986-04-20', gender: 'male', cccd: '001086045678', nationality: 'Việt Nam', singleRoomSupplement: 500000 },
+      { type: 'adult', name: 'Trần Mai Q', dob: '1988-10-05', gender: 'female', cccd: '001088078901', nationality: 'Việt Nam' }
+    ],
+    contactInfo: {
+      name: 'Võ Thanh P',
+      email: 'vothanhp@gmail.com',
+      phone: '0933 111 222'
+    },
+    totalAmount: 9000000,
+    paidAmount: 9000000,
+    remainingAmount: 0,
+    paymentMethod: 'vnpay',
+    paymentType: 'online',
+    paymentStatus: 'paid',
+    paymentTransactions: [
+      { id: 'TX011-1', amount: 9000000, method: 'vnpay', status: 'completed', paidAt: '2026-04-08T09:00:00Z', transactionRef: 'VNP17000010' }
+    ],
+    roomCounts: { single: 1, double: 0, triple: 0 },
+    confirmedBy: 'Nhân Viên Kinh Doanh',
+    confirmedAt: '2026-04-08T09:15:00Z',
+    createdAt: '2026-04-08T08:50:00Z'
   },
 
   // ── Hoàn thành (completed) — paymentStatus = paid (100%) ─────────────────────
@@ -323,6 +391,8 @@ export const mockBookings: Booking[] = [
     ],
     cancellationReason: 'Danh sách hành khách không đủ điều kiện',
     cancelledAt: '2026-03-28T10:00:00Z',
+    cancelledConfirmedBy: 'Nhân Viên Kinh Doanh',
+    cancelledConfirmedAt: '2026-03-28T11:00:00Z',
     refundAmount: 6300000,
     createdAt: '2026-03-22T16:30:00Z'
   },
@@ -353,14 +423,20 @@ export const mockBookings: Booking[] = [
     totalAmount: 32000000,
     paidAmount: 32000000,
     remainingAmount: 0,
-    paymentMethod: 'cash',
-    paymentType: 'offline',
+    paymentMethod: 'stripe',
+    paymentType: 'online',
     paymentStatus: 'refunded',
     paymentTransactions: [
-      { id: 'TX006-1', amount: 32000000, method: 'cash', status: 'completed', paidAt: '2026-03-18T11:10:00Z', transactionRef: 'CASH17000001' }
+      { id: 'TX006-1', amount: 32000000, method: 'stripe', status: 'completed', paidAt: '2026-03-18T11:10:00Z', transactionRef: 'STR17000003' }
     ],
     cancellationReason: 'Sức khỏe không cho phép',
     cancelledAt: '2026-03-25T14:00:00Z',
+    cancelledConfirmedBy: 'Nhân Viên Kinh Doanh',
+    cancelledConfirmedAt: '2026-03-25T14:15:00Z',
+    refundedBy: 'Nhân Viên Kinh Doanh',
+    refundedAt: '2026-03-26T09:00:00Z',
+    refundBillEditedBy: 'Nhân Viên Kinh Doanh',
+    refundBillEditedAt: '2026-03-26T10:30:00Z',
     refundAmount: 25600000,
     createdAt: '2026-03-18T11:00:00Z'
   },
@@ -385,12 +461,15 @@ export const mockBookings: Booking[] = [
     totalAmount: 4500000,
     paidAmount: 0,
     remainingAmount: 0,
-    paymentMethod: 'cash',
-    paymentType: 'offline',
+    paymentMethod: 'vnpay',
+    paymentType: 'online',
     paymentStatus: 'unpaid',
     paymentTransactions: [],
     cancellationReason: 'Hủy trước khi thanh toán',
     cancelledAt: '2026-03-23T09:00:00Z',
+    cancelledConfirmedBy: 'Nhân Viên Kinh Doanh',
+    cancelledConfirmedAt: '2026-03-23T09:30:00Z',
+    refundAmount: 0,
     createdAt: '2026-03-21T13:15:00Z'
   }
 ];

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { mockBookings, type Booking, type Passenger } from '../../data/bookings';
+import { useAuthStore } from '../../store/useAuthStore';
 
 type ExtendedBooking = Booking & {
   // Đồng bộ với schema thực: không còn notes/cancelReason/pendingAction
@@ -268,6 +269,9 @@ function RejectReasonPopup({ title, label, onConfirm, onCancel }: RejectReasonPo
 export default function SalesBookingDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const tab = searchParams.get('tab') ?? 'pending_confirm';
+  const currentUser = useAuthStore(s => s.user);
 
   const [booking, setBooking] = useState<Booking | undefined>(() =>
     mockBookings.find(b => b.id === id)
@@ -277,8 +281,12 @@ export default function SalesBookingDetail() {
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
   const [showRejectCancelPopup, setShowRejectCancelPopup] = useState(false);
   const [showConfirmCancelPopup, setShowConfirmCancelPopup] = useState(false);
+
+  // Bill edit state (for refunded bookings)
   const [billPreview, setBillPreview] = useState<string | null>(null);
-  const [, setBillFile] = useState<File | null>(null);
+  const [billFile, setBillFile] = useState<File | null>(null);
+  const [isEditingBill, setIsEditingBill] = useState(false);
+  const [showEmailToast, setShowEmailToast] = useState(false);
 
   // Cleanup BLOB URLs
   useEffect(() => {
@@ -329,8 +337,15 @@ export default function SalesBookingDetail() {
   };
   const handleConfirmRefund = () => {
     if (!billPreview) return;
-    const url = billPreview;
-    setBooking(prev => prev ? { ...prev, refundStatus: 'refunded' as const, refundBillUrl: url } : prev);
+    const now = new Date().toISOString();
+    const userName = currentUser?.name ?? 'NV Kinh doanh';
+    setBooking(prev => prev ? {
+      ...prev,
+      refundStatus: 'refunded' as const,
+      refundBillUrl: billPreview,
+      refundedBy: userName,
+      refundedAt: now,
+    } : prev);
     setBillFile(null);
     setBillPreview(null);
     setShowRefundPopup(false);
@@ -343,7 +358,14 @@ export default function SalesBookingDetail() {
 
   // Xác nhận đơn đặt → chuyển sang Đã xác nhận
   const handleConfirmBooking = () => {
-    setBooking(prev => prev ? { ...prev, status: 'confirmed' as const } : prev);
+    const now = new Date().toISOString();
+    const userName = currentUser?.name ?? 'NV Kinh doanh';
+    setBooking(prev => prev ? {
+      ...prev,
+      status: 'confirmed' as const,
+      confirmedBy: userName,
+      confirmedAt: now,
+    } : prev);
     setShowConfirmPopup(false);
   };
 
@@ -355,10 +377,14 @@ export default function SalesBookingDetail() {
 
   // Xác nhận hủy → chuyển sang Đã hủy + pending refund
   const handleConfirmCancel = () => {
+    const now = new Date().toISOString();
+    const userName = currentUser?.name ?? 'NV Kinh doanh';
     setBooking(prev => prev ? {
       ...prev,
       status: 'cancelled' as const,
       refundStatus: 'pending' as const,
+      cancelledConfirmedBy: userName,
+      cancelledConfirmedAt: now,
     } : prev);
     setShowConfirmCancelPopup(false);
   };
@@ -454,7 +480,7 @@ export default function SalesBookingDetail() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-[#2A2421]/50">Số tiền cần hoàn</span>
-                  <span className="font-bold text-[#D4AF37] font-['Noto_Serif']">{formatCurrency(booking.totalAmount)}</span>
+                  <span className="font-bold text-[#D4AF37] font-['Noto_Serif']">{formatCurrency(booking.refundAmount ?? 0)}</span>
                 </div>
                 {booking.bankInfo && (
                   <>
@@ -506,12 +532,23 @@ export default function SalesBookingDetail() {
         </div>
       )}
 
+      {/* ── Email notification toast ── */}
+      {showEmailToast && (
+        <div className="fixed bottom-8 right-8 z-50 bg-emerald-600 text-white px-6 py-4 shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom">
+          <span className="material-symbols-outlined text-xl">mail</span>
+          <div>
+            <p className="text-sm font-semibold">Đã gửi email thông báo cho khách</p>
+            <p className="text-xs text-emerald-200">Khách hàng đã được thông báo về việc cập nhật thông tin hoàn tiền.</p>
+          </div>
+        </div>
+      )}
+
       {/* ── MAIN CONTENT ── */}
       <div className="max-w-5xl mx-auto p-6 md:p-10">
 
         {/* Breadcrumb */}
         <nav className="flex items-center gap-2 mb-8 text-sm">
-          <Link to="/sales/bookings" className="text-[#D4AF37] hover:underline flex items-center gap-1">
+          <Link to={`/sales/bookings?tab=${tab}`} className="text-[#D4AF37] hover:underline flex items-center gap-1">
             <span className="material-symbols-outlined text-[16px]">receipt_long</span>
             Danh sách đơn booking
           </Link>
@@ -575,8 +612,25 @@ export default function SalesBookingDetail() {
                 </div>
                 <div>
                   <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Phương thức thanh toán</p>
-                  <p className="text-sm font-medium uppercase">{booking.paymentMethod}</p>
+                  <p className="text-sm font-medium uppercase">{booking.paymentMethod === 'vnpay' ? 'VNPay' : 'Stripe'}</p>
                 </div>
+                {/* Số phòng — chỉ hiện khi có */}
+                {booking.roomCounts && (
+                  <div>
+                    <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Số phòng</p>
+                    <div className="flex gap-3 text-xs">
+                      {booking.roomCounts.single > 0 && (
+                        <span className="px-2 py-1 bg-blue-50 text-blue-600 font-medium">Đơn: {booking.roomCounts.single}</span>
+                      )}
+                      {booking.roomCounts.double > 0 && (
+                        <span className="px-2 py-1 bg-green-50 text-green-600 font-medium">Đôi: {booking.roomCounts.double}</span>
+                      )}
+                      {booking.roomCounts.triple > 0 && (
+                        <span className="px-2 py-1 bg-purple-50 text-purple-600 font-medium">Ba: {booking.roomCounts.triple}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {/* Ghi chú từ contactInfo.note */}
                 {booking.contactInfo.note && (
                   <div className="col-span-2">
@@ -638,8 +692,13 @@ export default function SalesBookingDetail() {
                     <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-8">STT</th>
                     <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Họ và tên</th>
                     <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Loại</th>
+                    <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Giới tính</th>
                     <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Ngày sinh</th>
                     <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">CCCD / GKS</th>
+                    <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Quốc tịch</th>
+                    {booking.passengers.some(p => p.type === 'adult') && (
+                      <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold text-right">Phụ thu đơn</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#D0C5AF]/10">
@@ -652,22 +711,119 @@ export default function SalesBookingDetail() {
                           {PASSENGER_TYPE[p.type]}
                         </span>
                       </td>
+                      <td className="py-3 text-xs text-[#2A2421]/70">{p.gender === 'male' ? 'Nam' : 'Nữ'}</td>
                       <td className="py-3 text-sm text-[#2A2421]/60">{p.dob}</td>
                       <td className="py-3 text-sm font-mono text-[#2A2421]/70">{p.cccd || '—'}</td>
+                      <td className="py-3 text-xs text-[#2A2421]/60">{p.nationality || 'Việt Nam'}</td>
+                      {p.type === 'adult' ? (
+                        <td className="py-3 text-sm text-right font-medium text-amber-600">
+                          {p.singleRoomSupplement ? `+${p.singleRoomSupplement.toLocaleString('vi-VN')}đ` : '—'}
+                        </td>
+                      ) : (
+                        <td className="py-3 text-sm text-[#2A2421]/30 text-right">—</td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </section>
 
-            {/* Refund Bill */}
-            {booking.refundStatus === 'refunded' && booking.refundBillUrl && (
+            {/* Refund Bill — editable after refund completed */}
+            {booking.refundStatus === 'refunded' && (
               <section className="bg-white border border-emerald-200 p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-1 h-4 bg-emerald-500"></div>
                   <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-emerald-700">Ảnh bill chuyển khoản hoàn tiền</h2>
+                  {!isEditingBill && (
+                    <button
+                      onClick={() => setIsEditingBill(true)}
+                      className="ml-auto px-3 py-1 text-[10px] font-bold uppercase tracking-widest border border-emerald-400 text-emerald-600 hover:bg-emerald-50 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[14px] mr-1">edit</span>
+                      Chỉnh sửa bill
+                    </button>
+                  )}
                 </div>
-                <img src={booking.refundBillUrl} alt="Bill hoàn tiền" className="max-w-sm border border-[#D0C5AF]/30" />
+
+                {isEditingBill ? (
+                  /* Edit mode */
+                  <div className="space-y-4">
+                    {billPreview ? (
+                      <div className="relative">
+                        <img src={billPreview} alt="Bill mới" className="w-full max-w-sm border border-[#D0C5AF]/30 bg-gray-50" />
+                        <button
+                          onClick={() => {
+                            if (billPreview) URL.revokeObjectURL(billPreview);
+                            setBillPreview(null);
+                            setBillFile(null);
+                          }}
+                          className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">close</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-emerald-300 bg-emerald-50 cursor-pointer hover:border-emerald-500 transition-colors">
+                        <span className="material-symbols-outlined text-3xl text-emerald-300 mb-2">cloud_upload</span>
+                        <span className="text-xs text-emerald-600">Click để tải ảnh bill mới</span>
+                        <input type="file" accept="image/*" onChange={e => {
+                          const file = e.target.files?.[0];
+                          if (file) { setBillFile(file); setBillPreview(URL.createObjectURL(file)); }
+                        }} className="hidden" />
+                      </label>
+                    )}
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => {
+                          if (billPreview) URL.revokeObjectURL(billPreview);
+                          setBillPreview(null);
+                          setBillFile(null);
+                          setIsEditingBill(false);
+                        }}
+                        className="flex-1 py-2.5 text-xs font-['Inter'] uppercase tracking-widest border border-[#2A2421]/20 hover:bg-gray-50 transition-colors"
+                      >
+                        Hủy bỏ
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!billPreview) return;
+                          const now = new Date().toISOString();
+                          setBooking(prev => prev ? {
+                            ...prev,
+                            refundBillUrl: billPreview,
+                            refundBillEditedBy: currentUser?.name ?? 'NV Kinh doanh',
+                            refundBillEditedAt: now,
+                          } : prev);
+                          setIsEditingBill(false);
+                          setShowEmailToast(true);
+                          setTimeout(() => setShowEmailToast(false), 4000);
+                        }}
+                        disabled={!billPreview}
+                        className={`flex-1 py-2.5 text-xs font-['Inter'] uppercase tracking-widest font-bold flex items-center justify-center gap-2 transition-colors ${
+                          billPreview
+                            ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-[16px]">save</span>
+                        Lưu
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Display mode */
+                  <div>
+                    {booking.refundBillUrl && (
+                      <img src={booking.refundBillUrl} alt="Bill hoàn tiền" className="max-w-sm border border-[#D0C5AF]/30 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => window.open(booking.refundBillUrl, '_blank')} />
+                    )}
+                    {/* Log người chỉnh sửa */}
+                    {booking.refundBillEditedBy && (
+                      <p className="text-[10px] text-emerald-600 mt-2 italic">
+                        Đã chỉnh sửa bởi {booking.refundBillEditedBy} · {new Date(booking.refundBillEditedAt!).toLocaleString('vi-VN')}
+                      </p>
+                    )}
+                  </div>
+                )}
               </section>
             )}
           </div>
@@ -676,7 +832,7 @@ export default function SalesBookingDetail() {
           <div className="space-y-6">
 
             {/* Action Buttons — chỉ hiện khi Cần xác nhận */}
-            {booking.status === 'pending' && (
+            {(booking.status === 'pending' || booking.status === 'booked') && (
               <div className="bg-white border border-[#D0C5AF]/20 p-6 space-y-3">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-1 h-4 bg-[#D4AF37]"></div>
@@ -705,6 +861,23 @@ export default function SalesBookingDetail() {
                       <span className="material-symbols-outlined text-[16px]">check</span>
                       Xác nhận đơn đặt
                     </button>
+                  </>
+                )}
+
+                {booking.status === 'booked' && (
+                  <>
+                    {/* Người xác nhận đặt tour */}
+                    {booking.confirmedBy && (
+                      <div className="mt-4 pt-4 border-t border-[#D0C5AF]/20">
+                        <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Người xác nhận</p>
+                        <p className="text-sm font-semibold">{booking.confirmedBy}</p>
+                        {booking.confirmedAt && (
+                          <p className="text-xs text-[#2A2421]/50 mt-0.5">
+                            {new Date(booking.confirmedAt).toLocaleString('vi-VN')}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
 
@@ -749,12 +922,6 @@ export default function SalesBookingDetail() {
                   <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Số điện thoại</p>
                   <p className="text-sm font-medium text-[#D4AF37]">{booking.contactInfo.phone}</p>
                 </div>
-                {booking.contactInfo.note && (
-                  <div>
-                    <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Ghi chú</p>
-                    <p className="text-xs text-[#2A2421]/70 bg-[#FAFAF5] p-3 border border-[#D0C5AF]/20">{booking.contactInfo.note}</p>
-                  </div>
-                )}
               </div>
             </section>
 
@@ -804,6 +971,38 @@ export default function SalesBookingDetail() {
                 </div>
               )}
             </section>
+
+            {/* Thông tin xác nhận hủy — cancelled only */}
+            {booking.status === 'cancelled' && booking.cancelledConfirmedBy && (
+              <section className="bg-white border border-red-200 p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-1 h-4 bg-red-500"></div>
+                  <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-red-600">Người xác nhận hủy</h2>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold">{booking.cancelledConfirmedBy}</p>
+                  {booking.cancelledConfirmedAt && (
+                    <p className="text-xs text-[#2A2421]/50">{new Date(booking.cancelledConfirmedAt).toLocaleString('vi-VN')}</p>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* Thông tin hoàn tiền — refunded only */}
+            {booking.refundStatus === 'refunded' && (
+              <section className="bg-white border border-emerald-200 p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-1 h-4 bg-emerald-500"></div>
+                  <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-emerald-700">Người hoàn tiền</h2>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold">{booking.refundedBy ?? '—'}</p>
+                  {booking.refundedAt && (
+                    <p className="text-xs text-[#2A2421]/50">Lúc {new Date(booking.refundedAt).toLocaleString('vi-VN')}</p>
+                  )}
+                </div>
+              </section>
+            )}
 
             {/* Bank Info */}
             {booking.bankInfo && (
