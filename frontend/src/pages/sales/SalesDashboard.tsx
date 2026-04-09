@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Modal, Checkbox, Button } from 'antd';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { mockBookings } from '../../data/bookings';
 
@@ -80,6 +81,8 @@ function exportSalesReport(from: string, to: string, bookings: typeof mockBookin
 export default function SalesDashboard() {
   const [dateFrom, setDateFrom] = useState('2026-03-01');
   const [dateTo, setDateTo] = useState('2026-03-31');
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportTypes, setExportTypes] = useState<string[]>([]);
 
   // ── Computed from mockBookings ────────────────────────────────────────
 
@@ -268,6 +271,35 @@ export default function SalesDashboard() {
           <h2 className="font-['Inter'] text-base font-bold text-[#2A2421]">Báo cáo kinh doanh</h2>
         </div>
 
+        {/* Controls — date range + export button */}
+        <div className="flex flex-wrap items-center gap-3 mb-6">
+          <div className="flex items-center gap-2">
+            <label className="text-[10px] uppercase tracking-widest font-bold text-[#2A2421]/50">Từ ngày</label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              className="border border-[#D0C5AF]/40 px-3 py-2 text-sm focus:border-[#D4AF37] outline-none bg-white"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-[10px] uppercase tracking-widest font-bold text-[#2A2421]/50">Đến ngày</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              className="border border-[#D0C5AF]/40 px-3 py-2 text-sm focus:border-[#D4AF37] outline-none bg-white"
+            />
+          </div>
+          <button
+            onClick={() => setExportModalOpen(true)}
+            className="ml-auto flex items-center gap-2 bg-[#2A2421] text-white px-4 py-2 text-xs font-bold uppercase tracking-widest hover:bg-[#D4AF37] transition-colors"
+          >
+            <span className="material-symbols-outlined text-[16px]">download</span>
+            Xuất Báo Cáo
+          </button>
+        </div>
+
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {reportStats.map((s, i) => (
@@ -279,35 +311,6 @@ export default function SalesDashboard() {
               <p className="text-[10px] uppercase tracking-widest text-[#2A2421]/50 mt-1">{s.label}</p>
             </div>
           ))}
-        </div>
-
-        {/* Controls */}
-        <div className="bg-white border border-[#D0C5AF]/20 p-4 mb-6 flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <label className="text-[10px] uppercase tracking-widest font-bold text-[#2A2421]/50">Từ ngày</label>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={e => setDateFrom(e.target.value)}
-              className="border border-[#D0C5AF]/40 px-3 py-2 text-sm focus:border-[#D4AF37] outline-none"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-[10px] uppercase tracking-widest font-bold text-[#2A2421]/50">Đến ngày</label>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={e => setDateTo(e.target.value)}
-              className="border border-[#D0C5AF]/40 px-3 py-2 text-sm focus:border-[#D4AF37] outline-none"
-            />
-          </div>
-          <button
-            onClick={() => exportSalesReport(formatDateDisplay(dateFrom), formatDateDisplay(dateTo), mockBookings)}
-            className="ml-auto flex items-center gap-2 bg-[#2A2421] text-white px-4 py-2 text-xs font-bold uppercase tracking-widest hover:bg-[#D4AF37] transition-colors"
-          >
-            <span className="material-symbols-outlined text-[16px]">download</span>
-            Xuất Báo Cáo
-          </button>
         </div>
 
         {/* Charts */}
@@ -345,6 +348,75 @@ export default function SalesDashboard() {
           </div>
         </div>
       </div>
+
+      {/* ── Export Modal ── */}
+      <Modal
+        open={exportModalOpen}
+        onCancel={() => setExportModalOpen(false)}
+        title={<span className="font-['Noto_Serif'] text-xl text-[#2A2421]">Xuất Báo Cáo Excel</span>}
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button onClick={() => setExportModalOpen(false)}>Hủy</Button>
+            <Button
+              type="primary"
+              disabled={exportTypes.length === 0}
+              onClick={() => {
+                exportTypes.forEach(type => {
+                  exportSalesReport(formatDateDisplay(dateFrom), formatDateDisplay(dateTo), mockBookings);
+                });
+                setExportModalOpen(false);
+                setExportTypes([]);
+              }}
+            >
+              Xuất {exportTypes.length > 0 ? `${exportTypes.length} báo cáo` : ''}
+            </Button>
+          </div>
+        }
+        destroyOnClose
+      >
+        <p className="text-sm text-[#2A2421]/70 mb-4">
+          Chọn loại báo cáo muốn xuất (có thể chọn nhiều):
+        </p>
+        <div className="space-y-3">
+          {[
+            { key: 'booking', label: 'Báo cáo Số Booking theo ngày', desc: 'Số lượng booking theo từng ngày trong khoảng đã chọn' },
+            { key: 'revenue', label: 'Báo cáo Doanh thu theo ngày', desc: 'Doanh thu (triệu VND) theo từng ngày trong khoảng đã chọn' },
+          ].map(opt => (
+            <div
+              key={opt.key}
+              onClick={() => {
+                setExportTypes(prev =>
+                  prev.includes(opt.key) ? prev.filter(k => k !== opt.key) : [...prev, opt.key]
+                );
+              }}
+              className={`p-4 border cursor-pointer transition-colors ${
+                exportTypes.includes(opt.key)
+                  ? 'border-[#D4AF37] bg-[#D4AF37]/5'
+                  : 'border-[#D0C5AF]/40 hover:border-[#D4AF37]/50'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  checked={exportTypes.includes(opt.key)}
+                  onChange={() => {
+                    setExportTypes(prev =>
+                      prev.includes(opt.key) ? prev.filter(k => k !== opt.key) : [...prev, opt.key]
+                    );
+                  }}
+                />
+                <div>
+                  <p className="text-sm font-medium text-[#2A2421]">{opt.label}</p>
+                  <p className="text-[11px] text-[#2A2421]/50 mt-0.5">{opt.desc}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 p-3 bg-[#FAFAF5] border border-[#D0C5AF]/20 text-xs text-[#2A2421]/60">
+          Kỳ báo cáo: <span className="font-medium">{formatDateDisplay(dateFrom)}</span> —{' '}
+          <span className="font-medium">{formatDateDisplay(dateTo)}</span>
+        </div>
+      </Modal>
     </div>
   );
 }
