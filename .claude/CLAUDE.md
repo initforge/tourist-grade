@@ -49,37 +49,43 @@ tourist-grade/
 │   │   ├── App.tsx                   ← Router + route definitions
 │   │   ├── main.tsx
 │   │   ├── index.css                 ← Tailwind v4 theme (@theme)
-│   │   ├── components/layout/        ← 6 layout shells (Public, Auth, Admin, Manager, Coordinator, Sales)
+│   │   ├── components/
+│   │   │   ├── layout/              ← 6 layout shells (Public, Auth, Admin, Manager, Coordinator, Sales)
+│   │   │   ├── CancelBookingModal.tsx
+│   │   │   └── DispatchHDVModal.tsx
 │   │   ├── pages/
 │   │   │   ├── auth/                 ← Login, Register, ForgotPassword, ResetPassword
-│   │   │   ├── public/              ← Landing, TourList, TourDetail, BookingCheckout, Blog, etc.
-│   │   │   ├── customer/            ← BookingHistory, BookingDetail, CancelBooking, Wishlist, Profile
-│   │   │   ├── admin/               ← AdminUsers, BookingManagement, VoucherManagement, etc.
-│   │   │   ├── manager/             ← ManagerDashboard, AdminTourPrograms, AdminActiveTours, TourEstimate
-│   │   │   ├── coordinator/         ← CoordinatorDashboard, ServiceList, AdminSuppliers, TourSettlement
-│   │   │   └── sales/               ← SalesDashboard, SalesBookingDetail
-│   │   ├── data/                   ← Mock data (canonical source)
-│   │   │   ├── users.ts            ← 5 mock users (admin, manager, coordinator, sales, customer)
-│   │   │   ├── tours.ts            ← 3 mock tours (Hạ Long, Amanoi, Kyoto)
-│   │   │   ├── bookings.ts         ← 10 mock bookings (rich schema)
-│   │   │   └── mockData.ts        ← Legacy stub: MOCK_BLOGS only (NOT MOCK_BOOKINGS)
+│   │   │   ├── public/             ← Landing, TourList, TourDetail, BookingCheckout, Blog, AboutUs, OrderLookup
+│   │   │   ├── customer/           ← BookingHistory, BookingDetail, CancelBooking, Wishlist, Profile
+│   │   │   ├── admin/              ← AdminUsers.tsx  (1 file — Admin only manages users)
+│   │   │   ├── manager/            ← Dashboard, TourPrograms, ActiveTours, TourEstimate, TourProgramDetail, Vouchers, approvals, CancelPolicy
+│   │   │   ├── coordinator/        ← Dashboard, TourInstances (8-status tabs), TourProgramWizard, TourReceiveDispatch, TourSettlement, ServiceList, Suppliers, Vouchers, TourGenerationRules
+│   │   │   └── sales/              ← Dashboard, SalesBookings (9-col table), SalesBookingDetail, Vouchers
+│   │   ├── data/                   ← Mock data
+│   │   │   ├── users.ts            ← 5 mock users
+│   │   │   ├── tours.ts            ← 3 mock tours
+│   │   │   ├── bookings.ts         ← 10 mock bookings
+│   │   │   ├── vouchers.ts         ← Mock vouchers
+│   │   │   ├── tourProgram.ts       ← Tour programs + instances
+│   │   │   └── mockData.ts        ← Legacy stub: MOCK_BLOGS only
 │   │   ├── store/
-│   │   │   └── useAuthStore.ts     ← Zustand auth store (mock login by role)
+│   │   │   └── useAuthStore.ts
+│   │   ├── hooks/
+│   │   │   └── useAuthGuard.ts
 │   │   └── lib/
-│   │       └── utils.ts             ← cn(), formatPrice(), formatDate(), statusLabels
-│   ├── dist/                       ← Production build output (gitignore'd)
+│   │       └── utils.ts
+│   ├── dist/                       ← Production build output
 │   ├── eslint.config.js
 │   ├── vite.config.ts
-│   ├── .gitignore                  ← includes .env and .env.*
-│   └── .env.example                 ← template for environment variables
-├── database/                        ← TODO: not created yet — backend not started
-├── docs/                            ← 3-tier documentation
-│   ├── technical-spec.md            ← Architecture, API design (EN)
-│   ├── vi-technical-spec.md        ← Architecture, API design (VN)
-│   ├── user-guide.md               ← How to use (EN)
-│   ├── vi-user-guide.md           ← How to use (VN)
-│   └── [business analysis docs]   ← VN use-case docs
-└── skills/                         ← Custom skills
+│   ├── .gitignore
+│   └── .env.example
+├── database/                        ← TODO: backend not started
+├── docs/
+│   ├── technical-spec.md
+│   ├── vi-technical-spec.md
+│   ├── user-guide.md
+│   └── vi-user-guide.md
+└── skills/
 ```
 
 ---
@@ -174,15 +180,16 @@ File cần tách khi có ≥ 1 signal:
 
 | # | File | Issue | Status |
 |---|------|-------|--------|
-| 1 | `SalesBookingDetail.tsx` | 419 lines — module refactor candidate | P2 — defer |
-| 2 | `AdminTourProgramWizard.tsx` | 352 lines — multi-step form refactor | P2 — defer |
-| 3 | `AdminSuppliers.tsx` | 307 lines — module refactor candidate | P2 — defer |
-| 4 | Build chunk size | 924 KB JS bundle — code-split by route when backend lands | P2 |
+| 1 | `SalesBookingDetail.tsx` (419 lines) | module refactor candidate | P2 — defer |
+| 2 | `TourProgramWizard.tsx` — coordinator/ (352 lines) | multi-step form refactor | P2 — defer |
+| 3 | `Suppliers.tsx` — coordinator/ (307 lines) | module refactor candidate | P2 — defer |
+| 4 | Build chunk size | 1.75 MB JS bundle — code-split by route when backend lands | P2 |
 | 5 | `MOCK_BLOGS` encoding | Vietnamese text garbled (UTF-8 encoding issue) | P1 |
 | 6 | Zustand selectors | Layouts subscribed to entire store | ✅ FIXED |
 | 7 | URL.createObjectURL leak | Memory leak in SalesBookingDetail refund flow | ✅ FIXED |
 | 8 | BookingHistory data | Used legacy MOCK_BOOKINGS instead of canonical | ✅ FIXED |
 | 9 | BookingDetail data | Hardcoded local state, not wired to store | ✅ FIXED |
+| 10 | Pages/admin folder | Was catch-all for 11 files — now contains only AdminUsers.tsx | ✅ FIXED |
 
 ---
 
@@ -200,5 +207,44 @@ File cần tách khi có ≥ 1 signal:
 
 ## Recent Changes
 
-- 2026-03-31: Full-review session — 3 unused packages removed, Zustand selectors fixed, URL.createObjectURL memory leak fixed, BookingHistory + BookingDetail wired to canonical mockBookings, .env added to .gitignore, .env.example created, 3-tier docs created (README EN+VN, technical-spec EN+VN, user-guide EN+VN)
+- 2026-04-09: Folder restructure — moved 13 files out of `pages/admin/` into correct role folders (manager/, coordinator/, sales/). `pages/admin/` now contains only `AdminUsers.tsx`. App.tsx updated with clean role-based routing. SalesBookings.tsx — full NV Kinh doanh overhaul: DatePicker+Export moved under title, "Đã cọc" label fixed, confirm/reject actions with modals, refund filter changed to dropdown.
+- 2026-03-31: Full-review session — 3 unused packages removed, Zustand selectors fixed, URL.createObjectURL memory leak fixed, BookingHistory + BookingDetail wired to canonical mockBookings, .env added to .gitignore, .env.example created, 3-tier docs created
 - 2026-03-30: Full-review cleanup — 10 lint errors fixed, 9 temp files removed
+
+---
+
+## Task Workflow
+
+Mỗi khi nhận task từ user, tuân thủ quy trình sau:
+
+### 1. Trước khi làm — báo cáo bảng trạng thái
+
+Trả lời bằng bảng Markdown:
+
+```
+| # | Yêu cầu | Trạng thái | Ghi chú |
+|---|---|---|---|
+| 1 | ... | ✅ Xong / ❌ Chưa / ⚠️ Khác | |
+```
+
+Cột "Ghi chú" ghi rõ khác gì so với yêu cầu, hoặc đang conflict ở đâu.
+
+### 2. Sau khi làm xong — báo cáo bảng đầy đủ
+
+Mỗi yêu cầu ghi rõ:
+- **Trạng thái cuối**: ✅ Xong / ❌ Chưa
+- **Thay đổi cụ thể**: ghi tên file + dòng logic thay đổi
+- **Deploy**: `npm run build` → pass → chạy `npm run preview`
+- **Báo cáo toàn bộ task trong phiên** (kể cả task từ các phiên trước nếu có)
+
+### 3. Deploy
+
+Sau khi build pass: `npm run preview` để user kiểm tra giao diện. Nếu có lỗi → fix → build lại → preview lại.
+
+### 4. Không bao giờ
+
+- Không hứa "sẽ làm" nếu chưa đọc kỹ code
+- Không xóa file gốc trước khi copy đã tồn tại ở folder mới
+- Không dùng Write tool cho file > 200 lines (dùng Edit)
+- Không bỏ qua bước build verify
+

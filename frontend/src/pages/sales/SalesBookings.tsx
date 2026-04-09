@@ -39,7 +39,7 @@ const REFUND_SUB_FILTERS: { key: RefundSubFilter; label: string }[] = [
 // Label & style for paymentStatus (50% = partial, 100% = paid)
 const PAYMENT_LABEL: Record<string, string> = {
   unpaid:   'Chưa thanh toán',
-  partial:  'Đã cọc (50%)',
+  partial:  'Đã cọc',
   paid:     'Đã thanh toán',
   refunded: 'Đã hoàn tiền',
 };
@@ -164,7 +164,6 @@ export default function BookingManagement() {
   const [searchKeyword,   setSearchKeyword]    = useState('');
   const [searchInput,      setSearchInput]       = useState('');
   const [currentPage,     setCurrentPage]       = useState(1);
-  const [bookings]        = useState<Booking[]>(mockBookings);
 
   // Date range state (dayjs | null)
   const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null]>([null, null]);
@@ -172,6 +171,14 @@ export default function BookingManagement() {
   // Export modal state
   const [exportModalOpen,    setExportModalOpen]    = useState(false);
   const [exportReportTypes, setExportReportTypes]  = useState<ExportReportType[]>(['pending_confirm']);
+
+  // Booking action modals
+  const [confirmModal, setConfirmModal] = useState<{ open: boolean; booking: Booking | null }>({ open: false, booking: null });
+  const [rejectModal,  setRejectModal]  = useState<{ open: boolean; booking: Booking | null; defaultReason?: string }>({ open: false, booking: null });
+  const [rejectReason, setRejectReason] = useState('');
+
+  // Live bookings state (mutable for demo)
+  const [bookings, setBookings] = useState<Booking[]>(mockBookings);
 
   // ── Tab change ────────────────────────────────────────────────────────────
   const handleTabChange = (tab: BookingTab) => {
@@ -310,6 +317,46 @@ export default function BookingManagement() {
   // ── Export ────────────────────────────────────────────────────────────────
   const handleExport = () => setExportModalOpen(true);
 
+  // ── Booking Action Handlers ────────────────────────────────────────────────
+
+  const handleOpenConfirm = (booking: Booking) => {
+    setConfirmModal({ open: true, booking });
+  };
+
+  const handleOpenReject = (booking: Booking) => {
+    const defaultReason = booking.status === 'pending_cancel'
+      ? ''
+      : 'Danh sách hành khách không đủ điều kiện';
+    setRejectReason(defaultReason);
+    setRejectModal({ open: true, booking, defaultReason });
+  };
+
+  const handleConfirmBooking = () => {
+    if (!confirmModal.booking) return;
+    setBookings(prev => prev.map(b => {
+      if (b.id !== confirmModal.booking!.id) return b;
+      if (b.status === 'pending') return { ...b, status: 'confirmed' as const };
+      if (b.status === 'pending_cancel') return { ...b, status: 'cancelled' as const };
+      return b;
+    }));
+    setConfirmModal({ open: false, booking: null });
+  };
+
+  const handleRejectBooking = (reason: string) => {
+    if (!rejectModal.booking) return;
+    setBookings(prev => prev.map(b => {
+      if (b.id !== rejectModal.booking!.id) return b;
+      if (b.status === 'pending') {
+        return { ...b, status: 'cancelled' as const, cancellationReason: reason };
+      }
+      if (b.status === 'pending_cancel') {
+        return { ...b, status: 'confirmed' as const };
+      }
+      return b;
+    }));
+    setRejectModal({ open: false, booking: null });
+  };
+
   const handleConfirmExport = () => {
     const today = new Date().toISOString().split('T')[0];
     exportReportTypes.forEach(type => {
@@ -337,16 +384,13 @@ export default function BookingManagement() {
       <div className="p-6 md:p-10">
 
         {/* ── Title row ── */}
-        <div className="mb-8">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-4">
-            <div className="space-y-1.5">
-              <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold">Hệ thống đặt chỗ</p>
-              <h1 className="font-['Noto_Serif'] text-3xl text-[#2A2421] leading-tight">Báo cáo Kinh doanh</h1>
-              <p className="text-xs text-[#2A2421]/50">Quản lý toàn bộ đặt chỗ, xác nhận thanh toán và xử lý hoàn tiền.</p>
-            </div>
+        <div className="mb-6">
+          <div className="space-y-1.5 mb-4">
+            <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold">Hệ thống đặt chỗ</p>
+            <h1 className="font-['Noto_Serif'] text-3xl text-[#2A2421] leading-tight">Báo cáo Kinh doanh</h1>
           </div>
 
-          {/* Date range + Export controls */}
+          {/* Date range + Export controls — right under title */}
           <div className="flex flex-wrap items-center gap-3">
             <DatePicker.RangePicker
               value={dateRange}
@@ -359,7 +403,7 @@ export default function BookingManagement() {
 
             <button
               onClick={handleExport}
-              className="flex items-center gap-2 bg-[#2A2421] text-white px-5 py-2.5 text-xs font-['Inter'] uppercase tracking-widest hover:bg-[#D4AF37] transition-colors ml-auto"
+              className="flex items-center gap-2 bg-[#2A2421] text-white px-5 py-2.5 text-xs font-['Inter'] uppercase tracking-widest hover:bg-[#D4AF37] transition-colors"
             >
               <span className="material-symbols-outlined text-[16px]">download</span>
               Xuất Excel
@@ -411,23 +455,19 @@ export default function BookingManagement() {
             </div>
           )}
 
-          {/* Sub-filter: "Đã hủy" */}
+          {/* Sub-filter: "Đã hủy" — dropdown refund status */}
           {activeTab === 'cancelled' && (
             <div className="px-5 py-3 bg-red-50/40 border-t border-[#D0C5AF]/20 flex items-center gap-3">
               <span className="text-[10px] uppercase tracking-widest text-[#2A2421]/40 font-bold flex-shrink-0">Trạng thái hoàn tiền:</span>
-              {REFUND_SUB_FILTERS.map(f => (
-                <button
-                  key={f.key}
-                  onClick={() => { setRefundSubFilter(f.key); setCurrentPage(1); }}
-                  className={`px-3 py-1 text-[11px] font-medium border transition-all ${
-                    refundSubFilter === f.key
-                      ? 'bg-[#D4AF37] text-white border-[#D4AF37]'
-                      : 'bg-white text-[#2A2421]/60 border-[#D0C5AF]/40 hover:border-[#D4AF37]/50'
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
+              <select
+                value={refundSubFilter}
+                onChange={e => { setRefundSubFilter(e.target.value as RefundSubFilter); setCurrentPage(1); }}
+                className="px-3 py-1.5 text-[11px] border border-[#D0C5AF]/40 bg-white outline-none focus:border-[#D4AF37] cursor-pointer"
+              >
+                {REFUND_SUB_FILTERS.map(f => (
+                  <option key={f.key} value={f.key}>{f.label}</option>
+                ))}
+              </select>
             </div>
           )}
         </div>
@@ -550,6 +590,24 @@ export default function BookingManagement() {
                         <span className={`inline-block px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded ${ORDER_STATUS_STYLE[booking.status] ?? ''}`}>
                           {ORDER_STATUS_LABEL[booking.status] ?? booking.status}
                         </span>
+                      </td>
+
+                      {/* Hành động */}
+                      <td className="px-4 py-4" onClick={e => e.stopPropagation()}>
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={() => handleOpenConfirm(booking)}
+                            className="px-3 py-1.5 text-[10px] font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors whitespace-nowrap"
+                          >
+                            Xác nhận
+                          </button>
+                          <button
+                            onClick={() => handleOpenReject(booking)}
+                            className="px-3 py-1.5 text-[10px] font-bold border border-red-300 text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
+                          >
+                            Từ chối
+                          </button>
+                        </div>
                       </td>
                     </>
                   )}
@@ -690,6 +748,113 @@ export default function BookingManagement() {
             </Checkbox>
           ))}
         </div>
+      </Modal>
+
+      {/* ── Modal: Xác nhận đơn ── */}
+      <Modal
+        open={confirmModal.open}
+        onCancel={() => setConfirmModal({ open: false, booking: null })}
+        title={<span className="font-['Noto_Serif'] text-xl text-[#2A2421]">Xác nhận đơn đặt</span>}
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button onClick={() => setConfirmModal({ open: false, booking: null })}>Hủy</Button>
+            <Button type="primary" onClick={handleConfirmBooking}>
+              Xác nhận
+            </Button>
+          </div>
+        }
+      >
+        {confirmModal.booking && (
+          <div className="space-y-3">
+            <p className="text-sm text-[#2A2421]/70">
+              Bạn có chắc muốn xác nhận đơn này?
+            </p>
+            <div className="bg-[#FAFAF5] border border-[#D0C5AF]/20 p-4 space-y-2">
+              <p className="text-sm">
+                <span className="font-bold">Mã đơn:</span>{' '}
+                <span className="font-['Noto_Serif'] text-[#D4AF37]">#{confirmModal.booking.bookingCode}</span>
+              </p>
+              <p className="text-sm">
+                <span className="font-bold">Khách hàng:</span> {confirmModal.booking.contactInfo.name}
+              </p>
+              <p className="text-sm">
+                <span className="font-bold">Tour:</span> {confirmModal.booking.tourName}
+              </p>
+              <p className="text-sm">
+                <span className="font-bold">Trạng thái hiện tại:</span>{' '}
+                <span className="font-bold text-orange-600">
+                  {ORDER_STATUS_LABEL[confirmModal.booking.status]}
+                </span>
+              </p>
+            </div>
+            <p className="text-xs text-[#2A2421]/50 italic">
+              Sau khi xác nhận, đơn sẽ chuyển sang tab{" "}
+              <span className="text-emerald-600 font-bold">
+                {confirmModal.booking.status === 'pending_cancel' ? 'Đã hủy' : 'Đã xác nhận'}
+              </span>
+              .
+            </p>
+          </div>
+        )}
+      </Modal>
+
+      {/* ── Modal: Từ chối đơn ── */}
+      <Modal
+        open={rejectModal.open}
+        onCancel={() => setRejectModal({ open: false, booking: null })}
+        title={<span className="font-['Noto_Serif'] text-xl text-[#2A2421]">Từ chối đơn đặt</span>}
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button onClick={() => setRejectModal({ open: false, booking: null })}>Hủy</Button>
+            <Button
+              danger
+              onClick={() => {
+                handleRejectBooking(rejectReason || 'Danh sách hành khách không đủ điều kiện');
+              }}
+            >
+              Xác nhận từ chối
+            </Button>
+          </div>
+        }
+      >
+        {rejectModal.booking && (
+          <div className="space-y-3">
+            <p className="text-sm text-[#2A2421]/70">
+              Vui lòng nhập lý do từ chối đơn.
+            </p>
+            <div className="bg-[#FAFAF5] border border-[#D0C5AF]/20 p-4 space-y-2 mb-3">
+              <p className="text-sm">
+                <span className="font-bold">Mã đơn:</span>{' '}
+                <span className="font-['Noto_Serif'] text-[#D4AF37]">#{rejectModal.booking.bookingCode}</span>
+              </p>
+              <p className="text-sm">
+                <span className="font-bold">Khách hàng:</span> {rejectModal.booking.contactInfo.name}
+              </p>
+              <p className="text-sm">
+                <span className="font-bold">Trạng thái hiện tại:</span>{' '}
+                <span className="font-bold text-orange-600">
+                  {ORDER_STATUS_LABEL[rejectModal.booking.status]}
+                </span>
+              </p>
+            </div>
+            <textarea
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              rows={3}
+              placeholder={
+                rejectModal.booking.status === 'pending_cancel'
+                  ? 'Nhập lý do không chấp nhận yêu cầu hủy...'
+                  : 'Nhập lý do từ chối đơn đặt...'
+              }
+              className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none focus:border-[#D4AF37] resize-none"
+            />
+            <p className="text-xs text-[#2A2421]/50 italic">
+              {rejectModal.booking.status === 'pending_cancel'
+                ? 'Sau khi từ chối, đơn quay lại tab Đã xác nhận.'
+                : 'Sau khi từ chối, đơn chuyển sang tab Đã hủy.'}
+            </p>
+          </div>
+        )}
       </Modal>
 
     </div>

@@ -30,33 +30,39 @@ import CancelBooking from './pages/customer/CancelBooking';
 import Wishlist from './pages/customer/Wishlist';
 import Profile from './pages/customer/Profile';
 
-// Shared office pages (used by multiple roles)
-import AdminTourPrograms from './pages/admin/AdminTourPrograms';
-import AdminTourProgramWizard from './pages/admin/AdminTourProgramWizard';
-import AdminTourProgramDetail from './pages/admin/AdminTourProgramDetail';
-import AdminActiveTours from './pages/admin/AdminActiveTours';
-import TourEstimate from './pages/admin/TourEstimate';
-import TourSettlement from './pages/admin/TourSettlement';
-import ServiceList from './pages/admin/ServiceList';
-import AdminSuppliers from './pages/admin/AdminSuppliers';
-import BookingManagement from './pages/admin/BookingManagement';
-import SalesBookingDetail from './pages/admin/SalesBookingDetail';
-import VoucherManagement from './pages/admin/VoucherManagement';
-
-// Admin-only pages
+// Admin pages
 import AdminUsers from './pages/admin/AdminUsers';
 
-// Per-role dashboards
+// Manager pages
 import ManagerDashboard from './pages/manager/ManagerDashboard';
-import CoordinatorDashboard from './pages/coordinator/CoordinatorDashboard';
-import SalesDashboard from './pages/sales/SalesDashboard';
 import ManagerVoucherApproval from './pages/manager/ManagerVoucherApproval';
 import AdminTourProgramApproval from './pages/manager/AdminTourProgramApproval';
 import ManagerTourEstimateApproval from './pages/manager/ManagerTourEstimateApproval';
 import ManagerCancelPolicy from './pages/manager/ManagerCancelPolicy';
-import CoordinatorTourPrograms from './pages/coordinator/AdminTourPrograms';
+import ManagerTourPrograms from './pages/manager/TourPrograms';
+import ManagerActiveTours from './pages/manager/ActiveTours';
+import ManagerTourEstimate from './pages/manager/TourEstimate';
+import ManagerTourProgramDetail from './pages/manager/TourProgramDetail';
+import ManagerVouchers from './pages/manager/Vouchers';
+
+// Coordinator pages
+import CoordinatorDashboard from './pages/coordinator/CoordinatorDashboard';
+import CoordinatorTourPrograms from './pages/coordinator/TourInstances';
+import CoordinatorTourProgramWizard from './pages/coordinator/TourProgramWizard';
+import CoordinatorTourProgramDetail from './pages/coordinator/TourProgramDetail';
+import CoordinatorTourEstimate from './pages/coordinator/TourEstimate';
+import CoordinatorTourSettlement from './pages/coordinator/TourSettlement';
+import CoordinatorServiceList from './pages/coordinator/ServiceList';
+import CoordinatorSuppliers from './pages/coordinator/Suppliers';
+import CoordinatorVouchers from './pages/coordinator/Vouchers';
 import TourReceiveDispatch from './pages/coordinator/TourReceiveDispatch';
 import TourGenerationRules from './pages/coordinator/TourGenerationRules';
+
+// Sales pages
+import SalesDashboard from './pages/sales/SalesDashboard';
+import SalesBookings from './pages/sales/SalesBookings';
+import SalesBookingDetail from './pages/sales/SalesBookingDetail';
+import SalesVouchers from './pages/sales/Vouchers';
 
 export default function App() {
   return (
@@ -73,7 +79,7 @@ export default function App() {
           <Route path="blog" element={<BlogList />} />
           <Route path="blog/:slug" element={<BlogDetail />} />
           <Route path="about" element={<AboutUs />} />
-          
+
           {/* Customer routes (auth required) */}
           <Route path="customer/bookings" element={<BookingHistory />} />
           <Route path="customer/bookings/:id" element={<BookingDetail />} />
@@ -100,14 +106,15 @@ export default function App() {
         <Route path="/manager" element={<ManagerLayout />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<ManagerDashboard />} />
-          <Route path="tour-programs" element={<AdminTourPrograms />} />
-          <Route path="tour-programs/:id" element={<AdminTourProgramDetail />} />
-          <Route path="tours" element={<AdminActiveTours />} />
-          <Route path="tours/:id/estimate" element={<TourEstimate />} />
-          <Route path="voucher-approval" element={<ManagerVoucherApproval />} />
+          <Route path="tour-programs" element={<ManagerTourPrograms />} />
+          <Route path="tour-programs/:id" element={<ManagerTourProgramDetail />} />
           <Route path="tour-programs/:id/approval" element={<AdminTourProgramApproval />} />
+          <Route path="tours" element={<ManagerActiveTours />} />
+          <Route path="tours/:id/estimate" element={<ManagerTourEstimate />} />
           <Route path="tours/:id/estimate-approval" element={<ManagerTourEstimateApproval />} />
+          <Route path="voucher-approval" element={<ManagerVoucherApproval />} />
           <Route path="cancel-policies" element={<ManagerCancelPolicy />} />
+          <Route path="vouchers" element={<ManagerVouchers />} />
         </Route>
 
         {/* Coordinator routes */}
@@ -115,25 +122,25 @@ export default function App() {
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<CoordinatorDashboard />} />
           <Route path="tour-programs" element={<CoordinatorTourPrograms />} />
-          <Route path="tour-programs/create" element={<AdminTourProgramWizard />} />
-          <Route path="tour-programs/:id" element={<AdminTourProgramDetail />} />
+          <Route path="tour-programs/create" element={<CoordinatorTourProgramWizard />} />
+          <Route path="tour-programs/:id" element={<CoordinatorTourProgramDetail />} />
           <Route path="tour-programs/:id/receive" element={<TourReceiveDispatch />} />
           <Route path="tour-rules" element={<TourGenerationRules />} />
-          <Route path="tours" element={<AdminActiveTours />} />
-          <Route path="tours/:id/estimate" element={<TourEstimate />} />
-          <Route path="tours/:id/settle" element={<TourSettlement />} />
-          <Route path="services" element={<ServiceList />} />
-          <Route path="suppliers" element={<AdminSuppliers />} />
-          <Route path="vouchers" element={<VoucherManagement />} />
+          <Route path="tours" element={<CoordinatorTourPrograms />} />
+          <Route path="tours/:id/estimate" element={<CoordinatorTourEstimate />} />
+          <Route path="tours/:id/settle" element={<CoordinatorTourSettlement />} />
+          <Route path="services" element={<CoordinatorServiceList />} />
+          <Route path="suppliers" element={<CoordinatorSuppliers />} />
+          <Route path="vouchers" element={<CoordinatorVouchers />} />
         </Route>
 
         {/* Sales routes */}
         <Route path="/sales" element={<SalesLayout />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<SalesDashboard />} />
-          <Route path="bookings" element={<BookingManagement />} />
+          <Route path="bookings" element={<SalesBookings />} />
           <Route path="bookings/:id" element={<SalesBookingDetail />} />
-          <Route path="vouchers" element={<VoucherManagement />} />
+          <Route path="vouchers" element={<SalesVouchers />} />
         </Route>
       </Routes>
     </BrowserRouter>
