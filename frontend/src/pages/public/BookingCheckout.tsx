@@ -422,23 +422,37 @@ export default function BookingCheckout() {
                               placeholder="Việt Nam"
                             />
                           </div>
-                          {/* Phụ thu phòng đơn (chỉ người lớn) */}
+                          {/* Phòng đơn (chỉ người lớn) — checkbox style */}
                           {p.type === 'adult' && (
                             <div>
-                              <label className="block text-[10px] font-label uppercase tracking-widest text-primary/60 mb-1">
-                                Phụ thu phòng đơn
+                              <label className="block text-[10px] font-label uppercase tracking-widest text-primary/60 mb-2">
+                                Phòng đơn
                               </label>
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="number"
-                                  value={p.singleRoomSupplement ?? 0}
-                                  onChange={e => updatePassenger(idx, 'singleRoomSupplement', Number(e.target.value))}
-                                  className="w-full bg-transparent border-t-0 border-x-0 border-b border-outline-variant focus:border-[var(--color-secondary)] px-0 py-2 text-sm transition-all"
-                                  placeholder="0"
-                                  min={0}
-                                />
-                                <span className="text-xs text-primary/40">VNĐ</span>
-                              </div>
+                              <label className="flex items-center gap-3 cursor-pointer group">
+                                <div className={`w-5 h-5 border flex items-center justify-center transition-colors ${
+                                  (p.singleRoomSupplement ?? 0) > 0
+                                    ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]'
+                                    : 'border-outline-variant/50 group-hover:border-[var(--color-secondary)]'
+                                }`}
+                                  onClick={() => {
+                                    if ((p.singleRoomSupplement ?? 0) > 0) {
+                                      updatePassenger(idx, 'singleRoomSupplement', 0);
+                                    } else {
+                                      updatePassenger(idx, 'singleRoomSupplement', schedule.singleRoomSurcharge ?? 0);
+                                    }
+                                  }}
+                                >
+                                  {(p.singleRoomSupplement ?? 0) > 0 && (
+                                    <span className="material-symbols-outlined text-white text-base" style={{ fontVariationSettings: "'FILL' 1" }}>check</span>
+                                  )}
+                                </div>
+                                <span className="text-sm text-primary">
+                                  Phòng đơn
+                                </span>
+                                <span className="text-xs text-primary/50">
+                                  +{(schedule.singleRoomSurcharge ?? 0).toLocaleString('vi-VN')}đ
+                                </span>
+                              </label>
                             </div>
                           )}
                         </div>
@@ -471,119 +485,99 @@ export default function BookingCheckout() {
                   <button onClick={() => setStep(1)} className="flex items-center gap-2 hover:opacity-70 transition-opacity">
                     <span className="material-symbols-outlined text-[var(--color-primary)]">arrow_back</span>
                   </button>
-                  <h2 className="font-headline text-2xl text-primary">Xác nhận & Thanh toán</h2>
-                </div>
-
-                {/* Left col */}
-                <div className="space-y-6">
-
-                  {/* Passenger summary (read-only) */}
-                  <section className="bg-white border border-outline-variant/30 p-6">
-                    <h3 className="font-headline text-lg text-primary mb-4 flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[var(--color-secondary)]">group</span>
-                      Thông tin hành khách
-                    </h3>
-                    <div className="divide-y divide-[var(--color-surface)]">
-                      {passengers.map((p, idx) => (
-                        <div key={idx} className="py-3 flex items-center justify-between gap-4">
-                          <div>
-                            <p className="text-sm font-medium text-primary">{p.name}</p>
-                            <p className="text-xs text-primary/50 mt-0.5">
-                              {p.dob ? new Date(p.dob).toLocaleDateString('vi-VN') : '—'} · {p.gender === 'male' ? 'Nam' : 'Nữ'}
-                              {p.cccd ? ` · ${p.cccd}` : ''}
-                            </p>
-                          </div>
-                          <span className="text-[10px] uppercase tracking-widest bg-[var(--color-surface)] px-3 py-1 text-primary/60 shrink-0">
-                            {passengerTypeLabel(p.type)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => setStep(1)}
-                      className="mt-3 text-xs text-[var(--color-secondary)] hover:underline"
-                    >
-                      Chỉnh sửa thông tin
-                    </button>
-                  </section>
-
-                  {/* Payment method */}
-                  <section className="bg-white border border-outline-variant/30 p-6">
-                    <h3 className="font-headline text-lg text-primary mb-5">Phương thức thanh toán</h3>
-                    <div className="space-y-4">
-                      <label className={`block p-5 border cursor-pointer flex items-start gap-4 transition-colors ${
-                        paymentMethod === 'bank'
-                          ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/5'
-                          : 'border-outline-variant/30 hover:border-outline-variant'
-                      }`}>
-                        <input type="radio" name="payment" checked={paymentMethod === 'bank'}
-                          onChange={() => setPaymentMethod('bank')} className="mt-1 accent-[var(--color-secondary)]" />
-                        <div className="flex-1">
-                          <h4 className="font-headline font-bold text-base text-primary">Chuyển khoản Ngân hàng</h4>
-                          <p className="text-xs opacity-60 mt-1">Qua mã VietQR NAPAS. Thanh toán trong 24h để giữ chỗ.</p>
-                        </div>
-                        <span className="material-symbols-outlined text-3xl opacity-20">account_balance</span>
-                      </label>
-                      <label className={`block p-5 border cursor-pointer flex items-start gap-4 transition-colors ${
-                        paymentMethod === 'card'
-                          ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/5'
-                          : 'border-outline-variant/30 hover:border-outline-variant'
-                      }`}>
-                        <input type="radio" name="payment" checked={paymentMethod === 'card'}
-                          onChange={() => setPaymentMethod('card')} className="mt-1 accent-[var(--color-secondary)]" />
-                        <div className="flex-1">
-                          <h4 className="font-headline font-bold text-base text-primary">Thẻ tín dụng / Thẻ thanh toán</h4>
-                          <p className="text-xs opacity-60 mt-1">Visa, Mastercard, JCB qua cổng VNPAY.</p>
-                        </div>
-                        <span className="material-symbols-outlined text-3xl opacity-20">credit_card</span>
-                      </label>
-                    </div>
-                  </section>
-
-                  {/* Submit */}
-                  <div className="flex gap-4">
-                    <button
-                      onClick={() => setStep(1)}
-                      className="border border-outline-variant/60 text-primary px-8 py-4 font-sans uppercase tracking-[0.2em] text-[12px] hover:bg-surface transition-all"
-                    >
-                      Quay lại
-                    </button>
-                    <button
-                      onClick={handleSubmit}
-                      disabled={isSubmitting}
-                      className={`flex-1 py-4 font-sans uppercase tracking-[0.2em] text-[12px] font-bold transition-all flex items-center justify-center gap-2 ${
-                        isSubmitting
-                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                          : 'bg-primary text-surface hover:bg-[var(--color-secondary)]'
-                      }`}
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
-                          Đang xử lý...
-                        </>
-                      ) : (
-                        <>
-                          Thanh toán {paymentAmount.toLocaleString('vi-VN')}đ
-                          <span className="material-symbols-outlined text-lg">arrow_forward</span>
-                        </>
-                      )}
-                    </button>
+                  <div>
+                    <h2 className="font-headline text-2xl text-primary">Xác nhận thông tin</h2>
+                    <p className="text-xs text-primary/50 mt-0.5">Kiểm tra kỹ thông tin trước khi thanh toán</p>
                   </div>
                 </div>
+
+                {/* Contact info review */}
+                <section className="bg-white border border-outline-variant/30 p-6">
+                  <h3 className="font-headline text-lg text-primary mb-4 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[var(--color-secondary)]">contact_phone</span>
+                    Thông tin liên hệ
+                  </h3>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-primary/40 font-label">Họ tên</p>
+                      <p className="text-sm font-medium text-primary mt-1">{contact.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-primary/40 font-label">Số điện thoại</p>
+                      <p className="text-sm font-medium text-primary mt-1">{contact.phone}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-primary/40 font-label">Email</p>
+                      <p className="text-sm font-medium text-primary mt-1">{contact.email}</p>
+                    </div>
+                    {contact.note && (
+                      <div className="col-span-2">
+                        <p className="text-[10px] uppercase tracking-widest text-primary/40 font-label">Yêu cầu đặc biệt</p>
+                        <p className="text-sm text-primary/70 mt-1 italic">{contact.note}</p>
+                      </div>
+                    )}
+                  </div>
+                  <button onClick={() => setStep(1)} className="mt-3 text-xs text-[var(--color-secondary)] hover:underline">
+                    Chỉnh sửa
+                  </button>
+                </section>
+
+                {/* Passenger info review */}
+                <section className="bg-white border border-outline-variant/30 p-6">
+                  <h3 className="font-headline text-lg text-primary mb-4 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[var(--color-secondary)]">group</span>
+                    Hành khách
+                  </h3>
+                  <div className="space-y-4">
+                    {passengers.map((p, idx) => (
+                      <div key={idx} className="flex items-start gap-4">
+                        <div className="w-8 h-8 rounded-full bg-[var(--color-surface)] flex items-center justify-center shrink-0 mt-0.5">
+                          <span className="material-symbols-outlined text-base text-primary/40">person</span>
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-medium text-primary">
+                              {passengerTypeLabel(p.type)} {idx < counts.adult ? idx + 1 : idx - counts.adult + 1}
+                            </span>
+                            <span className="text-[10px] uppercase tracking-widest bg-[var(--color-surface)] px-2 py-0.5 text-primary/50">
+                              {p.gender === 'male' ? 'Nam' : 'Nữ'}
+                            </span>
+                            {(p.singleRoomSupplement ?? 0) > 0 && (
+                              <span className="text-[10px] uppercase tracking-widest bg-amber-50 text-amber-600 px-2 py-0.5">
+                                Phòng đơn
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-primary/50">
+                            {p.name} · {p.dob ? new Date(p.dob).toLocaleDateString('vi-VN') : '—'}
+                            {p.cccd ? ` · ${p.cccd}` : ''}
+                            {p.nationality && p.nationality !== 'Việt Nam' ? ` · ${p.nationality}` : ''}
+                          </p>
+                        </div>
+                        <span className="text-sm text-primary/70 shrink-0">
+                          {(p.type === 'adult' ? priceAdult : p.type === 'child' ? priceChild : priceInfant).toLocaleString('vi-VN')}đ
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={() => setStep(1)} className="mt-4 text-xs text-[var(--color-secondary)] hover:underline">
+                    Chỉnh sửa thông tin hành khách
+                  </button>
+                </section>
               </div>
             )}
           </div>
 
-          {/* Right: Booking Summary Card (sticky) */}
+          {/* Right: Booking Summary Card — sticky, no passenger list */}
           <div className="w-full lg:w-80 shrink-0">
-            <div className="sticky top-24 space-y-4">
+            <div className="sticky top-24">
               <div className="bg-white border border-outline-variant/30 overflow-hidden">
-                {/* Tour info */}
+
+                {/* Tour image */}
                 <div className="relative">
                   <img alt={tour.title} src={tour.image} className="w-full h-40 object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-                  <div className="absolute bottom-3 left-4">
+                  <div className="absolute bottom-3 left-4 right-4">
                     <p className="text-surface font-serif text-sm font-medium line-clamp-2">{tour.title}</p>
                     <p className="text-surface/80 text-xs mt-1">
                       {new Date(schedule.date).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
@@ -591,64 +585,47 @@ export default function BookingCheckout() {
                   </div>
                 </div>
 
-                {/* Summary */}
-                <div className="p-5 space-y-4">
-                  {/* Passengers */}
-                  <div className="space-y-2">
-                    <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Hành khách</p>
-                    {passengers.map((p, idx) => (
-                      <div key={idx} className="flex items-center justify-between text-sm">
-                        <span className="text-primary/70">
-                          {p.name || `${passengerTypeLabel(p.type)} ${idx + 1}`}
-                        </span>
-                        <span className="text-primary/50 text-xs">
-                          {p.type === 'adult' ? priceAdult :
-                           p.type === 'child' ? priceChild :
-                           priceInfant}{' đ'}
-                        </span>
-                      </div>
-                    ))}
+                {/* Pricing breakdown */}
+                <div className="p-5 space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-primary/60">Người lớn × {counts.adult}</span>
+                    <span>{(counts.adult * priceAdult).toLocaleString('vi-VN')}đ</span>
                   </div>
-
-                  <div className="border-t border-outline-variant/30 pt-3 space-y-2">
-                    {counts.adult > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-primary/60">Người lớn × {counts.adult}</span>
-                        <span>{(counts.adult * priceAdult).toLocaleString('vi-VN')}đ</span>
-                      </div>
-                    )}
-                    {counts.child > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-primary/60">Trẻ em × {counts.child}</span>
-                        <span>{(counts.child * priceChild).toLocaleString('vi-VN')}đ</span>
-                      </div>
-                    )}
-                    {counts.infant > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-primary/60">Em bé × {counts.infant}</span>
-                        <span>{(counts.infant * priceInfant).toLocaleString('vi-VN')}đ</span>
-                      </div>
-                    )}
-                    {totalSingleRoomSupplement > 0 && (
-                      <div className="flex justify-between text-sm text-amber-600">
-                        <span>Phụ thu phòng đơn</span>
-                        <span>+{totalSingleRoomSupplement.toLocaleString('vi-VN')}đ</span>
-                      </div>
-                    )}
-                    {promoApplied && (
-                      <div className="flex justify-between text-sm text-emerald-600">
-                        <span>Mã giảm giá (-10%)</span>
-                        <span>-{discount.toLocaleString('vi-VN')}đ</span>
-                      </div>
-                    )}
+                  {counts.child > 0 && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-primary/60">Thuế & phí</span>
-                      <span className="text-primary/50">Đã tính</span>
+                      <span className="text-primary/60">Trẻ em × {counts.child}</span>
+                      <span>{(counts.child * priceChild).toLocaleString('vi-VN')}đ</span>
                     </div>
+                  )}
+                  {counts.infant > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-primary/60">Em bé × {counts.infant}</span>
+                      <span>{(counts.infant * priceInfant).toLocaleString('vi-VN')}đ</span>
+                    </div>
+                  )}
+                  {totalSingleRoomSupplement > 0 && (
+                    <div className="flex justify-between text-sm text-amber-600">
+                      <span>Phụ thu phòng đơn</span>
+                      <span>+{totalSingleRoomSupplement.toLocaleString('vi-VN')}đ</span>
+                    </div>
+                  )}
+                  {promoApplied && (
+                    <div className="flex justify-between text-sm text-emerald-600">
+                      <span>Mã giảm giá (-10%)</span>
+                      <span>-{discount.toLocaleString('vi-VN')}đ</span>
+                    </div>
+                  )}
+                  <div className="border-t border-outline-variant/30 pt-3 flex justify-between">
+                    <span className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Tổng cộng</span>
+                    <span className="font-headline font-bold text-lg text-[var(--color-secondary)]">
+                      {subtotal.toLocaleString('vi-VN')}đ
+                    </span>
                   </div>
+                </div>
 
-                  {/* Promo code */}
-                  <div className="border-t border-outline-variant/30 pt-3">
+                {/* Promo code */}
+                <div className="px-5 pb-5">
+                  <div className="border-t border-outline-variant/30 pt-4">
                     <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label mb-2">Mã giảm giá</p>
                     <div className="flex gap-2">
                       <input
@@ -674,16 +651,83 @@ export default function BookingCheckout() {
                     </div>
                     <p className="text-[10px] text-primary/30 mt-1">Thử: TRAVELA10</p>
                   </div>
+                </div>
 
-                  {/* Total */}
-                  <div className="border-t border-outline-variant/30 pt-3">
-                    <div className="flex justify-between items-end mb-1">
-                      <span className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Tổng cộng</span>
-                      <span className="text-xl font-headline font-bold text-[var(--color-secondary)]">
-                        {subtotal.toLocaleString('vi-VN')}đ
-                      </span>
+                {/* Payment button */}
+                <div className="border-t border-outline-variant/30 px-5 py-4">
+                  {step === 1 ? (
+                    <button
+                      onClick={() => setStep(2)}
+                      disabled={!canProceedStep1}
+                      className={`w-full py-3.5 font-sans uppercase tracking-[0.15em] text-[11px] font-bold transition-all flex items-center justify-center gap-2 ${
+                        canProceedStep1
+                          ? 'bg-primary text-surface hover:bg-[var(--color-secondary)] cursor-pointer'
+                          : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      }`}
+                    >
+                      Tiếp tục thanh toán
+                      <span className="material-symbols-outlined text-lg">arrow_forward</span>
+                    </button>
+                  ) : (
+                    <div className="space-y-3">
+                      {/* Payment methods */}
+                      <div className="space-y-2">
+                        <label className={`block p-3 border cursor-pointer flex items-center gap-3 transition-colors ${
+                          paymentMethod === 'bank'
+                            ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/5'
+                            : 'border-outline-variant/30 hover:border-outline-variant'
+                        }`}>
+                          <input type="radio" name="payMethod" checked={paymentMethod === 'bank'}
+                            onChange={() => setPaymentMethod('bank')} className="accent-[var(--color-secondary)]" />
+                          <div className="flex-1">
+                            <p className="text-xs font-medium text-primary">Chuyển khoản VietQR</p>
+                          </div>
+                          <span className="material-symbols-outlined text-xl opacity-30">account_balance</span>
+                        </label>
+                        <label className={`block p-3 border cursor-pointer flex items-center gap-3 transition-colors ${
+                          paymentMethod === 'card'
+                            ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/5'
+                            : 'border-outline-variant/30 hover:border-outline-variant'
+                        }`}>
+                          <input type="radio" name="payMethod" checked={paymentMethod === 'card'}
+                            onChange={() => setPaymentMethod('card')} className="accent-[var(--color-secondary)]" />
+                          <div className="flex-1">
+                            <p className="text-xs font-medium text-primary">Thẻ VNPAY</p>
+                          </div>
+                          <span className="material-symbols-outlined text-xl opacity-30">credit_card</span>
+                        </label>
+                      </div>
+
+                      <button
+                        onClick={handleSubmit}
+                        disabled={isSubmitting}
+                        className={`w-full py-3.5 font-sans uppercase tracking-[0.15em] text-[11px] font-bold transition-all flex items-center justify-center gap-2 ${
+                          isSubmitting
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-primary text-surface hover:bg-[var(--color-secondary)]'
+                        }`}
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+                            Đang xử lý...
+                          </>
+                        ) : (
+                          <>
+                            Thanh toán {paymentAmount.toLocaleString('vi-VN')}đ
+                            <span className="material-symbols-outlined text-lg">arrow_forward</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => setStep(1)}
+                        className="w-full py-2 border border-outline-variant/60 text-primary/60 text-xs font-sans uppercase tracking-widest hover:bg-surface transition-all"
+                      >
+                        Quay lại
+                      </button>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>

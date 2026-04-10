@@ -3,7 +3,10 @@ export interface DepartureScheduleEntry {
   date: string;
   availableSeats: number;
   status: 'open' | 'filling' | 'full' | 'closed';
-  priceAdjusted?: number;
+  priceAdult?: number;
+  priceChild?: number;
+  priceInfant?: number;
+  singleRoomSurcharge?: number;
 }
 
 export interface CancellationTier {
@@ -84,11 +87,11 @@ export const mockTours: Tour[] = [
     tourType: 'quanh_nam',
     bookingDeadline: 7,
     departureSchedule: [
-      { id: 'DS001-1', date: '2026-04-10', availableSeats: 12, status: 'open' },
-      { id: 'DS001-2', date: '2026-04-17', availableSeats: 5, status: 'filling' },
-      { id: 'DS001-3', date: '2026-04-24', availableSeats: 12, status: 'open' },
-      { id: 'DS001-4', date: '2026-05-01', availableSeats: 12, status: 'open' },
-      { id: 'DS001-5', date: '2026-05-08', availableSeats: 0, status: 'full' },
+      { id: 'DS001-1', date: '2026-04-10', availableSeats: 12, status: 'open', priceAdult: 4500000, priceChild: 2250000, priceInfant: 0 },
+      { id: 'DS001-2', date: '2026-04-17', availableSeats: 5, status: 'filling', priceAdult: 4500000, priceChild: 2250000, priceInfant: 0 },
+      { id: 'DS001-3', date: '2026-04-24', availableSeats: 12, status: 'open', priceAdult: 4500000, priceChild: 2250000, priceInfant: 0 },
+      { id: 'DS001-4', date: '2026-05-01', availableSeats: 12, status: 'open', priceAdult: 4800000, priceChild: 2400000, priceInfant: 0, singleRoomSurcharge: 500000 },
+      { id: 'DS001-5', date: '2026-05-08', availableSeats: 0, status: 'full', priceAdult: 4500000, priceChild: 2250000, priceInfant: 0 },
     ],
     inclusions: ['Xe Limousine đưa đón khứ hồi', '02 đêm nghỉ trên du thuyền', 'Bữa ăn theo chương trình (3 bữa/ngày)', 'Vé tham quan hang động', 'Chèo Kayak', 'Bảo hiểm du lịch'],
     exclusions: ['Chi phí cá nhân, đồ uống ngoài thực đơn', 'Tiền tip cho hướng dẫn viên và lái xe', 'VAT nếu yêu cầu xuất hóa đơn'],
@@ -132,8 +135,8 @@ export const mockTours: Tour[] = [
     tourType: 'quanh_nam',
     bookingDeadline: 14,
     departureSchedule: [
-      { id: 'DS002-1', date: '2026-05-01', availableSeats: 4, status: 'open' },
-      { id: 'DS002-2', date: '2026-05-15', availableSeats: 4, status: 'open' },
+      { id: 'DS002-1', date: '2026-05-01', availableSeats: 4, status: 'open', priceAdult: 28000000, priceChild: 14000000, priceInfant: 2800000, singleRoomSurcharge: 8000000 },
+      { id: 'DS002-2', date: '2026-05-15', availableSeats: 4, status: 'open', priceAdult: 28000000, priceChild: 14000000, priceInfant: 2800000, singleRoomSurcharge: 8000000 },
     ],
     inclusions: ['Xe đưa đón sân bay Cam Ranh', '03 đêm tại biệt thự Amanoi', 'Bữa ăn theo chương trình', 'Liệu trình Spa 60 phút/ngày', 'Du thuyền Vịnh Vĩnh Hy', 'Bảo hiểm du lịch'],
     exclusions: ['Vé máy bay đến Cam Ranh', 'Chi phí cá nhân, đồ uống ngoài thực đơn', 'VAT nếu yêu cầu'],
@@ -180,8 +183,13 @@ export const mockTours: Tour[] = [
     holiday: 'Mùa thu Nhật Bản',
     bookingDeadline: 21,
     departureSchedule: [
-      { id: 'DS003-1', date: '2026-10-15', availableSeats: 25, status: 'open' },
-      { id: 'DS003-2', date: '2026-10-20', availableSeats: 18, status: 'open' },
+      { id: 'DS003-1', date: '2026-03-10', availableSeats: 10, status: 'open', priceAdult: 11400000, priceChild: 10000000, priceInfant: 500000, singleRoomSurcharge: 1000000 },
+      { id: 'DS003-2', date: '2026-03-11', availableSeats: 10, status: 'open', priceAdult: 11400000, priceChild: 10000000, priceInfant: 500000, singleRoomSurcharge: 1000000 },
+      { id: 'DS003-3', date: '2026-04-11', availableSeats: 10, status: 'open', priceAdult: 11400000, priceChild: 10000000, priceInfant: 500000, singleRoomSurcharge: 1000000 },
+      { id: 'DS003-4', date: '2026-04-12', availableSeats: 10, status: 'open', priceAdult: 11400000, priceChild: 10000000, priceInfant: 500000, singleRoomSurcharge: 2000000 },
+      { id: 'DS003-5', date: '2026-05-12', availableSeats: 10, status: 'open', priceAdult: 11400000, priceChild: 10000000, priceInfant: 500000, singleRoomSurcharge: 1000000 },
+      { id: 'DS003-6', date: '2026-10-15', availableSeats: 25, status: 'open', priceAdult: 32000000, priceChild: 26000000, priceInfant: 8000000, singleRoomSurcharge: 5000000 },
+      { id: 'DS003-7', date: '2026-10-20', availableSeats: 18, status: 'open', priceAdult: 32000000, priceChild: 26000000, priceInfant: 8000000, singleRoomSurcharge: 5000000 },
     ],
     inclusions: ['Vé máy bay khứ hồi NRT/KIX', '05 đêm khách sạn 4* (phòng đôi)', 'Bữa ăn theo chương trình', 'Xe tham quan', 'Phí vào cửa các điểm tham quan', 'Hướng dẫn viên tiếng Việt', 'Bảo hiểm du lịch quốc tế'],
     exclusions: ['Chi phí cá nhân, đồ uống ngoài thực đơn', 'Tip cho HDV và lái xe (khoảng 50 USD)', 'Phí phòng đơn (nếu có)', 'VAT'],

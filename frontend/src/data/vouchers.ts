@@ -10,9 +10,15 @@ export interface Voucher {
   code: string;
   type: VoucherType;
   value: string;
-  expiryDate: string;
+  /** Ngày bắt đầu áp dụng */
+  startDate: string;
+  /** Ngày kết thúc áp dụng */
+  endDate: string;
+  /** Alias for endDate (used in UI pages) */
+  expiryDate?: string;
   used: number;
   limit: number;
+  /** Danh sách id chương trình tour được áp dụng (empty = tất cả) */
   applicableTours: string[];
   status: VoucherStatus;
   rejectionReason?: string;
@@ -28,10 +34,11 @@ export const mockVouchers: Voucher[] = [
     code: 'SUMMER2024',
     type: 'percent',
     value: '15%',
-    expiryDate: '2026-08-31',
+    startDate: '2024-06-01',
+    endDate: '2026-08-31',
     used: 45,
     limit: 100,
-    applicableTours: ['T001', 'T002'],
+    applicableTours: [],
     status: 'active',
     description: 'Khuyến mãi mùa hè 2024',
   },
@@ -40,7 +47,8 @@ export const mockVouchers: Voucher[] = [
     code: 'LUXURY500K',
     type: 'fixed',
     value: '500,000 đ',
-    expiryDate: '2026-12-31',
+    startDate: '2026-01-01',
+    endDate: '2026-12-31',
     used: 12,
     limit: 50,
     applicableTours: [],
@@ -52,7 +60,8 @@ export const mockVouchers: Voucher[] = [
     code: 'FLASHWINTER',
     type: 'percent',
     value: '20%',
-    expiryDate: '2024-02-28',
+    startDate: '2024-01-01',
+    endDate: '2024-02-28',
     used: 100,
     limit: 100,
     applicableTours: [],
@@ -64,10 +73,11 @@ export const mockVouchers: Voucher[] = [
     code: 'SUMMER2026',
     type: 'percent',
     value: '20%',
-    expiryDate: '2026-08-31',
+    startDate: '2026-06-01',
+    endDate: '2026-08-31',
     used: 0,
     limit: 200,
-    applicableTours: ['T001', 'T002'],
+    applicableTours: [],
     status: 'draft',
     description: 'Khuyến mãi mùa hè 2026',
   },
@@ -76,7 +86,8 @@ export const mockVouchers: Voucher[] = [
     code: 'PROMO10PCT',
     type: 'percent',
     value: '10%',
-    expiryDate: '2026-12-31',
+    startDate: '2026-04-01',
+    endDate: '2026-12-31',
     used: 15,
     limit: 100,
     applicableTours: [],
@@ -90,10 +101,11 @@ export const mockVouchers: Voucher[] = [
     code: 'VIP50PCT',
     type: 'percent',
     value: '50%',
-    expiryDate: '2026-06-30',
+    startDate: '2026-04-01',
+    endDate: '2026-06-30',
     used: 0,
     limit: 10,
-    applicableTours: ['T003'],
+    applicableTours: [],
     status: 'rejected',
     rejectionReason: 'Giá trị giảm quá cao, vui lòng giảm xuống 30%.',
     description: 'VIP khách hàng thân thiết',
@@ -103,7 +115,8 @@ export const mockVouchers: Voucher[] = [
     code: 'AUTUMN20',
     type: 'percent',
     value: '20%',
-    expiryDate: '2026-10-31',
+    startDate: '2026-09-01',
+    endDate: '2026-10-31',
     used: 0,
     limit: 150,
     applicableTours: [],
@@ -117,10 +130,11 @@ export const mockVouchers: Voucher[] = [
     code: 'VIPONLY30',
     type: 'fixed',
     value: '300,000 đ',
-    expiryDate: '2026-09-30',
+    startDate: '2026-05-01',
+    endDate: '2026-09-30',
     used: 2,
     limit: 50,
-    applicableTours: ['T003', 'T004'],
+    applicableTours: [],
     status: 'pending_approval',
     createdBy: 'Lê Văn G',
     createdAt: '2026-03-30',

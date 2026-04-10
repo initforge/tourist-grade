@@ -229,25 +229,29 @@ export default function OrderLookup() {
 
       {/* Cancel Modal */}
       {showCancelModal && foundBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-primary/40 backdrop-blur-sm" onClick={() => setShowCancelModal(false)} />
-          <div className="relative w-full max-w-lg bg-white shadow-2xl animate-in zoom-in-95 duration-300">
-            <div className="p-8">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="font-serif text-2xl text-primary">Gửi yêu cầu hủy</h3>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[var(--color-primary)]/40 backdrop-blur-sm" onClick={() => setShowCancelModal(false)} />
+          <div className="relative w-full max-w-lg max-h-[90vh] bg-white shadow-2xl flex flex-col animate-in zoom-in-95 duration-300">
+            {/* Header */}
+            <div className="p-6 pb-5 border-b border-outline-variant/20 shrink-0">
+              <div className="flex items-center justify-between">
+                <h3 className="font-serif text-xl text-primary">Gửi yêu cầu hủy</h3>
                 <button onClick={() => setShowCancelModal(false)} className="text-primary/40 hover:text-primary transition-colors">
                   <span className="material-symbols-outlined text-2xl">close</span>
                 </button>
               </div>
+            </div>
 
+            {/* Scrollable body */}
+            <div className="p-6 space-y-5 overflow-y-auto">
               {/* Booking info */}
-              <div className="bg-[var(--color-surface)] p-4 mb-6 space-y-1">
+              <div className="bg-[var(--color-surface)] p-4 space-y-1">
                 <p className="text-sm font-medium text-primary">{foundBooking.tourName}</p>
                 <p className="text-xs text-primary/60">Mã: {foundBooking.bookingCode} · {new Date(foundBooking.tourDate).toLocaleDateString('vi-VN')}</p>
               </div>
 
               {/* Refund policy */}
-              <div className="bg-amber-50 border border-amber-200 p-4 mb-6 space-y-2 text-sm">
+              <div className="bg-amber-50 border border-amber-200 p-4 space-y-2">
                 <p className="font-bold text-amber-800 text-xs uppercase tracking-widest">Chính sách hoàn hủy</p>
                 <ul className="text-amber-700 space-y-1 text-xs">
                   <li>· Hủy trước 30 ngày → hoàn 100%</li>
@@ -261,47 +265,47 @@ export default function OrderLookup() {
               </div>
 
               {/* Reason */}
-              <div className="space-y-4">
-                <div>
-                  <label className="text-[10px] uppercase tracking-widest text-primary/60 font-label block mb-1">Lý do hủy (tùy chọn)</label>
-                  <textarea
-                    className="w-full border border-outline-variant/50 p-4 text-sm focus:border-[var(--color-secondary)] outline-none resize-none min-h-[80px]"
-                    placeholder="Chia sẻ lý do để chúng tôi hỗ trợ tốt hơn..."
-                  />
-                </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-primary/60 font-label block mb-2">Lý do hủy (tùy chọn)</label>
+                <textarea
+                  className="w-full border border-outline-variant/50 p-3 text-sm focus:border-[var(--color-secondary)] outline-none resize-none min-h-[72px]"
+                  placeholder="Chia sẻ lý do để chúng tôi hỗ trợ tốt hơn..."
+                />
+              </div>
 
-                {/* Bank info */}
-                <div className="space-y-3">
-                  <p className="text-sm font-medium text-primary">Thông tin tài khoản nhận hoàn tiền</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <input className="border border-outline-variant/50 px-3 py-2.5 text-sm focus:border-[var(--color-secondary)] outline-none" placeholder="Ngân hàng" />
-                    <input className="border border-outline-variant/50 px-3 py-2.5 text-sm focus:border-[var(--color-secondary)] outline-none font-mono" placeholder="Số tài khoản" />
-                  </div>
-                  <input className="w-full border border-outline-variant/50 px-3 py-2.5 text-sm focus:border-[var(--color-secondary)] outline-none uppercase" placeholder="Tên chủ tài khoản" />
+              {/* Bank info */}
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-primary">Thông tin tài khoản nhận hoàn tiền</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <input className="border border-outline-variant/50 px-3 py-2.5 text-sm focus:border-[var(--color-secondary)] outline-none" placeholder="Ngân hàng" />
+                  <input className="border border-outline-variant/50 px-3 py-2.5 text-sm focus:border-[var(--color-secondary)] outline-none font-mono" placeholder="Số tài khoản" />
                 </div>
+                <input className="w-full border border-outline-variant/50 px-3 py-2.5 text-sm focus:border-[var(--color-secondary)] outline-none uppercase" placeholder="Tên chủ tài khoản" />
+              </div>
 
-                <label className="flex items-start gap-3 cursor-pointer text-sm text-primary/70">
-                  <input type="checkbox" className="mt-0.5 accent-[var(--color-secondary)]" />
-                  <span>Tôi đồng ý với chính sách hoàn hủy</span>
-                </label>
+              <label className="flex items-start gap-3 cursor-pointer text-sm text-primary/70">
+                <input type="checkbox" className="mt-0.5 accent-[var(--color-secondary)]" />
+                <span>Tôi đồng ý với chính sách hoàn hủy</span>
+              </label>
+            </div>
 
-                <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={() => setShowCancelModal(false)}
-                    className="flex-1 py-3 border border-outline-variant/50 text-primary font-sans uppercase tracking-wider text-xs hover:bg-surface transition-colors"
-                  >
-                    Giữ lại đơn
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowCancelModal(false);
-                      // In real app: call API
-                    }}
-                    className="flex-1 py-3 bg-red-600 text-white font-sans uppercase tracking-wider text-xs hover:bg-red-700 transition-colors"
-                  >
-                    Gửi yêu cầu hủy
-                  </button>
-                </div>
+            {/* Footer */}
+            <div className="p-6 pt-5 border-t border-outline-variant/20 shrink-0">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowCancelModal(false)}
+                  className="flex-1 py-3 border border-outline-variant/50 text-primary font-sans uppercase tracking-wider text-xs hover:bg-surface transition-colors"
+                >
+                  Giữ lại đơn
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCancelModal(false);
+                  }}
+                  className="flex-1 py-3 bg-red-600 text-white font-sans uppercase tracking-wider text-xs hover:bg-red-700 transition-colors"
+                >
+                  Gửi yêu cầu hủy
+                </button>
               </div>
             </div>
           </div>
@@ -310,12 +314,12 @@ export default function OrderLookup() {
 
       {/* Payment Modal */}
       {showPaymentModal && foundBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-primary/40 backdrop-blur-sm" onClick={() => setShowPaymentModal(false)} />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[var(--color-primary)]/40 backdrop-blur-sm" onClick={() => setShowPaymentModal(false)} />
           <div className="relative w-full max-w-md bg-white shadow-2xl animate-in zoom-in-95 duration-300">
-            <div className="p-8">
+            <div className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="font-serif text-2xl text-primary">Thanh toán</h3>
+                <h3 className="font-serif text-xl text-primary">Thanh toán</h3>
                 <button onClick={() => setShowPaymentModal(false)} className="text-primary/40 hover:text-primary transition-colors">
                   <span className="material-symbols-outlined text-2xl">close</span>
                 </button>

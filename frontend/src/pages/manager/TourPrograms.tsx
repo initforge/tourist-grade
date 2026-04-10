@@ -68,10 +68,10 @@ export default function AdminTourPrograms() {
             <thead>
               <tr className="bg-[#FAFAF5] border-b border-[#D0C5AF]/30">
                 {(activeTab === 'pending'
-                  ? ['Mã nháp', 'Tên CT Tour', 'Điểm KH', 'Điểm TC', 'Thời lượng', 'Đơn giá', 'Người tạo', 'Hành động']
+                  ? ['Mã nháp', 'Tên CT Tour', 'Điểm KH', 'Điểm TQ', 'Thời lượng', 'Đơn giá', 'Người tạo', 'Hành động']
                   : activeTab === 'active'
-                  ? ['Mã Tour', 'Tên CT Tour', 'Điểm KH', 'Điểm TC', 'Thời lượng', 'Số tour đang bán', 'Đơn giá', 'Hành động']
-                  : ['Mã Tour', 'Tên CT Tour', 'Điểm KH', 'Điểm TC', 'Thời lượng', 'Thời gian hoạt động', 'Lý do ngừng']
+                  ? ['Mã Tour', 'Tên CT Tour', 'Điểm KH', 'Điểm TQ', 'Thời lượng', 'Số tour đang bán', 'Đơn giá', 'Hành động']
+                  : ['Mã Tour', 'Tên CT Tour', 'Điểm KH', 'Điểm TQ', 'Thời lượng', 'Loại tour', 'Lý do ngừng']
                 ).map(h => (
                   <th key={h} className="px-4 py-3.5 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">{h}</th>
                 ))}
@@ -129,7 +129,7 @@ export default function AdminTourPrograms() {
                   )}
                   {activeTab === 'inactive' && (
                     <>
-                      <td className="px-4 py-4 text-sm text-[#2A2421]/50">—</td>
+                      <td className="px-4 py-4 text-sm text-[#2A2421]/70">{p.tourType === 'mua_le' ? 'Mùa lễ' : 'Quanh năm'}</td>
                       <td className="px-4 py-4 text-sm text-[#2A2421]/70">—</td>
                     </>
                   )}

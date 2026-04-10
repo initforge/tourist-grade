@@ -44,6 +44,7 @@ import ManagerActiveTours from './pages/manager/ActiveTours';
 import ManagerTourEstimate from './pages/manager/TourEstimate';
 import ManagerTourProgramDetail from './pages/manager/TourProgramDetail';
 import ManagerVouchers from './pages/manager/Vouchers';
+import ManagerSpecialDays from './pages/manager/SpecialDays';
 
 // Coordinator pages
 import CoordinatorDashboard from './pages/coordinator/CoordinatorDashboard';
@@ -115,6 +116,7 @@ export default function App() {
           <Route path="voucher-approval" element={<ManagerVoucherApproval />} />
           <Route path="cancel-policies" element={<ManagerCancelPolicy />} />
           <Route path="vouchers" element={<ManagerVouchers />} />
+          <Route path="special-days" element={<ManagerSpecialDays />} />
         </Route>
 
         {/* Coordinator routes */}

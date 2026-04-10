@@ -39,8 +39,8 @@ const REFUND_STATUS_LABEL: Record<string, string> = {
 };
 const PAYMENT_LABEL: Record<string, string> = {
   unpaid: 'Chưa thanh toán',
-  partial: 'Thanh toán một phần',
-  paid: 'Đã thanh toán',
+  partial: '50%',
+  paid: '100%',
   refunded: 'Đã hoàn tiền',
 };
 const PAYMENT_STYLE: Record<string, string> = {
@@ -74,7 +74,7 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
 
   const canSave = drafts.every(p => {
     if (p.type === 'adult') return !!p.cccd?.trim();
-    return !!p.name?.trim(); // trẻ em/em bé chỉ cần có tên (GKS có thể bổ sung sau)
+    return !!p.name?.trim();
   });
 
   return (
@@ -103,10 +103,15 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
                 <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-8">STT</th>
                 <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Họ và tên</th>
                 <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Loại</th>
+                <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Giới tính</th>
                 <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Ngày sinh</th>
                 <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">
                   {drafts.some(p => p.type === 'adult') ? 'CCCD *' : 'Giấy khai sinh *'}
                 </th>
+                <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Quốc tịch</th>
+                {drafts.some(p => p.type === 'adult') && (
+                  <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold text-right">Phụ thu đơn</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-[#D0C5AF]/10">
@@ -126,6 +131,16 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
                     </span>
                   </td>
                   <td className="py-3">
+                    <select
+                      value={p.gender}
+                      onChange={e => handleChange(idx, 'gender', e.target.value)}
+                      className="border border-[#D0C5AF]/40 px-2 py-1 text-xs focus:border-[#D4AF37] outline-none bg-white"
+                    >
+                      <option value="male">Nam</option>
+                      <option value="female">Nữ</option>
+                    </select>
+                  </td>
+                  <td className="py-3">
                     <input
                       type="date"
                       value={p.dob}
@@ -141,6 +156,27 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
                       className="w-full border border-[#D0C5AF]/40 px-2 py-1 text-sm focus:border-[#D4AF37] outline-none font-mono"
                     />
                   </td>
+                  <td className="py-3">
+                    <input
+                      value={p.nationality ?? ''}
+                      onChange={e => handleChange(idx, 'nationality', e.target.value)}
+                      placeholder="Việt Nam"
+                      className="w-full border border-[#D0C5AF]/40 px-2 py-1 text-xs focus:border-[#D4AF37] outline-none"
+                    />
+                  </td>
+                  {p.type === 'adult' ? (
+                    <td className="py-3">
+                      <input
+                        type="number"
+                        value={p.singleRoomSupplement ?? ''}
+                        onChange={e => handleChange(idx, 'singleRoomSupplement', e.target.value)}
+                        placeholder="0"
+                        className="w-full border border-[#D0C5AF]/40 px-2 py-1 text-xs text-right focus:border-[#D4AF37] outline-none font-mono"
+                      />
+                    </td>
+                  ) : (
+                    <td className="py-3 text-sm text-[#2A2421]/30 text-right">—</td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -273,9 +309,8 @@ export default function SalesBookingDetail() {
   const tab = searchParams.get('tab') ?? 'pending_confirm';
   const currentUser = useAuthStore(s => s.user);
 
-  const [booking, setBooking] = useState<Booking | undefined>(() =>
-    mockBookings.find(b => b.id === id)
-  );
+  const foundBooking = mockBookings.find(b => b.id === id);
+  const [booking, setBooking] = useState<Booking>(foundBooking!);
   const [showRefundPopup, setShowRefundPopup] = useState(false);
   const [showPassengerModal, setShowPassengerModal] = useState(false);
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
@@ -286,6 +321,9 @@ export default function SalesBookingDetail() {
   const [billPreview, setBillPreview] = useState<string | null>(null);
   const [billFile, setBillFile] = useState<File | null>(null);
   const [isEditingBill, setIsEditingBill] = useState(false);
+  const [roomCountsDraft, setRoomCountsDraft] = useState<{ single: number; double: number; triple: number }>(
+    (foundBooking ?? booking).roomCounts ?? { single: 0, double: 0, triple: 0 }
+  );
   const [showEmailToast, setShowEmailToast] = useState(false);
 
   // Cleanup BLOB URLs
@@ -295,23 +333,9 @@ export default function SalesBookingDetail() {
     };
   }, [billPreview]);
 
-  if (!booking) {
-    return (
-      <div className="w-full min-h-full flex items-center justify-center bg-[#F3F3F3]">
-        <div className="text-center space-y-4">
-          <span className="material-symbols-outlined text-5xl text-[#D0C5AF]">search_off</span>
-          <p className="text-lg text-[#2A2421]/60">Không tìm thấy đơn booking</p>
-          <Link to="/sales/bookings" className="inline-flex items-center gap-2 text-sm text-[#D4AF37] hover:underline">
-            <span className="material-symbols-outlined text-[16px]">arrow_back</span> Quay lại danh sách
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   // refundStatus === 'pending' = yêu cầu hủy đang chờ xử lý
-  const isPendingCancel = booking.status === 'pending' && booking.refundStatus === 'pending';
-  const isPendingBook = booking.status === 'pending' && !isPendingCancel;
+  const isPendingCancel = booking.status === 'pending_cancel';
+  const isPendingBook = booking.status === 'pending';
 
   // Nút "Xác nhận" chỉ hiện khi tất cả adults có CCCD
   const allAdultsHaveCCCD = booking.passengers
@@ -351,6 +375,10 @@ export default function SalesBookingDetail() {
     setShowRefundPopup(false);
   };
 
+  const handleSaveRoomCounts = () => {
+    setBooking(prev => prev ? { ...prev, roomCounts: { ...roomCountsDraft } } : prev);
+  };
+
   const handleSavePassengers = (updated: Passenger[]) => {
     setBooking(prev => prev ? { ...prev, passengers: updated } : prev);
     setShowPassengerModal(false);
@@ -371,7 +399,7 @@ export default function SalesBookingDetail() {
 
   // Từ chối hủy → chuyển về Đã đặt
   const handleRejectCancel = (reason: string) => {
-    setBooking(prev => prev ? { ...prev, status: 'booked' as const } : prev);
+    setBooking(prev => prev ? { ...prev, status: 'confirmed' as const } : prev);
     setShowRejectCancelPopup(false);
   };
 
@@ -610,22 +638,34 @@ export default function SalesBookingDetail() {
                     {booking.passengers.filter(p => p.type === 'infant').length} EB
                   </p>
                 </div>
-                <div>
-                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Phương thức thanh toán</p>
-                  <p className="text-sm font-medium uppercase">{booking.paymentMethod === 'vnpay' ? 'VNPay' : 'Stripe'}</p>
-                </div>
-                {/* Số phòng — chỉ hiện khi có */}
-                {booking.roomCounts && (
+                {/* Số phòng */}
+                {isPendingBook && (
                   <div>
                     <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Số phòng</p>
                     <div className="flex gap-3 text-xs">
-                      {booking.roomCounts.single > 0 && (
+                      {roomCountsDraft.single > 0 && (
+                        <span className="px-2 py-1 bg-blue-50 text-blue-600 font-medium">Đơn: {roomCountsDraft.single}</span>
+                      )}
+                      {roomCountsDraft.double > 0 && (
+                        <span className="px-2 py-1 bg-green-50 text-green-600 font-medium">Đôi: {roomCountsDraft.double}</span>
+                      )}
+                      {roomCountsDraft.triple > 0 && (
+                        <span className="px-2 py-1 bg-purple-50 text-purple-600 font-medium">Ba: {roomCountsDraft.triple}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {!isPendingBook && booking.roomCounts && (
+                  <div>
+                    <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Số phòng</p>
+                    <div className="flex gap-3 text-xs">
+                      {booking.roomCounts?.single > 0 && (
                         <span className="px-2 py-1 bg-blue-50 text-blue-600 font-medium">Đơn: {booking.roomCounts.single}</span>
                       )}
-                      {booking.roomCounts.double > 0 && (
+                      {booking.roomCounts?.double > 0 && (
                         <span className="px-2 py-1 bg-green-50 text-green-600 font-medium">Đôi: {booking.roomCounts.double}</span>
                       )}
-                      {booking.roomCounts.triple > 0 && (
+                      {booking.roomCounts?.triple > 0 && (
                         <span className="px-2 py-1 bg-purple-50 text-purple-600 font-medium">Ba: {booking.roomCounts.triple}</span>
                       )}
                     </div>
@@ -832,7 +872,7 @@ export default function SalesBookingDetail() {
           <div className="space-y-6">
 
             {/* Action Buttons — chỉ hiện khi Cần xác nhận */}
-            {(booking.status === 'pending' || booking.status === 'booked') && (
+            {(booking.status === 'pending' || booking.status === 'pending_cancel') && (
               <div className="bg-white border border-[#D0C5AF]/20 p-6 space-y-3">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-1 h-4 bg-[#D4AF37]"></div>
@@ -864,23 +904,6 @@ export default function SalesBookingDetail() {
                   </>
                 )}
 
-                {booking.status === 'booked' && (
-                  <>
-                    {/* Người xác nhận đặt tour */}
-                    {booking.confirmedBy && (
-                      <div className="mt-4 pt-4 border-t border-[#D0C5AF]/20">
-                        <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Người xác nhận</p>
-                        <p className="text-sm font-semibold">{booking.confirmedBy}</p>
-                        {booking.confirmedAt && (
-                          <p className="text-xs text-[#2A2421]/50 mt-0.5">
-                            {new Date(booking.confirmedAt).toLocaleString('vi-VN')}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
-
                 {isPendingCancel && (
                   <>
                     {/* Cần xác nhận hủy */}
@@ -901,6 +924,22 @@ export default function SalesBookingDetail() {
                   </>
                 )}
               </div>
+            )}
+
+            {/* Người xác nhận đơn — hiện khi confirmed và có confirmedBy */}
+            {booking.status === 'confirmed' && booking.confirmedBy && (
+              <section className="bg-white border border-[#D0C5AF]/20 p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-1 h-4 bg-blue-500"></div>
+                  <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-blue-700">Người xác nhận đơn đặt</h2>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold">{booking.confirmedBy}</p>
+                  {booking.confirmedAt && (
+                    <p className="text-xs text-[#2A2421]/50">{new Date(booking.confirmedAt).toLocaleString('vi-VN')}</p>
+                  )}
+                </div>
+              </section>
             )}
 
             {/* Customer Info */}
@@ -935,10 +974,6 @@ export default function SalesBookingDetail() {
                 <div className="flex justify-between text-sm">
                   <span className="text-[#2A2421]/60">Tổng tiền</span>
                   <span className="font-['Noto_Serif'] font-bold text-lg">{formatCurrency(booking.totalAmount)}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs text-[#2A2421]/50">
-                  <span>Phương thức</span>
-                  <span className="uppercase font-medium">{booking.paymentMethod}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-[#2A2421]/50">Trạng thái thanh toán</span>

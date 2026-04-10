@@ -80,19 +80,25 @@ function ApproveConfirmPopup({ label, onConfirm, onCancel }: { label: string; on
   );
 }
 
-function ExtendDeadlinePopup({ onConfirm, onCancel }: { onConfirm: (days: number) => void; onCancel: () => void }) {
-  const [days, setDays] = useState(7);
+function ExtendDeadlinePopup({ onConfirm, onCancel }: { onConfirm: (newDate: string) => void; onCancel: () => void }) {
+  // Mặc định: 7 ngày sau hôm nay
+  const getDefaultDate = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().split('T')[0];
+  };
+  const [extendTo, setExtendTo] = useState(getDefaultDate());
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-[#2A2421]/50 backdrop-blur-sm" onClick={onCancel}></div>
       <div className="relative bg-white w-full max-w-xs mx-4 shadow-2xl border border-[#D0C5AF]/30 p-8">
         <h3 className="font-['Noto_Serif'] text-xl text-[#2A2421] mb-2">Gia hạn bán</h3>
-        <p className="text-xs text-[#2A2421]/60 mb-4">Chọn số ngày gia hạn thêm:</p>
-        <input type="number" value={days} onChange={e => setDays(Number(e.target.value))}
-          min={1} max={30} className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none focus:border-[#D4AF37] mb-6" />
+        <p className="text-xs text-[#2A2421]/60 mb-4">Chọn ngày gia hạn đến:</p>
+        <input type="date" value={extendTo} onChange={e => setExtendTo(e.target.value)}
+          className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none focus:border-[#D4AF37] mb-6" />
         <div className="flex gap-3">
           <button onClick={onCancel} className="flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest border border-[#2A2421]/20 hover:bg-gray-50">Hủy bỏ</button>
-          <button onClick={() => onConfirm(days)} className="flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold bg-[#D4AF37] text-white hover:bg-[#C49B2F]">Gia hạn</button>
+          <button onClick={() => extendTo && onConfirm(extendTo)} className="flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold bg-[#D4AF37] text-white hover:bg-[#C49B2F]">Gia hạn</button>
         </div>
       </div>
     </div>
@@ -132,7 +138,7 @@ export default function AdminActiveTours() {
 
   const handleApprove = (_id: string) => { setShowApprovePopup(null); };
   const handleReject = (_id: string, _reason: string) => { setShowRejectPopup(null); };
-  const handleExtend = (_days: number) => { setShowExtendPopup(false); };
+  const handleExtend = (_newDate: string) => { setShowExtendPopup(false); };
   const handleCancelTour = () => {
     if (selectedIds.size === 0) return;
     setInstances(prev => prev.filter(i => !selectedIds.has(i.id)));
@@ -180,26 +186,23 @@ export default function AdminActiveTours() {
             <table className="w-full text-left border-collapse min-w-[700px]">
               <thead>
                 <tr className="bg-[#FAFAF5] border-b border-[#D0C5AF]/30">
-                  {['Mã tour', 'Tên chương trình', 'Ngày KH', 'Điểm KH', 'Điểm TQ', 'Thời lượng', 'Người tạo', 'Trạng thái', 'Hành động'].map(h => (
+                  {['Mã yêu cầu', 'Tên chương trình', 'Loại tour', 'Ngày KH gần nhất', 'Ngày tạo YC', 'Số tour YC tạo', 'Người tạo', 'Hành động'].map(h => (
                     <th key={h} className="px-4 py-3.5 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#D0C5AF]/15">
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={9} className="px-5 py-16 text-center text-sm text-[#2A2421]/40">Không có tour nào</td></tr>
+                  <tr><td colSpan={8} className="px-5 py-16 text-center text-sm text-[#2A2421]/40">Không có tour nào</td></tr>
                 ) : filtered.map(t => (
                   <tr key={t.id} className="hover:bg-[#FAFAF5] transition-colors">
                     <td className="px-4 py-4 font-medium text-sm font-['Noto_Serif'] text-[#2A2421]">{t.id}</td>
                     <td className="px-4 py-4 text-sm font-semibold text-[#2A2421]">{t.programName}</td>
+                    <td className="px-4 py-4 text-sm text-[#2A2421]/70">{t.transport === 'maybay' ? 'Máy bay' : 'Xe'}</td>
                     <td className="px-4 py-4 text-sm text-[#2A2421]/70">{formatDate(t.departureDate)}</td>
-                    <td className="px-4 py-4 text-sm text-[#2A2421]/70">{t.departurePoint}</td>
-                    <td className="px-4 py-4 text-sm text-[#2A2421]/70">{t.sightseeingSpots.join(', ')}</td>
-                    <td className="px-4 py-4 text-sm text-[#2A2421]/70">—</td>
+                    <td className="px-4 py-4 text-sm text-[#2A2421]/70">{t.createdAt ? formatDate(t.createdAt) : '—'}</td>
+                    <td className="px-4 py-4 text-center text-sm font-bold">1</td>
                     <td className="px-4 py-4 text-sm text-[#2A2421]/70">{t.createdBy}</td>
-                    <td className="px-4 py-4">
-                      <span className="px-2 py-1 bg-amber-100 text-amber-700 text-[10px] font-bold">{TOUR_INSTANCE_STATUS_LABEL[t.status]}</span>
-                    </td>
                     <td className="px-4 py-4">
                       <div className="flex gap-2">
                         <button onClick={() => setShowApprovePopup(t.id)} className="px-3 py-1.5 text-[10px] font-bold bg-emerald-600 text-white hover:bg-emerald-700">Duyệt</button>
@@ -291,12 +294,20 @@ export default function AdminActiveTours() {
                     <td className="px-4 py-4 text-sm font-semibold">{t.programName}</td>
                     <td className="px-4 py-4 text-sm text-[#2A2421]/70">{formatDate(t.departureDate)}</td>
                     <td className="px-4 py-4 text-sm font-bold text-[#D4AF37]">
-                      {t.costEstimate ? fmtCurrency(t.costEstimate.totalFixedCost + t.costEstimate.totalVariableCost) : '—'}
+                      {t.costEstimate ? fmtCurrency(t.costEstimate.totalCost) : '—'}
                     </td>
                     <td className="px-4 py-4">
-                      {t.costEstimate ? (
-                        <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold">—</span>
-                      ) : '—'}
+                      {t.costEstimate ? (() => {
+                        const est = t.costEstimate!;
+                        const revenue = est.estimatedGuests * est.pricingConfig.sellPriceAdult;
+                        const profit = revenue - est.totalCost;
+                        const profitPct = revenue > 0 ? ((profit / revenue) * 100).toFixed(1) : '—';
+                        return (
+                          <span className={`px-2 py-1 text-xs font-bold ${profit >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
+                            {profitPct}%
+                          </span>
+                        );
+                      })() : '—'}
                     </td>
                     <td className="px-4 py-4 text-sm text-[#2A2421]/70">{t.createdBy}</td>
                     <td className="px-4 py-4">

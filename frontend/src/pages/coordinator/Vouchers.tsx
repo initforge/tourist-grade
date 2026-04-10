@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Modal, message } from 'antd';
 import { useAuthStore } from '../../store/useAuthStore';
 import { mockVouchers, VOUCHER_STATUS_LABEL as STATUS_LABEL, VOUCHER_STATUS_STYLE as STATUS_STYLE } from '../../data/vouchers';
 import type { Voucher, VoucherType, VoucherStatus } from '../../data/vouchers';
+import { mockTourPrograms } from '../../data/tourProgram';
 
 // ── Voucher Form Drawer ──────────────────────────────────────────────────────
 
@@ -17,13 +19,20 @@ function VoucherFormDrawer({ voucher, onClose, onSave, onSendApproval }: Voucher
   const [form, setForm] = useState<Partial<Voucher>>(
     voucher ?? { code: '', type: 'percent', value: '', expiryDate: '', limit: 100, applicableTours: [], status: 'draft', description: '' }
   );
-  const [tourInput, setTourInput] = useState(form.applicableTours?.join(', ') ?? '');
+  const [selectedTourIds, setSelectedTourIds] = useState<string[]>(voucher?.applicableTours ?? []);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const isEdit = !!voucher;
 
   const canEdit = !voucher || ['draft', 'rejected'].includes(voucher.status);
   const canSendApproval = isEdit && (form.status === 'draft' || form.status === 'rejected');
+
+  const toggleTour = (id: string) => {
+    setSelectedTourIds(prev =>
+      prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]
+    );
+  };
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -36,14 +45,12 @@ function VoucherFormDrawer({ voucher, onClose, onSave, onSendApproval }: Voucher
 
   const handleSave = () => {
     if (!validate()) return;
-    const tours = tourInput.split(',').map(t => t.trim()).filter(Boolean);
-    onSave({ ...(voucher ?? {}), ...form, applicableTours: tours } as Voucher);
+    onSave({ ...(voucher ?? {}), ...form, applicableTours: selectedTourIds } as Voucher);
   };
 
   const handleSendApproval = () => {
     if (!validate()) return;
-    const tours = tourInput.split(',').map(t => t.trim()).filter(Boolean);
-    onSendApproval({ ...(voucher ?? {}), ...form, applicableTours: tours, status: 'pending_approval' } as Voucher);
+    onSendApproval({ ...(voucher ?? {}), ...form, applicableTours: selectedTourIds, status: 'pending_approval' } as Voucher);
   };
 
   return (
@@ -148,15 +155,72 @@ function VoucherFormDrawer({ voucher, onClose, onSave, onSendApproval }: Voucher
                 Chương trình tour áp dụng
                 <span className="font-normal text-[#2A2421]/40 ml-1">(để trống = áp dụng tất cả)</span>
               </label>
-              <input
-                type="text"
-                value={tourInput}
-                onChange={e => setTourInput(e.target.value)}
-                disabled={!canEdit}
-                className={`w-full border p-3 text-sm outline-none ${errors.applicableTours ? 'border-red-400' : 'border-[#D0C5AF]/40 focus:border-[#D4AF37]'} ${!canEdit ? 'bg-gray-50 cursor-not-allowed' : ''}`}
-                placeholder="T001, T002, T003"
-              />
-              <p className="text-[10px] text-[#2A2421]/40 mt-1">Nhập mã tour, cách nhau bằng dấu phẩy</p>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => canEdit && setDropdownOpen(o => !o)}
+                  disabled={!canEdit}
+                  className={`w-full border p-3 text-sm text-left flex items-center justify-between ${errors.applicableTours ? 'border-red-400' : 'border-[#D0C5AF]/40 focus-within:border-[#D4AF37]'} ${!canEdit ? 'bg-gray-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                >
+                  <span className={selectedTourIds.length > 0 ? 'text-[#2A2421]' : 'text-[#2A2421]/40'}>
+                    {selectedTourIds.length > 0
+                      ? `${selectedTourIds.length} chương trình đã chọn`
+                      : 'Chọn chương trình tour...'}
+                  </span>
+                  <span className={`material-symbols-outlined text-[16px] transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}>
+                    expand_more
+                  </span>
+                </button>
+                {dropdownOpen && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-[#D0C5AF]/40 shadow-lg max-h-48 overflow-y-auto">
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedTourIds([]); setDropdownOpen(false); }}
+                      className="w-full px-4 py-2.5 text-left text-sm hover:bg-[#D4AF37]/5 transition-colors border-b border-[#D0C5AF]/20"
+                    >
+                      <span className="text-[#D4AF37] font-medium">Áp dụng cho tất cả chương trình</span>
+                      <span className="text-[10px] text-[#2A2421]/40 ml-2">(bỏ chọn tất cả)</span>
+                    </button>
+                    {mockTourPrograms.map(tp => (
+                      <button
+                        key={tp.id}
+                        type="button"
+                        onClick={() => { toggleTour(tp.id); setDropdownOpen(false); }}
+                        className={`w-full px-4 py-2.5 text-left text-sm hover:bg-[#D4AF37]/5 transition-colors flex items-center gap-2 ${selectedTourIds.includes(tp.id) ? 'bg-[#D4AF37]/8' : ''}`}
+                      >
+                        <span className={`w-4 h-4 border flex items-center justify-center flex-shrink-0 ${selectedTourIds.includes(tp.id) ? 'bg-[#D4AF37] border-[#D4AF37]' : 'border-[#D0C5AF]/40'}`}>
+                          {selectedTourIds.includes(tp.id) && (
+                            <span className="material-symbols-outlined text-white text-[12px]">check</span>
+                          )}
+                        </span>
+                        <span className="font-medium text-[#2A2421]/80">{tp.name}</span>
+                        <span className="text-[10px] text-[#2A2421]/40 ml-auto flex-shrink-0">{tp.duration.days}N{tp.duration.nights}Đ</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {selectedTourIds.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {selectedTourIds.map(id => {
+                    const tp = mockTourPrograms.find(t => t.id === id);
+                    return (
+                      <span key={id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#D4AF37]/10 text-[#D4AF37] text-[10px] font-bold rounded border border-[#D4AF37]/20">
+                        {tp?.name ?? id}
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTourIds(prev => prev.filter(t => t !== id))}
+                            className="hover:text-red-500 ml-0.5"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div>
@@ -405,18 +469,39 @@ export default function VoucherManagement() {
     });
     setShowFormDrawer(false);
     setEditingVoucher(null);
+    message.success('Đã gửi phê duyệt thành công!');
   };
 
   const handleApprove = (id: string) => {
     setVouchers(prev => prev.map(v => v.id === id ? { ...v, status: 'active' as VoucherStatus } : v));
     setShowDetailDrawer(false);
     setDetailVoucher(null);
+    message.success('Phê duyệt voucher thành công!');
   };
 
   const handleReject = (id: string, reason: string) => {
     setVouchers(prev => prev.map(v => v.id === id ? { ...v, status: 'rejected' as VoucherStatus, rejectionReason: reason } : v));
     setShowDetailDrawer(false);
     setDetailVoucher(null);
+  };
+
+  const handleDelete = (v: Voucher) => {
+    Modal.confirm({
+      title: 'Xóa Voucher',
+      content: `Bạn có chắc muốn xóa voucher "${v.code}" không?`,
+      okText: 'Xóa',
+      okButtonProps: { danger: true },
+      cancelText: 'Hủy',
+      onOk: () => {
+        setVouchers(prev => prev.filter(x => x.id !== v.id));
+        message.success('Đã xóa voucher thành công!');
+      },
+    });
+  };
+
+  const handleSendApprovalFromList = (v: Voucher) => {
+    setVouchers(prev => prev.map(x => x.id === v.id ? { ...x, status: 'pending_approval' as VoucherStatus } : x));
+    message.success('Đã gửi phê duyệt thành công!');
   };
 
   const openCreate = () => {
@@ -518,9 +603,14 @@ export default function VoucherManagement() {
                   <td className="px-5 py-4">
                     {v.applicableTours.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
-                        {v.applicableTours.slice(0, 2).map(t => (
-                          <span key={t} className="px-1.5 py-0.5 bg-[#D4AF37]/10 text-[#D4AF37] text-[10px] font-bold rounded">{t}</span>
-                        ))}
+                        {v.applicableTours.slice(0, 2).map(t => {
+                          const tp = mockTourPrograms.find(p => p.id === t);
+                          return (
+                            <span key={t} className="px-1.5 py-0.5 bg-[#D4AF37]/10 text-[#D4AF37] text-[10px] font-bold rounded max-w-[80px] truncate" title={tp?.name ?? t}>
+                              {tp?.name ?? t}
+                            </span>
+                          );
+                        })}
                         {v.applicableTours.length > 2 && (
                           <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[10px] font-bold rounded">+{v.applicableTours.length - 2}</span>
                         )}
@@ -544,6 +634,14 @@ export default function VoucherManagement() {
                           Phê duyệt
                         </button>
                       )}
+                      {v.status === 'draft' && (
+                        <button
+                          onClick={() => handleSendApprovalFromList(v)}
+                          className="px-2 py-1 bg-[#D4AF37] text-white text-[10px] font-bold hover:bg-[#C49B2F] transition-colors"
+                        >
+                          Gửi phê duyệt
+                        </button>
+                      )}
                       {['draft', 'rejected'].includes(v.status) && (
                         <button
                           onClick={() => openEdit(v)}
@@ -551,6 +649,15 @@ export default function VoucherManagement() {
                           title="Sửa"
                         >
                           <span className="material-symbols-outlined text-[18px]">edit</span>
+                        </button>
+                      )}
+                      {['draft', 'rejected', 'inactive'].includes(v.status) && (
+                        <button
+                          onClick={() => handleDelete(v)}
+                          className="p-1.5 hover:bg-red-50 transition-colors text-[#2A2421]/30 hover:text-red-500"
+                          title="Xóa"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">delete</span>
                         </button>
                       )}
                       <span className="material-symbols-outlined text-[#2A2421]/30 text-lg">chevron_right</span>
