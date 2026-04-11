@@ -53,7 +53,7 @@ export default function ServiceList() {
   
   const [templates] = useState<ServiceTemplate[]>(INITIAL_TEMPLATES);
   const [assignments] = useState<SupplierAssignment[]>(INITIAL_ASSIGNMENTS);
-  const [activeTab, setActiveTab] = useState<'all' | 'Vận chuyển' | 'Khách sạn' | 'Vé thắng cảnh' | 'Hướng dẫn viên (HDV)'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'Vận chuyển' | 'Khách sạn' | 'Vé thắng cảnh' | 'Hướng dẫn viên (HDV)' | 'Chi phí ăn'>('all');
   
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<SupplierAssignment & ServiceTemplate>>({
@@ -93,7 +93,7 @@ export default function ServiceList() {
           {['all', 'Khách sạn', 'Vận chuyển', 'Vé thắng cảnh', 'Hướng dẫn viên (HDV)', 'Chi phí ăn'].map(tab => (
             <button 
               key={tab}
-              onClick={() => setActiveTab(tab as 'all' | 'Vận chuyển' | 'Khách sạn' | 'Vé thắng cảnh' | 'Hướng dẫn viên (HDV)')}
+              onClick={() => setActiveTab(tab as 'all' | 'Vận chuyển' | 'Khách sạn' | 'Vé thắng cảnh' | 'Hướng dẫn viên (HDV)' | 'Chi phí ăn')}
               className={`pb-4 px-2 text-[10px] uppercase tracking-widest font-bold transition-all whitespace-nowrap ${activeTab === tab ? 'border-b-2 border-[#D4AF37] text-[#2A2421]' : 'text-stone-400 hover:text-stone-600'}`}
             >
               {tab === 'all' ? 'Tất cả' : tab}
