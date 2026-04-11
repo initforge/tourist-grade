@@ -45,11 +45,11 @@ export default function AdminTourPrograms() {
   const [showDispatchModal, setShowDispatchModal] = useState(false);
   const [dispatchTarget, setDispatchTarget] = useState<TourInstance | null>(null);
 
-  // Map tab key → status filter (phan_cong_hdv → san_sang_trien_khai, dang_khoi_hanh → dang_trien_khai)
+  // Map tab key → status filter (phan_cong_hdv → dang_trien_khai — san_sang_trien_khai has no instances)
   const tabStatusMap: Record<TabKey, TourInstanceStatus> = {
     cho_nhan_dieu_hanh: 'cho_nhan_dieu_hanh',
     cho_du_toan: 'cho_du_toan',
-    phan_cong_hdv: 'san_sang_trien_khai',
+    phan_cong_hdv: 'dang_trien_khai',
     dang_khoi_hanh: 'dang_trien_khai',
     cho_quyet_toan: 'cho_quyet_toan',
     hoan_thanh: 'hoan_thanh',
