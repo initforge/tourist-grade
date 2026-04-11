@@ -274,13 +274,15 @@ interface VoucherDetailDrawerProps {
   onClose: () => void;
   onApprove?: (id: string) => void;
   onReject?: (id: string, reason: string) => void;
+  onRequestEdit?: (id: string, reason: string) => void;
   onEdit?: (v: Voucher) => void;
   role?: string;
 }
 
-function VoucherDetailDrawer({ voucher, onClose, onApprove, onReject, onEdit, role }: VoucherDetailDrawerProps) {
+function VoucherDetailDrawer({ voucher, onClose, onApprove, onReject, onRequestEdit, onEdit, role }: VoucherDetailDrawerProps) {
   const [showRejectPopup, setShowRejectPopup] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [rejectType, setRejectType] = useState<'reject' | 'edit'>('reject');
 
   const canApprove = role === 'manager' && voucher.status === 'pending_approval';
   const canEdit = ['draft', 'rejected'].includes(voucher.status);
@@ -368,13 +370,27 @@ function VoucherDetailDrawer({ voucher, onClose, onApprove, onReject, onEdit, ro
             {canApprove && (
               <>
                 <button
-                  onClick={() => setShowRejectPopup(true)}
+                  onClick={() => { setRejectType('reject'); setShowRejectPopup(true); }}
                   className="flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold border border-red-300 text-red-600 hover:bg-red-50 transition-colors"
                 >
                   Từ chối
                 </button>
                 <button
-                  onClick={() => onApprove?.(voucher.id)}
+                  onClick={() => { setRejectType('edit'); setShowRejectPopup(true); }}
+                  className="flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold border border-amber-300 text-amber-600 hover:bg-amber-50 transition-colors"
+                >
+                  Yêu cầu chỉnh sửa
+                </button>
+                <button
+                  onClick={() => {
+                    Modal.confirm({
+                      title: 'Xác nhận phê duyệt',
+                      content: `Bạn có chắc muốn phê duyệt voucher "${voucher.code}" không?`,
+                      okText: 'Phê duyệt',
+                      cancelText: 'Hủy',
+                      onOk: () => { onApprove?.(voucher.id); },
+                    });
+                  }}
                   className="flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
                 >
                   Phê duyệt
@@ -401,13 +417,17 @@ function VoucherDetailDrawer({ voucher, onClose, onApprove, onReject, onEdit, ro
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
           <div className="absolute inset-0 bg-[#2A2421]/50 backdrop-blur-sm" onClick={() => setShowRejectPopup(false)}></div>
           <div className="relative bg-white w-full max-w-sm mx-4 shadow-2xl border border-[#D0C5AF]/30 p-8">
-            <h3 className="font-['Noto_Serif'] text-xl text-[#2A2421] mb-2">Từ chối Voucher</h3>
-            <p className="text-xs text-[#2A2421]/60 mb-4">Vui lòng nhập lý do từ chối.</p>
+            <h3 className="font-['Noto_Serif'] text-xl text-[#2A2421] mb-2">
+              {rejectType === 'reject' ? 'Từ chối Voucher' : 'Yêu cầu chỉnh sửa Voucher'}
+            </h3>
+            <p className="text-xs text-[#2A2421]/60 mb-4">
+              {rejectType === 'reject' ? 'Vui lòng nhập lý do từ chối.' : 'Vui lòng nhập nội dung yêu cầu chỉnh sửa.'}
+            </p>
             <textarea
               value={rejectReason}
               onChange={e => setRejectReason(e.target.value)}
               rows={3}
-              placeholder="Lý do từ chối..."
+              placeholder={rejectType === 'reject' ? 'Lý do từ chối...' : 'Nội dung yêu cầu chỉnh sửa...'}
               className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none focus:border-[#D4AF37] resize-none mb-4"
             />
             <div className="flex gap-3">
@@ -415,7 +435,14 @@ function VoucherDetailDrawer({ voucher, onClose, onApprove, onReject, onEdit, ro
                 Hủy bỏ
               </button>
               <button
-                onClick={() => { onReject?.(voucher.id, rejectReason); setShowRejectPopup(false); }}
+                onClick={() => {
+                  if (rejectType === 'edit') {
+                    onRequestEdit?.(voucher.id, rejectReason);
+                  } else {
+                    onReject?.(voucher.id, rejectReason);
+                  }
+                  setShowRejectPopup(false);
+                }}
                 disabled={!rejectReason.trim()}
                 className={`flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold transition-colors ${
                   rejectReason.trim() ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
@@ -480,9 +507,16 @@ export default function VoucherManagement() {
   };
 
   const handleReject = (id: string, reason: string) => {
-    setVouchers(prev => prev.map(v => v.id === id ? { ...v, status: 'rejected' as VoucherStatus, rejectionReason: reason } : v));
+    setVouchers(prev => prev.map(v => v.id === id ? { ...v, status: 'rejected' as VoucherStatus, rejectionReason: `Từ chối: ${reason}` } : v));
     setShowDetailDrawer(false);
     setDetailVoucher(null);
+  };
+
+  const handleRequestEdit = (id: string, reason: string) => {
+    setVouchers(prev => prev.map(v => v.id === id ? { ...v, status: 'rejected' as VoucherStatus, rejectionReason: `Yêu cầu chỉnh sửa: ${reason}` } : v));
+    setShowDetailDrawer(false);
+    setDetailVoucher(null);
+    message.info('Đã gửi yêu cầu chỉnh sửa');
   };
 
   const handleDelete = (v: Voucher) => {
@@ -691,6 +725,7 @@ export default function VoucherManagement() {
           onClose={() => { setShowDetailDrawer(false); setDetailVoucher(null); }}
           onApprove={handleApprove}
           onReject={handleReject}
+          onRequestEdit={handleRequestEdit}
           onEdit={openEdit}
         />
       )}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { Breadcrumb } from 'antd';
 import { mockTourPrograms, mockTourInstances, type TourInstance } from '../../data/tourProgram';
 
 type SubTab = 'quy_tac' | 'cho_duyet_ban';
@@ -50,11 +51,18 @@ export default function TourGenerationRules() {
   return (
     <div className="w-full bg-[var(--color-background)] min-h-screen pb-32">
       <main className="p-8 max-w-6xl mx-auto">
+        <Breadcrumb
+          className="mb-4 text-xs"
+          items={[
+            { title: <Link to="/coordinator/tour-rules" className="text-[var(--color-primary)]/50 hover:text-[var(--color-primary)]">Quản lý Tour</Link> },
+            { title: <span className="text-[var(--color-primary)]/30">Quy tắc tạo tour</span> },
+          ]}
+        />
 
         {/* Header */}
         <div className="mb-8">
           <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-primary/40 block mb-1">Khu vực điều phối</span>
-          <h1 className="font-serif text-3xl text-primary">Quy tắc tạo tour</h1>
+          <h1 className="font-serif text-3xl text-primary">Quản lý Tour</h1>
           <p className="text-sm text-primary/50 mt-2">
             Sinh tour từ chương trình đang hoạt động. Mùa lễ chỉ xuất hiện khi vừa được duyệt, Quanh năm luôn hiển thị.
           </p>
@@ -285,20 +293,23 @@ export default function TourGenerationRules() {
                         </tr>
                       </thead>
                       <tbody>
-                        {[1, 2, 3].map(idx => (
-                          <tr key={idx} className="border-b border-outline-variant/20">
-                            <td className="px-4 py-3 font-mono text-xs">{viewModal.id}</td>
-                            <td className="px-4 py-3 text-sm">{new Date(viewModal.departureDate).toLocaleDateString('vi-VN')}</td>
-                            <td className="px-4 py-3 text-xs">
-                              <span className="text-[10px] px-2 py-0.5 bg-[var(--color-surface)] font-label">{idx === 1 ? 'Ngày thường' : idx === 2 ? 'Giỗ tổ' : 'Ngày thường'}</span>
-                            </td>
-                            <td className="px-4 py-3 text-sm">{viewModal.expectedGuests}</td>
-                            <td className="px-4 py-3 text-sm font-mono">—</td>
-                            <td className="px-4 py-3 text-sm text-emerald-600">—</td>
-                            <td className="px-4 py-3 text-sm font-mono">{viewModal.priceAdult.toLocaleString('vi-VN')}đ</td>
-                            <td className="px-4 py-3 text-sm">{new Date(viewModal.bookingDeadline).toLocaleDateString('vi-VN')}</td>
-                          </tr>
-                        ))}
+                        {mockTourInstances
+                          .filter(i => i.programId === viewModal.programId)
+                          .slice(0, 3)
+                          .map(inst => (
+                            <tr key={inst.id} className="border-b border-outline-variant/20">
+                              <td className="px-4 py-3 font-mono text-xs">{inst.id}</td>
+                              <td className="px-4 py-3 text-sm">{new Date(inst.departureDate).toLocaleDateString('vi-VN')}</td>
+                              <td className="px-4 py-3 text-xs">
+                                <span className="text-[10px] px-2 py-0.5 bg-[var(--color-surface)] font-label">Ngày thường</span>
+                              </td>
+                              <td className="px-4 py-3 text-sm">{inst.expectedGuests}</td>
+                              <td className="px-4 py-3 text-sm font-mono">—</td>
+                              <td className="px-4 py-3 text-sm text-emerald-600">—</td>
+                              <td className="px-4 py-3 text-sm font-mono">{inst.priceAdult.toLocaleString('vi-VN')}đ</td>
+                              <td className="px-4 py-3 text-sm">{new Date(inst.bookingDeadline).toLocaleDateString('vi-VN')}</td>
+                            </tr>
+                          ))}
                       </tbody>
                     </table>
                   </div>

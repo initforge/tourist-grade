@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Breadcrumb } from 'antd';
 import {
   mockTourInstances,
   mockTourPrograms,
   type TourInstance,
 } from '../../data/tourProgram';
 import { mockBookings } from '../../data/bookings';
+import { mockUsers } from '../../data/users';
 import type { Booking } from '../../data/bookings';
 
 type Tab = 'tong_quan' | 'ds_kh' | 'lichtrinh' | 'dutoan';
@@ -42,12 +44,13 @@ export default function TourReceiveDispatch() {
         {/* Header */}
         <div className="flex items-start justify-between mb-6">
           <div>
-            <div className="flex items-center gap-3 mb-2">
-              <button onClick={() => navigate('/coordinator/tour-programs')} className="text-primary/40 hover:text-primary transition-colors">
-                <span className="material-symbols-outlined">arrow_back</span>
-              </button>
-              <span className="text-[10px] uppercase tracking-widest text-primary/40 font-label">Nhận điều hành</span>
-            </div>
+            <Breadcrumb
+              className="mb-4 text-xs"
+              items={[
+                { title: <Link to="/coordinator/tour-programs" className="text-[var(--color-primary)]/50 hover:text-[var(--color-primary)]">Điều hành tour</Link> },
+                { title: <span className="text-[var(--color-primary)]/30">Nhận điều hành</span> },
+              ]}
+            />
             <h1 className="font-serif text-2xl text-primary">{instance.programName}</h1>
             <p className="text-xs text-primary/50 mt-1">
               Mã tour: <span className="font-mono">{instance.id}</span> ·{' '}
@@ -106,7 +109,7 @@ export default function TourReceiveDispatch() {
                   { label: 'Điểm tham quan', value: instance.sightseeingSpots.join(', ') },
                   { label: 'Phương tiện', value: instance.transport === 'xe' ? 'Xe du lịch' : 'Máy bay' },
                   { label: 'Số khách dự kiến', value: `${instance.expectedGuests} người` },
-                  { label: 'Người tạo', value: instance.createdBy === 'U003' ? 'Nguyễn Thị Lan' : '—' },
+                  { label: 'Người tạo', value: mockUsers.find(u => u.id === instance.createdBy)?.name ?? '—' },
                 ].map(item => (
                   <div key={item.label} className="bg-[var(--color-surface)] p-4">
                     <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label mb-1">{item.label}</p>

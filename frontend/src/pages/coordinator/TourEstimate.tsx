@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
+import { Breadcrumb } from 'antd';
 import { useAuthStore } from '../../store/useAuthStore';
 import { mockTourInstances, mockTourPrograms } from '../../data/tourProgram';
 import { mockBookings } from '../../data/bookings';
@@ -74,6 +75,13 @@ export default function TourEstimate() {
 
   return (
     <div className="p-8 bg-[var(--color-background)] min-h-screen">
+      <Breadcrumb
+        className="mb-4 text-xs"
+        items={[
+          { title: <Link to={`${basePrefix}/tours`} className="text-[var(--color-primary)]/50 hover:text-[var(--color-primary)]">Điều hành tour</Link> },
+          { title: <span className="text-[var(--color-primary)]/30">Dự toán</span> },
+        ]}
+      />
       {/* Header */}
       <div className="mb-8 flex justify-between items-end">
         <div>

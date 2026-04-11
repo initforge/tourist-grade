@@ -93,6 +93,7 @@ export interface TourInstance {
   costEstimate?: CostEstimate;
   settlement?: SettlementData;
   assignedCoordinatorId?: string;
+  assignedGuide?: { id: string; name: string };
   createdBy: string;
   createdAt: string;
   // Vòng đời timestamps

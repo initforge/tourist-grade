@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Breadcrumb } from 'antd';
 import { useAuthStore } from '../../store/useAuthStore';
 
 type SupplierType = 'lodging' | 'transport' | 'restaurant';
@@ -112,6 +114,13 @@ export default function AdminSuppliers() {
     <div className="w-full bg-[var(--color-background)] min-h-screen relative">
       <main className="min-h-screen flex flex-col pb-20">
         <div className="p-10 flex-1">
+          <Breadcrumb
+            className="mb-6 text-xs"
+            items={[
+              { title: <Link to="/coordinator/suppliers" className="text-[var(--color-primary)]/50 hover:text-[var(--color-primary)]">Đối tác (NCC)</Link> },
+              { title: <span className="text-[var(--color-primary)]/30">Danh sách</span> },
+            ]}
+          />
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6">
             <div>
               <span className="label-md font-sans uppercase tracking-[0.2em] text-secondary mb-2 block">Cơ sở dữ liệu (CRM)</span>
@@ -160,7 +169,7 @@ export default function AdminSuppliers() {
                   <th className="px-6 py-5 font-sans uppercase tracking-widest text-[0.65rem] text-primary/60 font-semibold">Mã NCC</th>
                   <th className="px-6 py-5 font-sans uppercase tracking-widest text-[0.65rem] text-primary/60 font-semibold">Tên đối tác</th>
                   <th className="px-6 py-5 font-sans uppercase tracking-widest text-[0.65rem] text-primary/60 font-semibold">Phân loại</th>
-                  <th className="px-6 py-5 font-sans uppercase tracking-widest text-[0.65rem] text-primary/60 font-semibold">Khu vực</th>
+                  <th className="px-6 py-5 font-sans uppercase tracking-widest text-[0.65rem] text-primary/60 font-semibold">Khu vực hoạt động</th>
                   <th className="px-6 py-5 font-sans uppercase tracking-widest text-[0.65rem] text-primary/60 font-semibold">Trạng thái</th>
                   <th className="px-6 py-5 font-sans uppercase tracking-widest text-[0.65rem] text-primary/60 font-semibold text-right">Hành động</th>
                 </tr>
@@ -183,7 +192,7 @@ export default function AdminSuppliers() {
                     <td className="px-6 py-6">
                       {getTypeLabel(sup.type)}
                     </td>
-                    <td className="px-6 py-6 font-sans text-xs">{sup.region}</td>
+                    <td className="px-6 py-6 font-sans text-xs">{sup.type === 'transport' ? sup.region : '—'}</td>
                     <td className="px-6 py-6">
                       <div className="flex items-center space-x-2">
                         <span className={`w-2 h-2 rounded-full ${sup.active ? 'bg-tertiary' : 'bg-red-500'}`}></span>

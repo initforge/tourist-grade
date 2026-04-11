@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { Breadcrumb } from 'antd';
+import { message } from 'antd';
 import {
   mockTourInstances,
   TOUR_INSTANCE_STATUS_LABEL,
@@ -7,6 +9,7 @@ import {
   type TourInstance,
   type TourInstanceStatus,
 } from '../../data/tourProgram';
+import { DispatchHDVModal } from '../../components/DispatchHDVModal';
 
 type TabKey =
   | 'cho_nhan_dieu_hanh'
@@ -27,7 +30,11 @@ const TABS: { key: TabKey; label: string; desc: string }[] = [
   { key: 'da_huy', label: 'Đã hủy', desc: 'Tour đã bị hủy' },
 ];
 
-const COMMON_COLS = ['Mã tour', 'Tên chương trình', 'Ngày KH', 'Điểm KH', 'Điểm TQ', 'Thời lượng', 'Số KH', 'Hướng dẫn viên', 'Trạng thái', ''];
+// Các tab điều hành có HDV
+const HDV_TABS: TabKey[] = ['phan_cong_hdv', 'dang_khoi_hanh', 'cho_quyet_toan'];
+
+const COMMON_COLS_CREATOR = ['Mã tour', 'Tên chương trình', 'Ngày KH', 'Điểm KH', 'Điểm TQ', 'Thời lượng', 'Số KH', 'Người tạo', 'Trạng thái', ''];
+const COMMON_COLS_HDV = ['Mã tour', 'Tên chương trình', 'Ngày KH', 'Điểm KH', 'Điểm TQ', 'Thời lượng', 'Số KH', 'Hướng dẫn viên', 'Trạng thái', ''];
 
 const COL_COMPLETED = ['Mã tour', 'Tên chương trình', 'Ngày KH', 'Số KH', 'Doanh thu thực tế', 'Chi phí thực tế', 'Lợi nhuận', ''];
 const COL_CANCELLED = ['Mã tour', 'Tên chương trình', 'Ngày KH', 'Số KH đăng ký', 'Thời điểm hủy', 'Tổng tiền hoàn', 'Lý do'];
@@ -35,6 +42,8 @@ const COL_CANCELLED = ['Mã tour', 'Tên chương trình', 'Ngày KH', 'Số KH 
 export default function AdminTourPrograms() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabKey>('cho_nhan_dieu_hanh');
+  const [showDispatchModal, setShowDispatchModal] = useState(false);
+  const [dispatchTarget, setDispatchTarget] = useState<TourInstance | null>(null);
 
   // Map tab key → status filter (phan_cong_hdv → san_sang_trien_khai, dang_khoi_hanh → dang_trien_khai)
   const tabStatusMap: Record<TabKey, TourInstanceStatus> = {
@@ -59,7 +68,7 @@ export default function AdminTourPrograms() {
   const getColumns = (tab: TabKey) => {
     if (tab === 'hoan_thanh') return COL_COMPLETED;
     if (tab === 'da_huy') return COL_CANCELLED;
-    return COMMON_COLS;
+    return HDV_TABS.includes(tab) ? COMMON_COLS_HDV : COMMON_COLS_CREATOR;
   };
 
   const renderCell = (inst: TourInstance, col: string, tab: TabKey) => {
@@ -107,7 +116,12 @@ export default function AdminTourPrograms() {
     if (col === 'Điểm TQ') return <span className="text-xs">{inst.sightseeingSpots.join(', ')}</span>;
     if (col === 'Thời lượng') return '—';
     if (col === 'Số KH') return inst.expectedGuests;
-    if (col === 'Hướng dẫn viên') return <span className="text-xs text-primary/50">—</span>;
+    if (col === 'Hướng dẫn viên') return (
+      <span className="text-xs">{inst.assignedGuide?.name ?? '—'}</span>
+    );
+    if (col === 'Người tạo') return (
+      <span className="text-xs text-primary/50">—</span>
+    );
     if (col === 'Trạng thái') return (
       <span className={`text-[10px] px-2 py-1 border font-label uppercase tracking-wider ${TOUR_INSTANCE_STATUS_STYLE[inst.status]}`}>
         {TOUR_INSTANCE_STATUS_LABEL[inst.status]}
@@ -135,20 +149,13 @@ export default function AdminTourPrograms() {
     );
     if (tab === 'phan_cong_hdv') return (
       <button
-        onClick={() => navigate(`/coordinator/tour-programs/${inst.id}`)}
+        onClick={() => { setDispatchTarget(inst); setShowDispatchModal(true); }}
         className="px-4 py-1.5 bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-blue-700 transition-colors"
       >
-        Xem chi tiết
+        Phân công HDV
       </button>
     );
-    if (tab === 'dang_khoi_hanh') return (
-      <button
-        onClick={() => navigate(`/coordinator/tour-programs/${inst.id}/dispatch-hdv`)}
-        className="px-4 py-1.5 bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-emerald-700 transition-colors"
-      >
-        Điều phối HDV
-      </button>
-    );
+    if (tab === 'dang_khoi_hanh') return null;
     if (tab === 'cho_quyet_toan') return (
       <button
         onClick={() => navigate(`/coordinator/tours/${inst.id}/settle`)}
@@ -189,6 +196,14 @@ export default function AdminTourPrograms() {
             <h1 className="font-serif text-3xl text-primary tracking-tight">Điều hành Tour</h1>
           </div>
         </div>
+
+        <Breadcrumb
+          className="mb-6 text-xs"
+          items={[
+            { title: <Link to="/coordinator/tour-programs" className="text-[var(--color-primary)]/50 hover:text-[var(--color-primary)]">Điều hành tour</Link> },
+            { title: <span className="text-[var(--color-primary)]/30">Danh sách tour</span> },
+          ]}
+        />
 
         {/* 8 Tabs */}
         <div className="flex overflow-x-auto gap-0 mb-0 border-b border-outline-variant/30 bg-white rounded-t-sm">
@@ -268,6 +283,19 @@ export default function AdminTourPrograms() {
           )}
         </div>
       </main>
+
+      {showDispatchModal && dispatchTarget && (
+        <DispatchHDVModal
+          tourId={dispatchTarget.id}
+          tourName={dispatchTarget.programName}
+          onClose={() => { setShowDispatchModal(false); setDispatchTarget(null); }}
+          onConfirm={(hdv) => {
+            message.success(`Đã phân công HDV: ${hdv.name}`);
+            setShowDispatchModal(false);
+            setDispatchTarget(null);
+          }}
+        />
+      )}
     </div>
   );
 }

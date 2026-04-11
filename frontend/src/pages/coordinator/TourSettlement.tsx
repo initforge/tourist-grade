@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
+import { Breadcrumb, message } from 'antd';
 import { mockTourInstances, mockTourPrograms } from '../../data/tourProgram';
 import { mockBookings } from '../../data/bookings';
 import type { Booking } from '../../data/bookings';
@@ -72,14 +73,13 @@ export default function TourSettlement() {
       {/* Header */}
       <div className="mb-8 flex justify-between items-end">
         <div>
-          <nav
-            className="flex items-center gap-2 text-xs uppercase tracking-widest text-[var(--color-primary)]/50 mb-4 cursor-pointer"
-            onClick={() => navigate(`${basePrefix}/tours`)}
-          >
-            <span>Quản lý Tour</span>
-            <span className="material-symbols-outlined text-[14px]">chevron_right</span>
-            <span className="text-[var(--color-primary)] font-bold">{id ?? instance.id}</span>
-          </nav>
+          <Breadcrumb
+            className="mb-4 text-xs"
+            items={[
+              { title: <Link to={`${basePrefix}/tours`} className="text-[var(--color-primary)]/50 hover:text-[var(--color-primary)]">Điều hành tour</Link> },
+              { title: <span className="text-[var(--color-primary)]/30">Quyết toán</span> },
+            ]}
+          />
           <h1 className="font-serif text-3xl text-[var(--color-primary)]">Báo Cáo Quyết Toán Tour</h1>
           <p className="text-sm text-[var(--color-primary)]/50 mt-1">{instance.programName} · {instance.departureDate}</p>
         </div>

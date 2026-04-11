@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Breadcrumb } from 'antd';
 import { useAuthStore } from '../../store/useAuthStore';
 
 // Defines the 6 core categories from Docs
@@ -51,7 +53,7 @@ export default function ServiceList() {
   
   const [templates] = useState<ServiceTemplate[]>(INITIAL_TEMPLATES);
   const [assignments] = useState<SupplierAssignment[]>(INITIAL_ASSIGNMENTS);
-  const [activeTab, setActiveTab] = useState<'all' | 'Vận chuyển' | 'Khách sạn' | 'Vé thắng cảnh'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'Vận chuyển' | 'Khách sạn' | 'Vé thắng cảnh' | 'Hướng dẫn viên (HDV)'>('all');
   
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<SupplierAssignment & ServiceTemplate>>({
@@ -70,6 +72,13 @@ export default function ServiceList() {
   return (
     <div className="w-full bg-[var(--color-background)] min-h-screen">
       <main className="p-10">
+        <Breadcrumb
+          className="mb-6 text-xs"
+          items={[
+            { title: <Link to="/coordinator/services" className="text-[#D4AF37] hover:underline">Kho Dịch vụ</Link> },
+            { title: <span className="text-[#2A2421]/30">Danh mục dịch vụ</span> },
+          ]}
+        />
         <div className="flex justify-between items-end mb-10">
           <div>
             <span className="text-[10px] uppercase tracking-widest text-[#D4AF37] font-bold mb-2 block">Quản lý Kho Dịch Vụ</span>
@@ -84,7 +93,7 @@ export default function ServiceList() {
           {['all', 'Khách sạn', 'Vận chuyển', 'Vé thắng cảnh', 'Hướng dẫn viên (HDV)', 'Chi phí ăn'].map(tab => (
             <button 
               key={tab}
-              onClick={() => setActiveTab(tab as 'all' | 'Vận chuyển' | 'Khách sạn' | 'Vé thắng cảnh')}
+              onClick={() => setActiveTab(tab as 'all' | 'Vận chuyển' | 'Khách sạn' | 'Vé thắng cảnh' | 'Hướng dẫn viên (HDV)')}
               className={`pb-4 px-2 text-[10px] uppercase tracking-widest font-bold transition-all whitespace-nowrap ${activeTab === tab ? 'border-b-2 border-[#D4AF37] text-[#2A2421]' : 'text-stone-400 hover:text-stone-600'}`}
             >
               {tab === 'all' ? 'Tất cả' : tab}

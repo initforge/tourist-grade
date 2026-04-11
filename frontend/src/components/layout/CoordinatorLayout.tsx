@@ -27,16 +27,11 @@ export function CoordinatorLayout() {
             </Link>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-widest text-[#2A2421]/40 px-4 mb-2">Kinh doanh</p>
-            <div className="space-y-1">
-              <Link to="/coordinator/tour-rules" className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-colors ${isActive('/coordinator/tour-rules') ? 'bg-[#D4AF37]/10 text-[#D4AF37] font-medium' : 'hover:bg-gray-50'}`}>
-                <span className="material-symbols-outlined text-[20px]">auto_awesome</span> Quy tắc tạo tour
-              </Link>
-            </div>
-          </div>
-          <div>
             <p className="text-[10px] uppercase tracking-widest text-[#2A2421]/40 px-4 mb-2">Điều hành</p>
             <div className="space-y-1">
+              <Link to="/coordinator/tour-rules" className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-colors ${isActive('/coordinator/tour-rules') ? 'bg-[#D4AF37]/10 text-[#D4AF37] font-medium' : 'hover:bg-gray-50'}`}>
+                <span className="material-symbols-outlined text-[20px]">auto_awesome</span> Quản lý Tour
+              </Link>
               <Link to="/coordinator/tours" className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-colors ${isActive('/coordinator/tours') ? 'bg-[#D4AF37]/10 text-[#D4AF37] font-medium' : 'hover:bg-gray-50'}`}>
                 <span className="material-symbols-outlined text-[20px]">tour</span> Điều hành Tour
               </Link>
