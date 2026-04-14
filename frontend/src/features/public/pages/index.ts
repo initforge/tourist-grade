@@ -1,0 +1,9 @@
+export { default as AboutUs } from './AboutUs';
+export { default as BlogDetail } from './BlogDetail';
+export { default as BlogList } from './BlogList';
+export { default as BookingCheckout } from './BookingCheckout';
+export { default as BookingSuccess } from './BookingSuccess';
+export { default as Landing } from './Landing';
+export { default as OrderLookup } from './OrderLookup';
+export { default as TourDetail } from './TourDetail';
+export { default as TourList } from './TourList';
