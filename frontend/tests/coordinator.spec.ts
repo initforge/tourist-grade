@@ -1,36 +1,18 @@
 import { test, expect } from '@playwright/test';
+import { loginAs } from './support/app';
 
-// ── Login helper ────────────────────────────────────────────────────────────
 async function loginAsCoordinator(page: any) {
-  // First visit any page to load the React app + store
-  await page?.goto('/');
-  await page?.waitForLoadState('domcontentloaded');
-  await page?.waitForTimeout(500);
-  // Inject auth
-  await page?.evaluate(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any)?.__authLogin('coordinator');
-  });
-  await page?.waitForTimeout(200);
-  // Now navigate to coordinator — store already has the role
-  await page?.goto('/coordinator/dashboard');
+  await loginAs(page, 'coordinator', '/coordinator/dashboard');
   await page?.waitForLoadState('domcontentloaded');
   await page?.waitForTimeout(500);
 }
 
 async function loginAsManager(page: any) {
-  await page?.goto('/');
-  await page?.waitForLoadState('domcontentloaded');
-  await page?.waitForTimeout(500);
-  await page?.evaluate(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any)?.__authLogin('manager');
-  });
-  await page?.waitForTimeout(200);
-  await page?.goto('/manager/dashboard');
+  await loginAs(page, 'manager', '/manager/dashboard');
   await page?.waitForLoadState('domcontentloaded');
   await page?.waitForTimeout(500);
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 

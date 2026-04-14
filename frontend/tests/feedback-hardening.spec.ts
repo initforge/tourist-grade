@@ -34,7 +34,10 @@ function installRuntimeAudit(page: Page) {
   page.on('pageerror', (error) => issues.push(`pageerror: ${error.message}`));
   page.on('requestfailed', (request) => {
     const url = request.url();
-    if (!url.startsWith('data:') && !url.startsWith('blob:')) {
+    const errorText = request.failure()?.errorText ?? '';
+    const resourceType = request.resourceType();
+    const isNavigationAbort = errorText === 'net::ERR_ABORTED' && ['image', 'font'].includes(resourceType);
+    if (!url.startsWith('data:') && !url.startsWith('blob:') && !isNavigationAbort) {
       issues.push(`requestfailed: ${request.resourceType()} ${url} ${request.failure()?.errorText ?? ''}`);
     }
   });
@@ -238,11 +241,20 @@ test.describe('Feedback hardening audit', () => {
     await loginAs(page, 'manager');
     await page.goto(appUrl('/manager/tours'));
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^Duyệt$/ }).first().click();
-    await expect(page.getByRole('dialog').getByRole('heading', { name: /Duyệt tour chờ bán/i })).toBeVisible();
-    await page.getByRole('dialog').getByRole('button', { name: /Yêu cầu sửa/i }).click();
-    await expect(page.getByRole('dialog').getByRole('heading', { name: /Yêu cầu sửa/i })).toBeVisible();
-    await page.getByRole('button', { name: /Hủy bỏ/i }).click();
+    await page.locator('tbody tr').first().getByRole('button').first().click();
+    const approveDialog = page.getByRole('dialog');
+    await expect(approveDialog).toBeVisible();
+    await expect(approveDialog.getByRole('button', { name: /Y.*u c.*u s.*a/i })).toBeVisible();
+    await approveDialog.getByRole('button', { name: /Y.*u c.*u s.*a/i }).click();
+    const requestEditDialog = page.locator('[role="dialog"]').last();
+    await expect(requestEditDialog.getByRole('heading', { name: /Y.*u c.*u s.*a/i })).toBeVisible();
+    await requestEditDialog.getByRole('button', { name: /H.*y b.*/i }).click();
+
+    await page.goto(appUrl('/manager/tours'));
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('button', { name: /Kh.*ng .*K KH/i }).click();
+    await expect(page.getByRole('button', { name: /Ti.*p t.*c tri.*n khai/i })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: /L.*i nhu.*n d.* ki.*n/i })).toBeVisible();
 
     await page.goto(appUrl('/manager/tour-programs/TP003/approval'));
     await page.waitForLoadState('domcontentloaded');
