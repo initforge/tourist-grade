@@ -15,6 +15,10 @@ test.describe('Manager remaining feedback', () => {
     await page?.goto('/manager/tours');
     await page?.waitForLoadState('domcontentloaded');
 
+    await expect(page?.getByRole('heading', { name: 'Quản lý Tour' }))?.toBeVisible();
+    await expect(page?.locator('body'))?.not?.toContainText(/Quáº|KhÃ|Chá»|Duyá»|Ä/);
+    await expect(page?.getByRole('button', { name: 'Không đủ ĐK KH' }))?.toBeVisible();
+
     for (const tab of [
       /Ch.* duy.*t b.*n/i,
       /Kh.*ng .*K KH/i,
@@ -29,6 +33,8 @@ test.describe('Manager remaining feedback', () => {
     await page?.locator('tbody tr')?.first()?.getByRole('button')?.first()?.click();
     const approveDialog = page?.getByRole('dialog');
     await expect(approveDialog)?.toBeVisible();
+    await expect(approveDialog)?.not?.toContainText(/Quáº|KhÃ|Chá»|Duyá»|Ä/);
+    await expect(approveDialog?.getByRole('button', { name: 'Duyệt' }))?.toBeVisible();
     await expect(approveDialog?.getByText(/.* ch.*n: \d+ tour/i).first())?.toBeVisible();
     await expect(approveDialog?.getByRole('button', { name: /Y.*u c.*u s.*a/i }))?.toBeVisible();
     await expect(approveDialog?.getByRole('button', { name: /T.* ch.*i/i }))?.toBeVisible();
