@@ -8,7 +8,8 @@ Nguồn:
 - Google Sheet feedback khách, tab `Lỗi`
 - Export nguồn đã lưu local: [feedback-source.xlsx](/P:/tourist-grade/docs/attachment-audit/feedback-source.xlsx)
 - Production: `https://tourist-grade.pages.dev`
-- Commit production đã verify: `572219a`
+- Commit production đang live khi re-check: `572219a`
+- Commit local đã fix gap mới phát hiện: `2975caf` (`pending push/deploy` do GitHub network đang bị chặn trong môi trường hiện tại)
 - Attachment local: [attachment-audit](/P:/tourist-grade/docs/attachment-audit)
 
 Verify production cuối:
@@ -19,7 +20,9 @@ cmd /c npx playwright test --config=playwright.config.ts --reporter=line
 ```
 
 Kết quả:
-- `72/72 pass`
+- Lần automated trước đó trên production `572219a`: `72/72 pass`.
+- Re-check thủ công bằng browser MCP ngày `2026-04-14`: phát hiện row `41/45` còn mojibake ở `/manager/tours` trên production `572219a`.
+- Local đã fix trong commit `2975caf`; production cần deploy lại trước khi chốt all-clear cuối cùng.
 
 Nguyên tắc đọc row:
 - Mỗi row được kết luận theo spec hợp nhất của `Lỗi + UPDATE + UPDATE LỖI`.
@@ -108,11 +111,11 @@ Role mapping:
 | 38 | Coordinator | `-` | `/coordinator/services` | [ServiceList.tsx](/P:/tourist-grade/frontend/src/features/coordinator/pages/ServiceList.tsx:1) | [coordinator.spec.ts](/P:/tourist-grade/frontend/tests/coordinator.spec.ts:295), [coordinator-remaining.spec.ts](/P:/tourist-grade/frontend/tests/coordinator-remaining.spec.ts:176) | `Đáp ứng` | Không có attachment nhưng UI/test cover đủ. |
 | 39 | Coordinator | [row-39-B39.jpg](/P:/tourist-grade/docs/attachment-audit/row-39-B39.jpg) | `/coordinator/suppliers` | [Suppliers.tsx](/P:/tourist-grade/frontend/src/features/coordinator/pages/Suppliers.tsx:1) | [coordinator.spec.ts](/P:/tourist-grade/frontend/tests/coordinator.spec.ts:276), [coordinator-remaining.spec.ts](/P:/tourist-grade/frontend/tests/coordinator-remaining.spec.ts:176) | `Đáp ứng` | Supplier split đã mở trực tiếp attachment. |
 | 40 | Coordinator | [row-40-B40.jpg](/P:/tourist-grade/docs/attachment-audit/row-40-B40.jpg) | estimate/settlement edit price popup | [TourEstimate.tsx](/P:/tourist-grade/frontend/src/features/coordinator/pages/TourEstimate.tsx:1), [TourSettlement.tsx](/P:/tourist-grade/frontend/src/features/coordinator/pages/TourSettlement.tsx:1) | [feedback-hardening.spec.ts](/P:/tourist-grade/frontend/tests/feedback-hardening.spec.ts:182) | `Đáp ứng` | Popup edit giá đã bám attachment. |
-| 41 | Manager | `-` | `/manager/tours` | [ActiveTours.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/ActiveTours.tsx:1) | [manager-remaining.spec.ts](/P:/tourist-grade/frontend/tests/manager-remaining.spec.ts:13), [feedback-hardening.spec.ts](/P:/tourist-grade/frontend/tests/feedback-hardening.spec.ts:238) | `Đáp ứng` | Row từng mismatch thật trên production, nay đã verify lại xanh. |
+| 41 | Manager | `-` | `/manager/tours` | [ActiveTours.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/ActiveTours.tsx:1) | [manager-remaining.spec.ts](/P:/tourist-grade/frontend/tests/manager-remaining.spec.ts:13), [feedback-hardening.spec.ts](/P:/tourist-grade/frontend/tests/feedback-hardening.spec.ts:238) | `Đáp ứng local, pending deploy` | Re-check production `572219a` phát hiện mojibake ở manager tours; đã fix local commit `2975caf`, cần push/deploy rồi verify production lại. |
 | 42 | Manager | `-` | `/manager/tour-programs/TP003/approval` | [AdminTourProgramApproval.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/AdminTourProgramApproval.tsx:1) | [manager-remaining.spec.ts](/P:/tourist-grade/frontend/tests/manager-remaining.spec.ts:70) | `Đáp ứng` | Read-only đủ 3 phần. |
 | 43 | Manager | `-` | `/manager/tours/TI003/estimate-approval` | [ManagerTourEstimateApproval.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/ManagerTourEstimateApproval.tsx:1) | [manager-remaining.spec.ts](/P:/tourist-grade/frontend/tests/manager-remaining.spec.ts:93) | `Đáp ứng` | Có request-edit/reject/approve. |
 | 44 | Manager | `-` | `/manager/tour-programs` | [TourPrograms.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/TourPrograms.tsx:1) | [manager-remaining.spec.ts](/P:/tourist-grade/frontend/tests/manager-remaining.spec.ts:111) | `Đáp ứng` | Nhãn/cột đúng feedback mới. |
-| 45 | Manager | [row-45-B45.jpg](/P:/tourist-grade/docs/attachment-audit/row-45-B45.jpg) | `/manager/tours` | [ActiveTours.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/ActiveTours.tsx:1) | [manager-remaining.spec.ts](/P:/tourist-grade/frontend/tests/manager-remaining.spec.ts:13), [feedback-hardening.spec.ts](/P:/tourist-grade/frontend/tests/feedback-hardening.spec.ts:238) | `Đáp ứng` | Popup review đã đối chiếu trực tiếp với attachment. |
+| 45 | Manager | [row-45-B45.jpg](/P:/tourist-grade/docs/attachment-audit/row-45-B45.jpg) | `/manager/tours` | [ActiveTours.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/ActiveTours.tsx:1) | [manager-remaining.spec.ts](/P:/tourist-grade/frontend/tests/manager-remaining.spec.ts:13), [feedback-hardening.spec.ts](/P:/tourist-grade/frontend/tests/feedback-hardening.spec.ts:238) | `Đáp ứng local, pending deploy` | Popup review đã đối chiếu attachment; re-check production `572219a` phát hiện cùng lỗi mojibake manager tours, đã fix local commit `2975caf`. |
 | 46 | Manager | `B46` stale | `/manager/cancel-policies` | [ManagerCancelPolicy.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/ManagerCancelPolicy.tsx:1) | [manager-remaining.spec.ts](/P:/tourist-grade/frontend/tests/manager-remaining.spec.ts:111) | `Đáp ứng theo spec mới` | Mock cũ stale; row bị update sang `chính sách cố định`. |
 | 47 | Manager | `-` | `/manager/special-days` | [SpecialDays.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/SpecialDays.tsx:1) | [manager-remaining.spec.ts](/P:/tourist-grade/frontend/tests/manager-remaining.spec.ts:111) | `Đáp ứng` | Module ngày đặc biệt đúng cột yêu cầu. |
 
@@ -121,4 +124,6 @@ Role mapping:
 - Đây là file verify duy nhất cần giữ để trace feedback khách.
 - Tất cả role đều đã được trace theo từng row riêng, không gộp chung thành một kết luận mơ hồ.
 - Các row có attachment đã được mở trực tiếp; các row không có attachment vẫn có trace rõ `production -> code -> test`.
-- Chưa thấy row nào còn fail trên production ở lần verify cuối.
+- Production `572219a` còn gap row `41/45` ở manager tours theo re-check thủ công mới nhất.
+- Local commit `2975caf` đã sửa gap này và thêm assertion strict để không lọt mojibake nữa.
+- Cần push/deploy được `2975caf` rồi verify production lại trước khi đổi row `41/45` về `Đáp ứng` production.
