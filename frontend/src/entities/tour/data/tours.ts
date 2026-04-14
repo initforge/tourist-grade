@@ -78,7 +78,7 @@ export const mockTours: Tour[] = [
     category: 'domestic',
     itinerary: [
       { day: 1, title: 'Hà Nội - Vịnh Hạ Long', description: 'Đón khách tại Hà Nội và di chuyển xuống cảng Tuần Châu?. Check-in du thuyền và thưởng thức welcome drink?.', activities: ['Nhận phòng du thuyền', 'Tiệc nướng BBQ'], meals: ['lunch', 'dinner'] },
-      { day: 2, title: 'Khám Phá Hang Sửng Sốt', description: 'Thăm quan một trong những hang động lớn nhất Vịnh?. Tắm biển tại bãi Ti Tốp và tham gia lớp nấu ăn truyền thống?.', activities: ['Tắm biển Ti Tốp', 'Lớp học nấu ăn'], meals: ['breakfast', 'lunch', 'dinner'] },
+      { day: 2, title: 'Khám Phá Hang Sửng Sốt', description: 'Thăm quan một trong những hang động lớn nhất Vịnh. Tắm biển tại bãi Ti Tốp và tham gia lớp nấu ăn truyền thống.', activities: ['Tắm biển Ti Tốp', 'Lớp học nấu ăn'], meals: ['breakfast', 'lunch', 'dinner'] },
       { day: 3, title: 'Hạ Long - Hà Nội', description: 'Ngắm bình minh và tập Thái Cực Quyền trên boong tàu?. Brunch và trở về Hà Nội?.', activities: ['Brunch tự chọn', 'Trở về Hà Nội'], meals: ['breakfast', 'lunch'] }
     ],
     departurePoint: 'Hà Nội',
@@ -170,7 +170,7 @@ export const mockTours: Tour[] = [
     itinerary: [
       { day: 1, title: 'Hà Nội - Osaka', description: 'Bay thẳng Vietnam Airlines đến Osaka Kansai?. Đón và đưa về khách sạn trung tìm Namba?.', activities: ['Nhận phòng khách sạn'], meals: ['lunch'] },
       { day: 2, title: 'Khám phá Osaka', description: 'Thăm Lâu đài Osaka và khu phố Dotonbori?. Thưởng thức Takoyaki và Okonomiyaki đích thực?.', activities: ['Lâu đài Osaka', 'Dotonbori'], meals: ['breakfast', 'dinner'] },
-      { day: 3, title: 'Cố đô Kyoto', description: 'Thăm Chùa Vàng (Kinkakuji), chụp ảnh với Kimono truyền thống?. Trải nghiệm trà đạo tại đền?.', activities: ['Kinkakuji', 'Kimono', 'Trà đạo'], meals: ['breakfast', 'lunch', 'dinner'] },
+      { day: 3, title: 'Cố đô Kyoto', description: 'Thăm Chùa Vàng (Kinkakuji), chụp ảnh với Kimono truyền thống. Trải nghiệm trà đạo tại đền.', activities: ['Kinkakuji', 'Kimono', 'Trà đạo'], meals: ['breakfast', 'lunch', 'dinner'] },
       { day: 4, title: 'Rừng trúc Arashiyama', description: 'Đi dạo trong rừng trúc huyền thoại?. Thưởng thức bữa tối Kaiseki cao cấp?.', activities: ['Arashiyama', 'Kaiseki'], meals: ['breakfast', 'lunch', 'dinner'] },
       { day: 5, title: 'Nara', description: 'Thăm công viên hươu Nara và chùa Todaiji?. Tự do mua sắm tại Shinsaibashi?.', activities: ['Nara Park', 'Todaiji'], meals: ['breakfast', 'lunch'] },
       { day: 6, title: 'Osaka - Hà Nội', description: 'Tắm Onsen buổi sáng?. Di chuyển ra sân bay Kansai và kết thúc hành trình?.', activities: ['Onsen', 'Trả phòng'], meals: ['breakfast'] }

@@ -90,7 +90,7 @@ export default function BlogDetail() {
           <div>
             <span className="text-[10px] uppercase tracking-widest text-[var(--color-primary)]/50 font-bold block mb-1">Tác Giả</span>
             <h4 className="font-serif text-xl text-[var(--color-primary)] mb-2">Lê Minh Khôi</h4>
-            <p className="text-sm">Chuyên gia đ?nh giá trải nghiệm nghỉ dưỡng cao cấp tại Travela?. Sở hữu hơn 10 năm kinh nghiệm tại các chuỗi hệ thống khách sạn Luxury toàn cầu?.</p>
+            <p className="text-sm">Chuyên gia đánh giá trải nghiệm nghỉ dưỡng cao cấp tại Travela. Sở hữu hơn 10 năm kinh nghiệm tại các chuỗi hệ thống khách sạn Luxury toàn cầu.</p>
           </div>
         </div>
 

@@ -28,7 +28,7 @@ export const mockUsers: User[] = [
   },
   {
     id: 'U002',
-    name: 'Quản L? Kinh Doanh',
+    name: 'Quản Lý Kinh Doanh',
     email: 'manager@travela.vn',
     phone: '0901234568',
     role: 'manager',

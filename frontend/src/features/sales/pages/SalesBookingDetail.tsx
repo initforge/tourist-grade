@@ -976,7 +976,7 @@ export default function SalesBookingDetail() {
               )}
             </section>
 
-            {/* Thàng tin xác nhận hủy — cancelled only */}
+            {/* Thông tin xác nhận hủy — cancelled only */}
             {booking.status === 'cancelled' && booking?.cancelledConfirmedBy && (
               <section className="bg-white border border-red-200 p-6">
                 <div className="flex items-center gap-2 mb-4">

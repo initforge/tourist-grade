@@ -455,21 +455,21 @@ export default function AdminTourProgramWizard() {
                           type="button"
                           onClick={() => setHolidayMonthAnchor(toDateKey(addMonths(displayMonth, -1)))}
                           className="w-9 h-9 border border-outline-variant/40 flex items-center justify-center text-primary/60 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
-                          aria-label="Thàng trước"
+                          aria-label="Tháng trước"
                         >
                           <span className="material-symbols-outlined text-base">chevron_left</span>
                         </button>
                         <div className="text-center">
                           <p className="text-[10px] uppercase tracking-widest text-primary/40 font-bold">Lịch khởi hành</p>
                           <p className="text-sm font-medium text-primary">
-                            Thàng {displayMonth?.getMonth() + 1}/{displayMonth?.getFullYear()}
+                            Tháng {displayMonth?.getMonth() + 1}/{displayMonth?.getFullYear()}
                           </p>
                         </div>
                         <button
                           type="button"
                           onClick={() => setHolidayMonthAnchor(toDateKey(addMonths(displayMonth, 1)))}
                           className="w-9 h-9 border border-outline-variant/40 flex items-center justify-center text-primary/60 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
-                          aria-label="Thàng sau"
+                          aria-label="Tháng sau"
                         >
                           <span className="material-symbols-outlined text-base">chevron_right</span>
                         </button>

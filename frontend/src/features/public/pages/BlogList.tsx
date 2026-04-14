@@ -29,7 +29,7 @@ export default function BlogList() {
                   Hành Trình
                 </h1>
                 <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--color-primary)]/60 font-medium font-sans">
-                  Tập san số 12 ? Thàng 12, 2024
+                  Tập san số 12 - Tháng 12, 2024
                 </p>
               </div>
               <nav className="flex flex-wrap gap-5 md:gap-8 text-[10px] uppercase tracking-widest text-[var(--color-primary)] font-bold">

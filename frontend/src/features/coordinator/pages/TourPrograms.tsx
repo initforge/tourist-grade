@@ -22,7 +22,7 @@ export default function CoordinatorTourPrograms() {
   });
 
   const headers = activeTab === 'draft'
-    ? ['Mã nháp', 'T?n chương trình tour', 'Điểm khởi hành', 'Điểm tham quan', 'Thời lượng', 'Cập nhật gần nhất', 'Tình trạng']
+    ? ['Mã nháp', 'Tên chương trình tour', 'Điểm khởi hành', 'Điểm tham quan', 'Thời lượng', 'Cập nhật gần nhất', 'Tình trạng']
     : activeTab === 'active'
     ? ['Mã Tour', 'Tên chương trình tour', 'Điểm khởi hành', 'Điểm tham quan', 'Thời lượng', 'Loại tour', 'Đơn giá', 'Người tạo chương trình tour', 'Hành động']
     : ['Mã Tour', 'Tên chương trình tour', 'Điểm khởi hành', 'Điểm tham quan', 'Thời lượng', 'Loại tour', 'Lý do ngừng', 'Người tạo chương trình tour'];
@@ -39,7 +39,7 @@ export default function CoordinatorTourPrograms() {
           <div>
             <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-primary/40 block mb-1">NV điều phối</span>
             <h1 className="font-serif text-3xl text-primary">Quản lý Chương trình tour</h1>
-            <p className="text-sm text-primary/50 mt-2">Tách khỏi màn Điều hành tour; chỉ quản lý template chương trình?.</p>
+            <p className="text-sm text-primary/50 mt-2">Tách khỏi màn Điều hành tour; chỉ quản lý template chương trình.</p>
           </div>
           <button onClick={() => navigate('/coordinator/tour-programs/create')} className="px-8 py-4 bg-[#D4AF37] text-white font-bold uppercase tracking-widest text-[10px] hover:opacity-90 shadow-lg">
             Tạo mới

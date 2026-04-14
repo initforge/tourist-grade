@@ -145,13 +145,13 @@ export function PublicLayout() {
               TRAVELA
             </h3>
             <p className="text-sm leading-relaxed text-white/60">
-              Chuy?n các hành trình du lịch trong nước với lịch trình rõ ràng, giao diện gọn gàng và trải nghiệm đặt tour dễ theo dõi?.
+              Chuyên các hành trình du lịch trong nước với lịch trình rõ ràng, giao diện gọn gàng và trải nghiệm đặt tour dễ theo dõi.
             </p>
           </div>
           <div>
-            <h4 className="text-white font-medium mb-4">Về Chàng Tài</h4>
+            <h4 className="text-white font-medium mb-4">Về Chúng Tôi</h4>
             <ul className="space-y-2 text-sm">
-              <li><Link to="/about" className="hover:text-white transition-colors">Cóu chuyện thương hiệu</Link></li>
+              <li><Link to="/about" className="hover:text-white transition-colors">Câu chuyện thương hiệu</Link></li>
               <li><Link to="/about" className="hover:text-white transition-colors">Cam kết chất lượng</Link></li>
               <li><Link to="/blog" className="hover:text-white transition-colors">Tuyển dụng</Link></li>
             </ul>
@@ -160,7 +160,7 @@ export function PublicLayout() {
             <h4 className="text-white font-medium mb-4">Hỗ Trợ</h4>
             <ul className="space-y-2 text-sm">
               <li><Link to="/booking/lookup" className="hover:text-[var(--color-secondary)] transition-colors">Tra cứu hóa đơn</Link></li>
-              <li><Link to="/about" className="hover:text-white transition-colors">Chành sách hủy đổi</Link></li>
+              <li><Link to="/about" className="hover:text-white transition-colors">Chính sách hủy đổi</Link></li>
               <li><Link to="/about" className="hover:text-white transition-colors">Bảo mật thông tin</Link></li>
             </ul>
           </div>
@@ -173,7 +173,7 @@ export function PublicLayout() {
           </div>
         </div>
         <div className="mt-16 pt-8 border-t border-white/10 text-center text-xs text-white/40">
-          © 2026 Travela Luxury?. All rights reserved?.
+          © 2026 Travela Luxury. All rights reserved.
         </div>
       </footer>
     </div>

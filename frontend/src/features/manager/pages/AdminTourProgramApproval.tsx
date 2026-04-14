@@ -224,7 +224,7 @@ export default function AdminTourProgramApproval() {
             <section className="bg-white border border-[#D0C5AF]/20 p-6">
               <div className="flex items-center gap-2 mb-5">
                 <div className="w-1 h-4 bg-[#D4AF37]"></div>
-                <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">Thàng tin hệ thống</h2>
+                <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">Thông tin hệ thống</h2>
               </div>
               <div className="space-y-4">
                 <div>

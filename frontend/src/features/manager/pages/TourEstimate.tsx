@@ -173,7 +173,7 @@ export default function TourEstimate() {
 
           <div className="space-y-6">
             <div className="bg-white border border-[#D0C5AF]/40 shadow-sm p-6 space-y-4">
-              <h3 className="font-serif text-lg border-b border-[#D0C5AF]/30 pb-3">Thàng tin Giá</h3>
+              <h3 className="font-serif text-lg border-b border-[#D0C5AF]/30 pb-3">Thông tin Giá</h3>
               {[
                 ['Giá bán NL', `${instance?.priceAdult?.toLocaleString()} đ`],
                 ['Giá bán TE', `${instance?.priceChild?.toLocaleString()} đ`],

@@ -529,7 +529,7 @@ export default function AdminSuppliers() {
                 <p className="text-xs uppercase tracking-[0.35em] text-secondary font-bold mb-3">Danh mục đối tác</p>
                 <h1 className="font-serif text-4xl text-primary">Nhà cung cấp</h1>
                 <p className="text-primary/55 mt-3 max-w-2xl">
-                  Quản lý hồ sơ nhà cung cấp dịch vụ và hướng dẫn viên theo từng nhóm nghiệp vụ?.
+                  Quản lý hồ sơ nhà cung cấp dịch vụ và hướng dẫn viên theo từng nhóm nghiệp vụ.
                 </p>
               </div>
               <button

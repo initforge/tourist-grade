@@ -46,7 +46,7 @@ export default function AdminTourProgramDetail() {
 
 <section className="bg-[#FBFBFB] p-10 relative">
 <div className="absolute top-0 right-10 h-1 w-20 bg-[#D4AF37]"></div>
-<h2 className="font-headline text-2xl mb-8 tracking-tight border-b border-[#D0C5AF]/20 pb-4 uppercase tracking-[0.2em] text-sm font-bold text-[#2A2421]/40">Thàng tin chung</h2>
+<h2 className="font-headline text-2xl mb-8 tracking-tight border-b border-[#D0C5AF]/20 pb-4 uppercase tracking-[0.2em] text-sm font-bold text-[#2A2421]/40">Thông tin chung</h2>
 <div className="grid grid-cols-3 gap-8">
 <div>
 <p className="text-[10px] uppercase tracking-widest text-[#2A2421]/60 mb-1">Mã Tour</p>
@@ -101,7 +101,7 @@ export default function AdminTourProgramDetail() {
 <div className="flex-1 bg-[#FBFBFB] p-8">
 <h3 className="font-headline text-xl mb-4 italic">Bình minh trên Vịnh – Làng chài nổi – Tiệc đêm</h3>
 <div className="space-y-4 text-[#2A2421]/80 leading-relaxed body-lg">
-<p>Đón bình minh với bài tập Thái Cực Quyền trên boong tàu?. Tham quan khu nuôi cấy ngọc trai thiên nhiên và tìm hiểu quy trình chế tác thủ công truyền thống?.</p>
+<p>Đón bình minh với bài tập Thái Cực Quyền trên boong tàu. Tham quan khu nuôi cấy ngọc trai thiên nhiên và tìm hiểu quy trình chế tác thủ công truyền thống.</p>
 <div className="p-4 border-l border-[#D4AF37] bg-[#F3F3F3]/50 italic text-sm">
                                     "Trải nghiệm trà chiều Indochine đặc trưng với các loại bánh điểm tìm Pháp hóa quyện hương vị Việt?."
                                 </div>
@@ -113,7 +113,7 @@ export default function AdminTourProgramDetail() {
 <section className="bg-[#FBFBFB] p-10 border border-[#D0C5AF]/20">
 <h2 className="font-headline text-lg mb-6 flex items-center gap-3">
 <span className="material-symbols-outlined text-[#D4AF37]" data-icon="policy">policy</span>
-                        Chành sách Hoàn hủy
+                        Chính sách Hoàn hủy
                     </h2>
 <div className="prose prose-sm max-w-none text-[#2A2421]/70 leading-relaxed">
 <ul className="space-y-2 list-none p-0">

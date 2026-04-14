@@ -84,7 +84,7 @@ export default function Wishlist() {
                     {tour?.rating && (
                       <div className="flex items-center gap-1 text-xs text-primary/50 mb-3">
                         <span className="material-symbols-outlined text-[14px] text-[var(--color-secondary)]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                        {tour?.rating} · {tour?.reviewCount} đ?nh giá
+                        {tour?.rating} · {tour?.reviewCount} đánh giá
                       </div>
                     )}
                   </div>

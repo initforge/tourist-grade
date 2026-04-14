@@ -98,7 +98,7 @@ export function CancelBookingModal({ booking, onClose }: CancelBookingModalProps
 
           {/* Refund policy */}
           <div className="bg-amber-50 border border-amber-200 p-4 mb-6 space-y-2">
-            <p className="font-bold text-amber-800 text-xs uppercase tracking-widest">Chành sách hoàn hủy</p>
+            <p className="font-bold text-amber-800 text-xs uppercase tracking-widest">Chính sách hoàn hủy</p>
             <div className="space-y-1 text-xs text-amber-700">
               <div className="flex justify-between"><span>Hủy trước 30 ngày</span><strong>→ hoàn 100%</strong></div>
               <div className="flex justify-between"><span>Hủy trước 15-29 ngày</span><strong>→ hoàn 70%</strong></div>

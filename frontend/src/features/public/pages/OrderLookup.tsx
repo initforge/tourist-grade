@@ -75,7 +75,7 @@ export default function OrderLookup() {
       <div className="text-center mb-10 md:mb-12 animate-in slide-in-from-bottom-5 duration-700 max-w-3xl mx-auto">
         <h1 className="font-serif text-4xl text-[var(--color-primary)] tracking-tight mb-4">Tra Cứu Đơn Đặt Chỗ</h1>
         <p className="text-[var(--color-primary)]/70 max-w-lg mx-auto font-light text-sm">
-          Kiểm tra tình trạng đơn đặt chỗ, thông tin hành trình và chi tiết thanh toán của quá khách?.
+          Kiểm tra tình trạng đơn đặt chỗ, thông tin hành trình và chi tiết thanh toán của quý khách.
         </p>
       </div>
 
@@ -271,7 +271,7 @@ export default function OrderLookup() {
 
               {/* Refund policy */}
               <div className="bg-amber-50 border border-amber-200 p-4 space-y-2">
-                <p className="font-bold text-amber-800 text-xs uppercase tracking-widest">Chành sách hoàn hủy</p>
+                <p className="font-bold text-amber-800 text-xs uppercase tracking-widest">Chính sách hoàn hủy</p>
                 <ul className="text-amber-700 space-y-1 text-xs">
                   <li>· Hủy trước 30 ngày → hoàn 100%</li>
                   <li>· Hủy trước 15-29 ngày → hoàn 70%</li>

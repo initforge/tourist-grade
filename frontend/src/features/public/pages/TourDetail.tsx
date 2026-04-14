@@ -4,18 +4,18 @@ import { useAuthStore } from '@shared/store/useAuthStore';
 import { mockTours, type DepartureScheduleEntry } from '@entities/tour/data/tours';
 
 const MONTH_NAMES: Record<number, string> = {
-  1: 'Thàng 1',
-  2: 'Thàng 2',
-  3: 'Thàng 3',
-  4: 'Thàng 4',
-  5: 'Thàng 5',
-  6: 'Thàng 6',
-  7: 'Thàng 7',
-  8: 'Thàng 8',
-  9: 'Thàng 9',
-  10: 'Thàng 10',
-  11: 'Thàng 11',
-  12: 'Thàng 12',
+  1: 'Tháng 1',
+  2: 'Tháng 2',
+  3: 'Tháng 3',
+  4: 'Tháng 4',
+  5: 'Tháng 5',
+  6: 'Tháng 6',
+  7: 'Tháng 7',
+  8: 'Tháng 8',
+  9: 'Tháng 9',
+  10: 'Tháng 10',
+  11: 'Tháng 11',
+  12: 'Tháng 12',
 };
 
 interface ScheduleRow {
@@ -168,7 +168,7 @@ export default function TourDetail() {
                 <span className="material-symbols-outlined text-[16px] text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>
                   star
                 </span>
-                <span>{tour?.rating} ({tour?.reviewCount} đ?nh giá)</span>
+                <span>{tour?.rating} ({tour?.reviewCount} đánh giá)</span>
               </div>
             )}
             <div className="hidden md:block w-px h-3 bg-outline-variant/40" />
@@ -196,7 +196,7 @@ export default function TourDetail() {
                   <table className="w-full min-w-[800px]">
                     <thead>
                       <tr className="bg-[var(--color-primary)] text-white">
-                        <th className="text-center text-[10px] uppercase tracking-widest font-semibold px-4 py-3 w-16">Thàng</th>
+                        <th className="text-center text-[10px] uppercase tracking-widest font-semibold px-4 py-3 w-16">Tháng</th>
                         <th className="text-left text-[10px] uppercase tracking-widest font-semibold px-4 py-3">Ngày khởi hành</th>
                         <th className="text-right text-[10px] uppercase tracking-widest font-semibold px-4 py-3">Người lớn</th>
                         <th className="text-right text-[10px] uppercase tracking-widest font-semibold px-4 py-3">Trẻ em</th>
@@ -308,7 +308,7 @@ export default function TourDetail() {
 
               <div>
                 <div className="flex items-center gap-4 mb-4">
-                  <h3 className="font-headline text-xl text-primary">Thông tin cần lưu ?</h3>
+                  <h3 className="font-headline text-xl text-primary">Thông tin cần lưu ý</h3>
                   <div className="flex-grow h-px bg-outline-variant/30" />
                 </div>
                 <div className="bg-white border border-[var(--color-primary)]/20 p-5 space-y-0">
@@ -338,7 +338,7 @@ export default function TourDetail() {
                     <p>{tour?.childPolicy}</p>
                   </AccordionItem>
 
-                  <AccordionItem title="Chành sách hủy tour" keyName="cancel">
+                  <AccordionItem title="Chính sách hủy tour" keyName="cancel">
                     <div className="space-y-3">
                       {tour?.cancellationPolicy?.map((tier, index) => (
                         <div key={index} className="flex items-center gap-3 flex-wrap">
@@ -353,7 +353,7 @@ export default function TourDetail() {
                     </div>
                   </AccordionItem>
 
-                  <AccordionItem title="Thàng tin khác" keyName="other">
+                  <AccordionItem title="Thông tin khác" keyName="other">
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
                         <span className="material-symbols-outlined text-primary/40 text-base shrink-0">directions_bus</span>

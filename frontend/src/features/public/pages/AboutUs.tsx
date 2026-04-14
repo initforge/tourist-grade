@@ -60,12 +60,12 @@ export default function AboutUs() {
               <span className="material-symbols-outlined text-4xl text-[var(--color-secondary)] mb-6">diamond</span>
               <h3 className="font-serif text-xl text-[var(--color-primary)] mb-4">Tinh Tế Độc Bản</h3>
               <p className="text-sm text-[var(--color-primary)]/60 leading-relaxed">
-                Mỗi hành trình là một tác phẩm nghệ thuật trọn vẹn, được may đo riêng biệt cho từng du khách?.
+                Mỗi hành trình là một tác phẩm nghệ thuật trọn vẹn, được may đo riêng biệt cho từng du khách.
               </p>
             </div>
             <div className="bg-white p-8 md:p-10 border border-[#D0C5AF]/30 shadow-sm relative overflow-hidden group hover:-translate-y-2 transition-transform duration-300">
               <span className="material-symbols-outlined text-4xl text-[var(--color-secondary)] mb-6">workspace_premium</span>
-              <h3 className="font-serif text-xl text-[var(--color-primary)] mb-4">Chuy?n Gia Bản Địa</h3>
+              <h3 className="font-serif text-xl text-[var(--color-primary)] mb-4">Chuyên Gia Bản Địa</h3>
               <p className="text-sm text-[var(--color-primary)]/60 leading-relaxed">
                 Đội ngũ chuyên gia không chỉ là hướng dẫn viên, mà còn là những người đồng hành truyền cảm hứng?.
               </p>

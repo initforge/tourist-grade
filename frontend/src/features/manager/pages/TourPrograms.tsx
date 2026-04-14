@@ -37,7 +37,7 @@ export default function AdminTourPrograms() {
             <div className="w-1 h-5 bg-[#D4AF37] rounded-sm"></div>
             <h1 className="font-['Noto_Serif'] text-3xl text-[#2A2421]">Quản lý Chương trình Tour</h1>
           </div>
-          <p className="text-xs text-[#2A2421]/50 ml-4">Quản lý và phê duyệt các chương trình tour trong hệ thống?.</p>
+          <p className="text-xs text-[#2A2421]/50 ml-4">Quản lý và phê duyệt các chương trình tour trong hệ thống.</p>
         </div>
 
         {/* Tab Bar */}
@@ -68,7 +68,7 @@ export default function AdminTourPrograms() {
             <thead>
               <tr className="bg-[#FAFAF5] border-b border-[#D0C5AF]/30">
                 {(activeTab === 'pending'
-                  ? ['Mã nháp', 'T?n CT Tour', 'Điểm KH', 'Điểm TQ', 'Thời lượng', 'Đơn giá', 'Người tạo', 'Hành động']
+                  ? ['Mã nháp', 'Tên CT Tour', 'Điểm KH', 'Điểm TQ', 'Thời lượng', 'Đơn giá', 'Người tạo', 'Hành động']
                   : activeTab === 'active'
                   ? ['Mã Tour', 'Tên CT Tour', 'Điểm KH', 'Điểm TQ', 'Thời lượng', 'Số tour đang bán', 'Đơn giá', 'Hành động']
                   : ['Mã Tour', 'Tên CT Tour', 'Điểm KH', 'Điểm TQ', 'Thời lượng', 'Loại tour', 'Lý do ngừng']

@@ -115,7 +115,7 @@ test.describe('Feedback hardening audit', () => {
     await page.getByRole('button', { name: /Tiếp tục: Hành khách/i }).first().click();
     await page.getByPlaceholder('Đúng theo CCCD/Passport').fill('Nguyễn Văn A');
     await page.locator('input[type="date"]').first().fill('1990-01-01');
-    await page.locator('section').filter({ hasText: /Thàng tin hành khách/i }).getByRole('checkbox', { name: /Phòng đơn/i }).check();
+    await page.locator('section').filter({ hasText: /Thông tin hành khách/i }).getByRole('checkbox', { name: /Phòng đơn/i }).check();
     await page.getByRole('button', { name: /Tiếp tục: Thanh toán/i }).first().click();
     await expect(page.getByRole('button', { name: /Thanh toán ?.*đ/i })).toBeVisible();
 

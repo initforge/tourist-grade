@@ -27,7 +27,7 @@ export default function Profile() {
                 className={`text-left px-4 py-3 text-sm transition-colors flex items-center gap-3 ${activeTab === 'info' ? 'bg-[var(--color-background)] font-medium text-[var(--color-primary)] border-l-2 border-[var(--color-secondary)]' : 'text-[var(--color-primary)]/60 hover:bg-black/5'}`}
               >
                 <span className="material-symbols-outlined text-[18px]">person</span>
-                Thàng tin chung
+                Thông tin chung
               </button>
               <button 
                 onClick={() => setActiveTab('security')}

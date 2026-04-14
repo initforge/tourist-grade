@@ -41,7 +41,7 @@ test?.describe('Customer + Public Booking Verification', () => {
 
     await page?.getByRole('button', { name: /Giá tour bao gồm/i })?.click();
     await expect(page?.getByText(/Xe Limousine đưa đón khứ hồi/i))?.toBeVisible();
-    await page?.getByRole('button', { name: /Chành sách hủy tour/i })?.click();
+    await page?.getByRole('button', { name: /Chính sách hủy tour/i })?.click();
     await expect(page?.getByText(/Hoàn/)?.first())?.toBeVisible();
   });
 
@@ -72,11 +72,11 @@ test?.describe('Customer + Public Booking Verification', () => {
     await page?.getByRole('button', { name: /Tiếp tục: Hành khách/i })?.first()?.click();
 
     await expect(page?.getByRole('heading', { name: /Số lượng hành khách/i }))?.toBeVisible();
-    await expect(page?.getByRole('heading', { name: /Thàng tin hành khách/i }))?.toBeVisible();
+    await expect(page?.getByRole('heading', { name: /Thông tin hành khách/i }))?.toBeVisible();
     await page?.getByPlaceholder('Đúng theo CCCD/Passport')?.fill('Nguyễn Văn A');
     await page?.locator('input[type="date"]')?.first()?.fill('1990-01-01');
 
-    const passengerSection = page?.locator('section')?.filter({ hasText: /Thàng tin hành khách/i });
+    const passengerSection = page?.locator('section')?.filter({ hasText: /Thông tin hành khách/i });
     await passengerSection?.getByRole('checkbox', { name: /Phòng đơn/i })?.check();
 
     await page?.getByPlaceholder('Nhập mã...')?.fill('TRAVELA10');

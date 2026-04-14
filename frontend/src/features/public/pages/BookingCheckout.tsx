@@ -229,7 +229,7 @@ export default function BookingCheckout() {
                 {/* Contact Info */}
                 <section>
                   <h2 className="font-headline text-xl text-primary mb-1">Thông tin liên hệ</h2>
-                  <p className="text-xs text-primary/50 font-light italic mb-6">Thàng tin xác nhận đặt tour sẽ gửi đến email này</p>
+                  <p className="text-xs text-primary/50 font-light italic mb-6">Thông tin xác nhận đặt tour sẽ gửi đến email này</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-5">
                       <div className="relative group">
@@ -353,7 +353,7 @@ export default function BookingCheckout() {
 
                 <section>
                   <h2 className="font-headline text-xl text-primary mb-6">
-                    Thàng tin hành khách
+                    Thông tin hành khách
                     <span className="ml-3 text-sm font-sans font-normal bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] px-3 py-1 rounded-full">
                       {totalPassengers} khách
                     </span>
@@ -470,7 +470,7 @@ export default function BookingCheckout() {
                 <section className="bg-white border border-outline-variant/30 p-6">
                   <h3 className="font-headline text-lg text-primary mb-4 flex items-center gap-2">
                     <span className="material-symbols-outlined text-[var(--color-secondary)]">contact_phone</span>
-                    Thàng tin liên hệ
+                    Thông tin liên hệ
                   </h3>
                   <div className="grid grid-cols-2 gap-6">
                     <div>
