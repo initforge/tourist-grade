@@ -112,6 +112,54 @@ test?.describe('Coordinator remaining feedback', () => {
     await expect(page?.locator('tbody tr')?.first()?.locator('input[type="date"]'))?.toHaveCount(3);
   });
 
+  test('tour program wizard pricing tables keep mock interactions alive for suppliers and services', async ({ page }) => {
+    await loginAsCoordinator(page);
+    await page?.goto('/coordinator/tour-programs/create');
+    await page?.waitForLoadState('domcontentloaded');
+
+    await page?.locator('select')?.nth(0)?.selectOption({ index: 1 });
+    await page?.locator('select')?.nth(1)?.selectOption({ index: 1 });
+    await page?.getByLabel(/Quanh năm/i)?.check();
+    await page?.getByLabel(/Ngày bắt đầu/i)?.fill('2026-04-20');
+    await page?.getByLabel(/Ngày kết thúc/i)?.fill('2026-04-22');
+    await page?.getByRole('button', { name: /Tiếp theo: Lịch trình/i })?.click();
+
+    await page?.locator('select')?.nth(0)?.selectOption({ index: 1 });
+    await page?.locator('select')?.nth(1)?.selectOption({ index: 1 });
+    const day1Block = page?.getByRole('heading', { name: /Ngày 1/i })?.locator('xpath=../../..');
+    const day2Block = page?.getByRole('heading', { name: /Ngày 2/i })?.locator('xpath=../../..');
+    await day1Block?.getByRole('button', { name: /Bữa trưa/i })?.click();
+    await day2Block?.getByRole('button', { name: /Bữa tối/i })?.click();
+    await page?.getByRole('button', { name: /Tiếp theo: Giá & Cấu hình/i })?.click();
+
+    const tables = page?.locator('table');
+    const transportTable = tables?.nth(0);
+    const hotelTable = tables?.nth(1);
+    const mealTable = tables?.nth(2);
+    const attractionTable = tables?.nth(3);
+    const otherCostTable = tables?.nth(4);
+
+    const transportRowCount = await transportTable?.locator('tbody tr')?.count();
+    await page?.getByRole('button', { name: /Thêm mới NCC xe tham quan/i })?.click();
+    await expect(transportTable?.locator('tbody tr'))?.toHaveCount((transportRowCount ?? 0) + 1);
+
+    const hotelRowCount = await hotelTable?.locator('tbody tr')?.count();
+    await page?.getByRole('button', { name: /Thêm mới NCC Lưu trú/i })?.first()?.click();
+    await expect(hotelTable?.locator('tbody tr'))?.toHaveCount((hotelRowCount ?? 0) + 3);
+
+    const mealRowCount = await mealTable?.locator('tbody tr')?.count();
+    await page?.getByRole('button', { name: /Thêm mới dịch vụ Ngày 1 - Bữa trưa/i })?.click();
+    await expect(mealTable?.locator('tbody tr'))?.toHaveCount((mealRowCount ?? 0) + 1);
+
+    const attractionRowCount = await attractionTable?.locator('tbody tr')?.count();
+    await page?.getByRole('button', { name: /^Thêm mới dịch vụ Ngày 1$/i })?.click();
+    await expect(attractionTable?.locator('tbody tr'))?.toHaveCount((attractionRowCount ?? 0) + 1);
+
+    const otherCostRowCount = await otherCostTable?.locator('tbody tr')?.count();
+    await page?.getByRole('button', { name: /Thêm mới dịch vụ chi phí khác/i })?.click();
+    await expect(otherCostTable?.locator('tbody tr'))?.toHaveCount((otherCostRowCount ?? 0) + 1);
+  });
+
   test('tour generation rules matches wireframe columns and generation preview table', async ({ page }) => {
     await loginAsCoordinator(page);
     await page?.goto('/coordinator/tour-rules');
@@ -129,6 +177,19 @@ test?.describe('Coordinator remaining feedback', () => {
     await expect(page?.getByRole('button', { name: /Xem/i })?.first())?.toBeVisible();
     await expect(page?.getByRole('button', { name: /Sửa/i })?.first())?.toBeVisible();
     await expect(page?.getByRole('button', { name: /Xóa/i })?.first())?.toBeVisible();
+
+    await page?.getByRole('button', { name: /Sửa/i })?.first()?.click();
+    const editDialog = page?.getByRole('dialog');
+    await expect(editDialog?.getByRole('heading', { name: /S.*a y.*u c.*u ch.* duy.*t b.*n/i }))?.toBeVisible();
+    await editDialog?.getByRole('spinbutton')?.fill('33');
+    await editDialog?.getByRole('button', { name: /L.*u thay .*i/i })?.click();
+    await expect(editDialog)?.toHaveCount(0);
+
+    await page?.getByRole('button', { name: /Xóa/i })?.first()?.click();
+    const deleteDialog = page?.getByRole('dialog');
+    await expect(deleteDialog?.getByRole('heading', { name: /X.*a y.*u c.*u ch.* duy.*t b.*n/i }))?.toBeVisible();
+    await deleteDialog?.getByRole('button', { name: /^X.*a$/i })?.click();
+    await expect(deleteDialog)?.toHaveCount(0);
 
     await page?.getByRole('button', { name: /Quy tắc tạo tour/i })?.click();
     await page?.getByRole('button', { name: /^Tạo tour$/ })?.first()?.click();

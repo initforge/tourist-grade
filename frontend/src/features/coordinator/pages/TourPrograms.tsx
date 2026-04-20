@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Breadcrumb } from 'antd';
+import { Breadcrumb, message } from 'antd';
 import { mockTourPrograms, type TourProgram } from '@entities/tour-program/data/tourProgram';
 import { PageSearchInput } from '@shared/ui/PageSearchInput';
 
@@ -18,7 +18,9 @@ export default function CoordinatorTourPrograms() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabKey>('draft');
   const [searchQuery, setSearchQuery] = useState('');
-  const filtered = mockTourPrograms?.filter(p => {
+  const [programs, setPrograms] = useState<TourProgram[]>(mockTourPrograms);
+  const [inactiveReasons, setInactiveReasons] = useState<Record<string, string>>({});
+  const filtered = programs?.filter(p => {
     if (activeTab === 'draft') return p.status === 'draft';
     return p.status === activeTab;
   })?.filter(program => {
@@ -103,13 +105,32 @@ export default function CoordinatorTourPrograms() {
                       <td className="px-5 py-4 text-sm text-primary/70">{tourTypeLabel(program?.tourType)}</td>
                       <td className="px-5 py-4 text-sm font-bold text-secondary">{fmtPrice(program?.pricingConfig?.sellPriceAdult)}</td>
                       <td className="px-5 py-4 text-sm text-primary/70">{program?.createdBy}</td>
-                      <td className="px-5 py-4"><button className="px-3 py-1.5 border border-red-300 text-red-600 text-[10px] uppercase tracking-widest font-bold">Ngừng kinh doanh</button></td>
+                      <td className="px-5 py-4">
+                        <button
+                          onClick={() => {
+                            setPrograms(prev => prev.map(item => (
+                              item.id === program.id
+                                ? { ...item, status: 'inactive', updatedAt: new Date().toISOString() }
+                                : item
+                            )));
+                            setInactiveReasons(prev => ({
+                              ...prev,
+                              [program.id]: 'Ngừng kinh doanh từ màn quản lý chương trình tour',
+                            }));
+                            setActiveTab('inactive');
+                            message.success(`Đã ngừng kinh doanh ${program.name}`);
+                          }}
+                          className="px-3 py-1.5 border border-red-300 text-red-600 text-[10px] uppercase tracking-widest font-bold"
+                        >
+                          Ngừng kinh doanh
+                        </button>
+                      </td>
                     </>
                   )}
                   {activeTab === 'inactive' && (
                     <>
                       <td className="px-5 py-4 text-sm text-primary/70">{tourTypeLabel(program?.tourType)}</td>
-                      <td className="px-5 py-4 text-sm text-primary/70">Ngừng theo kế hoạch kinh doanh</td>
+                      <td className="px-5 py-4 text-sm text-primary/70">{inactiveReasons[program.id] ?? 'Ngừng theo kế hoạch kinh doanh'}</td>
                       <td className="px-5 py-4 text-sm text-primary/70">{program?.createdBy}</td>
                     </>
                   )}

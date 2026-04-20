@@ -7,6 +7,7 @@ import {
   MEAL_LABELS,
   mockHolidays,
 } from '@entities/tour-program/data/tourProgram';
+import TourProgramPricingTables from '@features/coordinator/components/TourProgramPricingTables';
 
 type Transport = 'xe' | 'maybay';
 type TourType = 'mua_le' | 'quanh_nam';
@@ -284,47 +285,6 @@ export default function AdminTourProgramWizard() {
     })),
   );
 
-  const hotelGroups = useMemo(() => {
-    const groups: { id: string; label: string; city: string; nights: number }[] = [];
-    let current: { id: string; label: string; city: string; startDay: number; endDay: number; nights: number } | null = null;
-
-    for (const day of form?.itinerary?.slice(0, Math.max(0, form?.nights)) ?? []) {
-      if (!day?.accommodationPoint) continue;
-      if (current && current.city === day?.accommodationPoint && day.day === current.endDay + 1) {
-        current.endDay = day.day;
-        current.nights += 1;
-        continue;
-      }
-      if (current) {
-        groups.push({
-          id: current.id,
-          label: `Lưu trú - Đêm ${current.startDay}${current.endDay > current.startDay ? `, ${current.endDay}` : ''}`,
-          city: current.city,
-          nights: current.nights,
-        });
-      }
-      current = {
-        id: `stay-${day.day}`,
-        label: `Lưu trú - Đêm ${day.day}`,
-        city: day?.accommodationPoint,
-        startDay: day.day,
-        endDay: day.day,
-        nights: 1,
-      };
-    }
-
-    if (current) {
-      groups.push({
-        id: current.id,
-        label: `Lưu trú - Đêm ${current.startDay}${current.endDay > current.startDay ? `, ${current.endDay}` : ''}`,
-        city: current.city,
-        nights: current.nights,
-      });
-    }
-
-    return groups;
-  }, [form?.itinerary, form?.nights]);
-
   const totalMealCost = mealRows?.reduce((sum, meal) => sum + meal.price, 0);
   const hotelVariableCost = Math.max(1, form?.nights) * 650000;
   const attractionVariableCost = Math.max(1, form?.days) * 250000;
@@ -396,16 +356,6 @@ export default function AdminTourProgramWizard() {
       return { ...prev, [key]: true };
     });
   };
-
-  const renderProviderDeleteButton = (label: string) => (
-    <button type="button" className="text-red-500 text-lg leading-none hover:text-red-700" aria-label={label}>
-      ×
-    </button>
-  );
-
-  const renderDefaultCheckbox = (checked = false) => (
-    <input type="checkbox" checked={checked} readOnly className="accent-[var(--color-secondary)] w-4 h-4" />
-  );
 
   return (
     <div className="w-full bg-[var(--color-background)] min-h-screen pb-40">
@@ -1058,227 +1008,18 @@ export default function AdminTourProgramWizard() {
             <section className="bg-white border border-outline-variant/30 p-6">
               <h3 className="font-headline text-base text-primary mb-5">Bảng kê chi phí dự kiến</h3>
               <div className="overflow-x-auto pb-3">
-              <div className="min-w-[900px] space-y-7">
-                <div>
-                  <h4 className="font-semibold text-sm text-primary mb-2">I. Vận chuyển</h4>
-                  <table className="w-full border-collapse text-sm">
-                    <thead>
-                      <tr className="bg-[var(--color-surface)] text-left">
-                        {['Nhà cung cấp', 'Dịch vụ', 'Báo giá', 'Ghi chú', 'Mặc định', 'Thao tác']?.map(header => (
-                          <th key={header} className="border border-outline-variant/20 px-3 py-2 font-medium">{header}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="bg-gray-50">
-                        <td className="border border-outline-variant/20 px-3 py-2 font-medium" colSpan={2}>Xe tham quan</td>
-                        <td className="border border-outline-variant/20 px-3 py-2 text-right" colSpan={2}>Đơn giá áp dụng: {formatMoney(transportFixedCost)}</td>
-                        <td className="border border-outline-variant/20 px-3 py-2" />
-                        <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50 text-secondary font-medium">Thêm mới NCC +</td>
-                      </tr>
-                      {[
-                        ['NCC A', 'Xe 29 chỗ', 8500000, true],
-                        ['NCC B', 'Xe 29 chỗ', 7200000, false],
-                        ['NCC C', 'Xe 29 chỗ', 0, false],
-                      ]?.map(row => (
-                        <tr key={`${row[0]}-${row[1]}`}>
-                          <td className="border border-outline-variant/20 px-3 py-2">{row[0]}</td>
-                          <td className="border border-outline-variant/20 px-3 py-2">{row[1]}</td>
-                          <td className="border border-outline-variant/20 px-3 py-2">
-                            <input type="number" defaultValue={row[2] as number || ''} placeholder="Nhập đơn giá" className="w-full border-0 bg-transparent outline-none text-right" />
-                          </td>
-                          <td className="border border-outline-variant/20 px-3 py-2"><input placeholder="Nhập ghi chú" className="w-full border-0 bg-transparent outline-none" /></td>
-                          <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderDefaultCheckbox(Boolean(row[3]))}</td>
-                          <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderProviderDeleteButton(`Xóa ${row[0]}`)}</td>
-                        </tr>
-                      ))}
-                      {form?.transport === 'maybay' && (
-                        <>
-                          <tr className="bg-gray-50">
-                            <td className="border border-outline-variant/20 px-3 py-2 font-medium" colSpan={2}>Vé máy bay từ {form?.departurePoint || 'Hà Nội'} đến {form?.arrivalPoint || 'Đà Nẵng'}</td>
-                            <td className="border border-outline-variant/20 px-3 py-2 text-right" colSpan={2}>Đơn giá áp dụng: 4.400.000</td>
-                            <td className="border border-outline-variant/20 px-3 py-2" />
-                            <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50 text-secondary font-medium">Thêm mới NCC +</td>
-                          </tr>
-                          <tr>
-                            <td className="border border-outline-variant/20 px-3 py-2" rowSpan={3}>Đại lý bán vé máy bay A</td>
-                            <td className="border border-outline-variant/20 px-3 py-2">Người lớn</td>
-                            <td className="border border-outline-variant/20 px-3 py-2 text-right">4.400.000</td>
-                            <td className="border border-outline-variant/20 px-3 py-2" rowSpan={3}><input placeholder="Nhập ghi chú" className="w-full border-0 bg-transparent outline-none" /></td>
-                            <td className="border border-outline-variant/20 px-3 py-2 text-center" rowSpan={3}>{renderDefaultCheckbox(true)}</td>
-                            <td className="border border-outline-variant/20 px-3 py-2 text-center" rowSpan={3}>{renderProviderDeleteButton('Xóa đại lý vé máy bay A')}</td>
-                          </tr>
-                          <tr>
-                            <td className="border border-outline-variant/20 px-3 py-2">Trẻ em</td>
-                            <td className="border border-outline-variant/20 px-3 py-2 text-right">4.200.000</td>
-                          </tr>
-                          <tr>
-                            <td className="border border-outline-variant/20 px-3 py-2">Trẻ sơ sinh</td>
-                            <td className="border border-outline-variant/20 px-3 py-2 text-right">440.000</td>
-                          </tr>
-                        </>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold text-sm text-primary mb-2">II. Khách sạn</h4>
-                  <table className="w-full border-collapse text-sm">
-                    <thead>
-                      <tr className="bg-[var(--color-surface)] text-left">
-                        {['Nhà cung cấp', 'Địa chỉ', 'Dịch vụ', 'Đơn giá', 'Mặc định', 'Thao tác']?.map(header => (
-                          <th key={header} className="border border-outline-variant/20 px-3 py-2 font-medium">{header}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {hotelGroups.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="border border-outline-variant/20 px-3 py-4 text-primary/45 italic">
-                            Chọn Địa điểm lưu trú ở Lịch trình trước khi thêm nhà cung cấp.
-                          </td>
-                        </tr>
-                      ) : hotelGroups?.map((group, index) => (
-                        <>
-                          <tr key={`${group.id}-header`} className="bg-gray-50">
-                            <td className="border border-outline-variant/20 px-3 py-2 font-medium">{group.label}</td>
-                            <td className="border border-outline-variant/20 px-3 py-2">Tỉnh Thành: {group.city}</td>
-                            <td className="border border-outline-variant/20 px-3 py-2 text-primary/45">Chọn Tỉnh Thành</td>
-                            <td className="border border-outline-variant/20 px-3 py-2 text-right">Thành tiền: {formatMoney(group.nights * 1300000)}</td>
-                            <td className="border border-outline-variant/20 px-3 py-2" />
-                            <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50 text-secondary font-medium">Thêm mới NCC +</td>
-                          </tr>
-                          <tr key={`${group.id}-single`}>
-                            <td className="border border-outline-variant/20 px-3 py-2" rowSpan={2}>Khách sạn {String.fromCharCode(65 + index)}</td>
-                            <td className="border border-outline-variant/20 px-3 py-2" rowSpan={2}>xx đường {group.city}</td>
-                            <td className="border border-outline-variant/20 px-3 py-2">Phòng đơn</td>
-                            <td className="border border-outline-variant/20 px-3 py-2 text-right">1.200.000</td>
-                            <td className="border border-outline-variant/20 px-3 py-2 text-center" rowSpan={2}>{renderDefaultCheckbox(index === 0)}</td>
-                            <td className="border border-outline-variant/20 px-3 py-2 text-center" rowSpan={2}>{renderProviderDeleteButton(`Xóa khách sạn ${index + 1}`)}</td>
-                          </tr>
-                          <tr key={`${group.id}-double`}>
-                            <td className="border border-outline-variant/20 px-3 py-2">Phòng đôi</td>
-                            <td className="border border-outline-variant/20 px-3 py-2 text-right">1.300.000</td>
-                          </tr>
-                        </>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold text-sm text-primary mb-2">III. Chi phí ăn</h4>
-                  <table className="w-full border-collapse text-sm">
-                    <thead>
-                      <tr className="bg-[var(--color-surface)] text-left">
-                        {['Nhà cung cấp', 'Địa chỉ', 'Tên dịch vụ', 'Đơn giá', 'Mặc định', 'Thao tác']?.map(header => (
-                          <th key={header} className="border border-outline-variant/20 px-3 py-2 font-medium">{header}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {mealRows.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="border border-outline-variant/20 px-3 py-4 text-primary/45 italic">Chọn bữa ăn ở Lịch trình để sinh dòng chi phí ăn.</td>
-                        </tr>
-                      ) : mealRows?.map((meal, index) => (
-                        <tr key={meal.id} className={index === 0 ? 'bg-gray-50' : ''}>
-                          <td className="border border-outline-variant/20 px-3 py-2">{meal.label}</td>
-                          <td className="border border-outline-variant/20 px-3 py-2">xx phố {index + 1}</td>
-                          <td className="border border-outline-variant/20 px-3 py-2">{meal.service}</td>
-                          <td className="border border-outline-variant/20 px-3 py-2 text-right">{formatMoney(meal.price)}</td>
-                          <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderDefaultCheckbox(index === 0)}</td>
-                          <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderProviderDeleteButton(`Xóa ${meal.label}`)}</td>
-                        </tr>
-                      ))}
-                      <tr className="bg-gray-50">
-                        <td className="border border-outline-variant/20 px-3 py-2 font-medium">Ngày tiếp theo</td>
-                        <td className="border border-outline-variant/20 px-3 py-2" />
-                        <td className="border border-outline-variant/20 px-3 py-2" />
-                        <td className="border border-outline-variant/20 px-3 py-2 text-right">Đơn giá áp dụng:</td>
-                        <td className="border border-outline-variant/20 px-3 py-2" />
-                        <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50 text-secondary font-medium">Thêm DV +</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold text-sm text-primary mb-2">IV. Vé thắng cảnh</h4>
-                  <table className="w-full border-collapse text-sm">
-                    <thead>
-                      <tr className="bg-[var(--color-surface)] text-left">
-                        {['Nhà cung cấp', 'Địa chỉ', 'Tên dịch vụ', 'Đơn giá người lớn', 'Đơn giá trẻ em', 'Thao tác']?.map(header => (
-                          <th key={header} className="border border-outline-variant/20 px-3 py-2 font-medium">{header}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {form?.itinerary?.slice(0, Math.max(1, form?.days))?.map((day, index) => (
-                        <tr key={`attraction-${day.day}`} className={index % 2 === 0 ? 'bg-gray-50' : ''}>
-                          <td className="border border-outline-variant/20 px-3 py-2">{index === 0 ? 'Ngày 1' : `Ngày ${day.day}`}</td>
-                          <td className="border border-outline-variant/20 px-3 py-2">Địa chỉ {day.day}</td>
-                          <td className="border border-outline-variant/20 px-3 py-2">Vé tham quan {day.title || '...'}</td>
-                          <td className="border border-outline-variant/20 px-3 py-2 text-right">250.000</td>
-                          <td className="border border-outline-variant/20 px-3 py-2 text-right">150.000</td>
-                          <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderProviderDeleteButton(`Xóa vé thắng cảnh ngày ${day.day}`)}</td>
-                        </tr>
-                      ))}
-                      <tr className="bg-gray-50">
-                        <td className="border border-outline-variant/20 px-3 py-2 font-medium">Ngày mới</td>
-                        <td className="border border-outline-variant/20 px-3 py-2" />
-                        <td className="border border-outline-variant/20 px-3 py-2" />
-                        <td className="border border-outline-variant/20 px-3 py-2" />
-                        <td className="border border-outline-variant/20 px-3 py-2" />
-                        <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50 text-secondary font-medium">Thêm mới DV +</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold text-sm text-primary mb-2">V. Hướng dẫn viên</h4>
-                  <div className="grid grid-cols-[220px_180px_1fr] gap-4 items-end max-w-2xl">
-                    <label>
-                      <span className="text-[10px] uppercase tracking-widest text-primary/60 font-label block mb-1">Đơn giá</span>
-                      <input
-                        type="number"
-                        value={pricingConfig?.guideUnitPrice}
-                        onChange={e => updatePricingConfig('guideUnitPrice', parseInt(e?.target?.value) || 0)}
-                        className="w-full border border-outline-variant/50 px-3 py-2.5 text-sm outline-none"
-                      />
-                    </label>
-                    <span className="text-sm text-primary/45 pb-3">đ / ngày tour</span>
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold text-sm text-primary mb-2">VI. Chi phí khác</h4>
-                  <table className="w-full border-collapse text-sm">
-                    <thead>
-                      <tr className="bg-[var(--color-surface)] text-left">
-                        {['Nhà cung cấp', 'Tên dịch vụ', 'Đơn giá', 'Đơn vị', 'Ghi chú', 'Thêm mới DV +']?.map(header => (
-                          <th key={header} className="border border-outline-variant/20 px-3 py-2 font-medium">{header}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td className="border border-outline-variant/20 px-3 py-2">NCC A</td>
-                        <td className="border border-outline-variant/20 px-3 py-2">Bảo hiểm du lịch</td>
-                        <td className="border border-outline-variant/20 px-3 py-2 text-right">200.000</td>
-                        <td className="border border-outline-variant/20 px-3 py-2">Người</td>
-                        <td className="border border-outline-variant/20 px-3 py-2"><input placeholder="Nhập ghi chú" className="w-full border-0 bg-transparent outline-none" /></td>
-                        <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderProviderDeleteButton('Xóa bảo hiểm du lịch')}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <TourProgramPricingTables
+                transport={form?.transport}
+                departurePoint={form?.departurePoint}
+                arrivalPoint={form?.arrivalPoint}
+                days={form?.days}
+                nights={form?.nights}
+                itinerary={form?.itinerary}
+                guideUnitPrice={pricingConfig?.guideUnitPrice}
+                onGuideUnitPriceChange={value => updatePricingConfig('guideUnitPrice', value)}
+              />
               </div>
             </section>
-
             <section className="bg-white border border-[var(--color-secondary)]/50 shadow-sm p-5">
               <h3 className="font-semibold text-sm text-primary mb-3 bg-amber-50 inline-block px-3 py-1">Tính toán dự kiến</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-3">

@@ -255,3 +255,27 @@ Khi refactor một module, áp dụng cùng một form:
 - Với supplier/service/guide, cần tách 3 resource riêng thay vì dồn vào một blob JSON.
 - Với booking/estimate/settlement, backend phải sở hữu state transition và tính toán cuối cùng.
 - Với dashboard, frontend chỉ render aggregate response thay vì tự tổng hợp từ danh sách lớn.
+
+## 12.11 Audit tương tác ngày 2026-04-20
+
+Phạm vi quét bổ sung:
+
+- `frontend/src/features/coordinator/**/*.tsx`
+- `frontend/src/features/manager/**/*.tsx`
+- `frontend/tests/coordinator-remaining.spec.ts`
+- `frontend/tests/manager-remaining.spec.ts`
+
+Kết quả:
+
+- AST scan các thẻ `<button>` trong hai role chính hiện trả `TOTAL 0` cho nhóm thiếu `onClick`, `type`, `disabled` hoặc `aria-disabled`.
+- Các nút mock vẫn phải có side effect nhìn thấy được: cập nhật local state, mở modal, điều hướng, hoặc hiển thị `antd message`.
+- `TourProgramWizard` tách bảng giá dự kiến sang `TourProgramPricingTables.tsx`; nút thêm NCC/DV, chọn mặc định, xóa dòng và input giá/ghi chú đều chạy trên mock state.
+- `TourGenerationRules` tab `Chờ duyệt bán` có state riêng cho sửa/xóa dòng chờ duyệt, không còn chỉ render nút tĩnh.
+- `TourPrograms` của coordinator/manager có thao tác ngừng kinh doanh/tạm ngừng cập nhật local state và lý do ngừng.
+- Các nút lưu/gửi ở dự toán, quyết toán và detail legacy đã được nối vào message/navigate để tránh UI chết trong giai đoạn mock.
+
+Ghi chú môi trường:
+
+- Vite 8 trên Windows cần chạy với `--configLoader native`; bundle config loader có thể fail khi bundle native dependency của Tailwind.
+- `frontend/package.json` và `frontend/scripts/playwright-dev-server.mjs` đã chuẩn hóa theo native config loader.
+- Trong shell sandbox hiện tại, Playwright CLI bị chặn launch worker/browser với `spawn EPERM`; vì vậy kết quả audit này dựa trên `tsc`, production build, AST scan và test spec đã cập nhật. Khi chạy ngoài sandbox cần chạy lại full Playwright.

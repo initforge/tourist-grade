@@ -127,6 +127,15 @@ test.describe('Manager remaining feedback', () => {
     await expect(page?.getByRole('button', { name: /Ng.*ng ho.*t .*ng/i }))?.toBeVisible();
     await expect(page?.getByRole('columnheader', { name: /.*i.*m TQ/i }))?.toBeVisible();
 
+    await page?.getByRole('button', { name: /.*ang ho.*t .*ng/i })?.click();
+    await page?.locator('tbody tr')?.first()?.getByRole('button', { name: /^Xem$/i })?.click();
+    const detailDialog = page?.getByRole('dialog');
+    await expect(detailDialog?.getByRole('heading', { name: /Chi ti.*t ch.*ng tr.*nh tour/i }))?.toBeVisible();
+    await detailDialog?.getByRole('button', { name: /.*ng/i })?.click();
+
+    await page?.locator('tbody tr')?.first()?.getByRole('button', { name: /T.*m ng.*ng/i })?.click();
+    await expect(page?.getByText(/T.*m ng.*ng th.* c.*ng/i))?.toBeVisible();
+
     await page?.getByRole('button', { name: /Ng.*ng ho.*t .*ng/i })?.click();
     await expect(page?.getByRole('columnheader', { name: /Lo.*i tour/i }))?.toBeVisible();
 

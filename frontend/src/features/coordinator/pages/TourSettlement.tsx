@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { useParams, useLocation, Link } from 'react-router-dom';
-import { Breadcrumb } from 'antd';
+import { useParams, useLocation, Link, useNavigate } from 'react-router-dom';
+import { Breadcrumb, message } from 'antd';
 import { mockTourInstances } from '@entities/tour-program/data/tourProgram';
 
 type SettlementRow = {
@@ -23,6 +23,7 @@ function formatCurrency(value: number) {
 export default function TourSettlement() {
   const { id } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const basePrefix = location?.pathname?.startsWith('/manager') ? '/manager' : '/coordinator';
 
   const instance = mockTourInstances?.find(i => i.id === id);
@@ -136,10 +137,13 @@ export default function TourSettlement() {
           <p className="text-sm text-[var(--color-primary)]/50 mt-1">{instance?.programName} - {instance?.departureDate}</p>
         </div>
         <div className="flex gap-4">
-          <button className="px-6 py-2 border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-black/5 text-sm uppercase tracking-widest transition-colors font-medium">
+          <button onClick={() => message.success('Đã lưu nháp quyết toán')} className="px-6 py-2 border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-black/5 text-sm uppercase tracking-widest transition-colors font-medium">
             Lưu Nháp
           </button>
-          <button className="px-6 py-2 bg-[var(--color-primary)] text-white hover:bg-black text-sm uppercase tracking-widest transition-colors font-medium shadow-md">
+          <button onClick={() => {
+            message.success('Đã hoàn tất quyết toán');
+            navigate(`${basePrefix}/tours`);
+          }} className="px-6 py-2 bg-[var(--color-primary)] text-white hover:bg-black text-sm uppercase tracking-widest transition-colors font-medium shadow-md">
             Hoàn Tất Quyết Toán
           </button>
         </div>

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
-import { Breadcrumb } from 'antd';
+import { Breadcrumb, message } from 'antd';
 import { useAuthStore } from '@shared/store/useAuthStore';
 import { mockTourInstances, mockTourPrograms } from '@entities/tour-program/data/tourProgram';
 import { mockBookings } from '@entities/booking/data/bookings';
@@ -245,10 +245,13 @@ export default function TourEstimate() {
             </>
           ) : (
             <>
-              <button className="px-6 py-2 border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-black/5 text-sm uppercase tracking-widest transition-colors font-medium">
+              <button onClick={() => message.success('Đã lưu nháp dự toán')} className="px-6 py-2 border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-black/5 text-sm uppercase tracking-widest transition-colors font-medium">
                 Lưu Nháp
               </button>
-              <button className="px-6 py-2 bg-[var(--color-tertiary)] text-white hover:bg-[var(--color-tertiary)]/90 text-sm uppercase tracking-widest transition-colors font-medium shadow-md">
+              <button onClick={() => {
+                message.success('Đã gửi dự toán phê duyệt');
+                navigate(`${basePrefix}/tours`);
+              }} className="px-6 py-2 bg-[var(--color-tertiary)] text-white hover:bg-[var(--color-tertiary)]/90 text-sm uppercase tracking-widest transition-colors font-medium shadow-md">
                 Gửi Phê Duyệt
               </button>
             </>

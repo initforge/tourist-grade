@@ -413,3 +413,25 @@ Một module chỉ được bắt đầu cắt mock khi có đủ:
 - seed QA chạy được
 - docs cập nhật
 - smoke test pass
+
+## 13.13 Interaction contract trước khi cắt mock
+
+Trong giai đoạn hiện tại, frontend vẫn dùng mock data nhưng không được để nút/tương tác đứng yên. Khi chuyển từng module sang API, giữ nguyên nguyên tắc sau:
+
+1. Mỗi action hiện đang cập nhật local state phải được map sang một endpoint hoặc command backend tương ứng.
+2. Nếu action hiện chỉ hiển thị `message`, backend phase phải quyết định rõ: đó là command thật, audit event, hay chỉ là UI affordance cần bỏ.
+3. Các bảng dự toán/quyết toán phải giữ quan hệ `category -> item -> supplier quote/service quote` để API/DB không mất khả năng expand bảng giá.
+4. `TourProgramPricingTables` hiện là mock-state boundary cho chi phí dự kiến khi tạo chương trình; khi nối API nên thay bằng adapter trả về cùng shape UI trước, rồi mới refactor sâu.
+5. Các trạng thái nhận điều hành, gửi duyệt dự toán, ngừng kinh doanh, tạm ngừng, hoàn tất quyết toán phải có audit trail: `actorId`, `actedAt`, `fromStatus`, `toStatus`, `reason`.
+6. Test sau migration phải chạy lại cùng regression matrix ở mục 13.8, thêm contract test cho payload state transition và price history.
+
+Các lệnh chốt trước khi deploy một batch frontend/mock:
+
+```powershell
+cd frontend
+cmd /c npx tsc -b --pretty false
+cmd /c npm.cmd run build
+cmd /c "set PLAYWRIGHT_BASE_URL=http://127.0.0.1:4174&& npx.cmd playwright test"
+```
+
+Nếu Playwright CLI bị chặn bởi sandbox `spawn EPERM`, ghi rõ trong release note và chạy lại ở terminal local/CI có quyền spawn browser trước khi coi là verified đầy đủ.

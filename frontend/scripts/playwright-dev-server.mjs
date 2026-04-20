@@ -4,6 +4,7 @@ process.env.VITE_DISABLE_TAILWIND = '1';
 
 const server = await createServer({
   configFile: 'vite.config.ts',
+  configLoader: 'native',
   server: {
     host: '127.0.0.1',
     port: 4174,

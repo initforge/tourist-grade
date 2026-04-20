@@ -112,3 +112,19 @@ Routes: `/booking/lookup`, `/customer/bookings`
   - Manager voucher approval warning and confirmation flows.
   - Sales/manager/coordinator dashboard daily revenue panels.
   - Sales report export field selections.
+
+## Coordinator Internal Ops Mock Boundaries
+
+These rules describe the current frontend mock behavior that must become API/database contracts later.
+
+- Creating a year-round tour program requires `yearRoundStartDate` and `yearRoundEndDate`; the UI generates preview departure rows from the selected date range, similar to holiday tour previews.
+- The tour program pricing step is grouped by operational cost category:
+  - transport and flight rows have supplier quote lists and one default quote;
+  - hotel quote groups are generated from selected accommodation points in the itinerary;
+  - meal quote groups are generated from selected meals in the itinerary;
+  - attraction tickets and other costs are direct service cost rows, not supplier selection lists;
+  - guide cost stores only `unitPrice`.
+- Any `add supplier`, `add service`, default selection, delete, price input, or note input in pricing tables must map to a future command or draft update endpoint, not just a static display row.
+- Tour generation `pending approval` rows support view, edit, and delete in mock state. Backend should own the equivalent state transition and audit metadata.
+- Coordinator/manager tour program stop actions currently update local state and reason. Backend should persist `status = inactive`, `inactiveReason`, `actorId`, and `actedAt`.
+- Estimate and settlement submit/save buttons currently show local feedback. Backend migration must replace these with real draft/submit/complete commands.

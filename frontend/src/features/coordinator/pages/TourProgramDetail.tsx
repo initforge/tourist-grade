@@ -1,13 +1,18 @@
 ﻿import React from 'react';
 
+import { message } from 'antd';
+import { useNavigate } from 'react-router-dom';
+
 export default function AdminTourProgramDetail() {
+  const navigate = useNavigate();
+
   return (
     <div className="w-full bg-[var(--color-background)]">
       
 
 <header className="sticky top-0 z-50 w-full bg-[#FBFBFB] border-b border-[#D0C5AF]/40 px-10 py-4 flex justify-between items-center">
 <div className="flex items-center gap-6">
-<button className="hover:text-[#D4AF37] transition-colors duration-300">
+<button onClick={() => navigate(-1)} className="hover:text-[#D4AF37] transition-colors duration-300">
 <span className="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
 </button>
 <div className="flex flex-col">
@@ -19,10 +24,10 @@ export default function AdminTourProgramDetail() {
 </div>
 </div>
 <div className="flex items-center gap-4">
-<button className="px-6 py-2.5 border border-[#2A2421] text-[#2A2421] text-xs uppercase tracking-widest hover:bg-[#2A2421] hover:text-white transition-all duration-300">
+<button onClick={() => message.warning('Đã ghi nhận thao tác từ chối chương trình tour')} className="px-6 py-2.5 border border-[#2A2421] text-[#2A2421] text-xs uppercase tracking-widest hover:bg-[#2A2421] hover:text-white transition-all duration-300">
                 Từ chối
             </button>
-<button className="px-6 py-2.5 bg-[#3d6656] text-white text-xs uppercase tracking-widest hover:bg-[#2A2421] transition-all duration-300">
+<button onClick={() => message.success('Đã phê duyệt chương trình tour')} className="px-6 py-2.5 bg-[#3d6656] text-white text-xs uppercase tracking-widest hover:bg-[#2A2421] transition-all duration-300">
                 Phê duyệt &amp; Đăng bán
             </button>
 </div>
@@ -234,7 +239,7 @@ export default function AdminTourProgramDetail() {
 <div className="p-4 bg-[#FBFBFB] border-t border-[#D0C5AF]/20">
 <div className="relative">
 <input className="w-full border-none border-b border-[#D0C5AF]/40 bg-transparent text-xs py-2 focus:ring-0 focus:border-[#D4AF37] placeholder:text-[#2A2421]/30" placeholder="Nhập phản hồi nội bộ..." type="text"/>
-<button className="absolute right-0 top-1/2 -translate-y-1/2 text-[#D4AF37] hover:scale-110 transition-transform">
+<button onClick={() => message.info('Đã gửi nội dung trao đổi')} className="absolute right-0 top-1/2 -translate-y-1/2 text-[#D4AF37] hover:scale-110 transition-transform">
 <span className="material-symbols-outlined text-lg" data-icon="send">send</span>
 </button>
 </div>

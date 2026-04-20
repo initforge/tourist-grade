@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { message } from 'antd';
 import { mockTourPrograms } from '@entities/tour-program/data/tourProgram';
 import type { TourProgram } from '@entities/tour-program/data/tourProgram';
 
@@ -14,7 +15,9 @@ function fmtPrice(n: number) {
 export default function AdminTourPrograms() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<string>('pending');
-  const [programs] = useState<TourProgram[]>(mockTourPrograms);
+  const [programs, setPrograms] = useState<TourProgram[]>(mockTourPrograms);
+  const [inactiveReasons, setInactiveReasons] = useState<Record<string, string>>({});
+  const [viewProgram, setViewProgram] = useState<TourProgram | null>(null);
 
   const filtered = programs?.filter(p => {
     if (activeTab === 'pending') return p.status === 'draft';
@@ -121,8 +124,34 @@ export default function AdminTourPrograms() {
                       <td className="px-4 py-4 text-sm font-bold text-[#D4AF37]">{fmtPrice(p?.pricingConfig?.sellPriceAdult)}</td>
                       <td className="px-4 py-4">
                         <div className="flex gap-2">
-                          <button className="px-2 py-1 text-[10px] font-bold border border-[#D0C5AF] text-[#2A2421]/60 hover:bg-gray-50">Xem</button>
-                          <button className="px-2 py-1 text-[10px] font-bold border border-red-300 text-red-600 hover:bg-red-50">Tạm ngừng</button>
+                          <button
+                            onClick={e => {
+                              e?.stopPropagation();
+                              setViewProgram(p);
+                            }}
+                            className="px-2 py-1 text-[10px] font-bold border border-[#D0C5AF] text-[#2A2421]/60 hover:bg-gray-50"
+                          >
+                            Xem
+                          </button>
+                          <button
+                            onClick={e => {
+                              e?.stopPropagation();
+                              setPrograms(prev => prev.map(item => (
+                                item.id === p.id
+                                  ? { ...item, status: 'inactive', updatedAt: new Date().toISOString() }
+                                  : item
+                              )));
+                              setInactiveReasons(prev => ({
+                                ...prev,
+                                [p.id]: 'Tạm ngừng thủ công từ màn quản lý chương trình tour',
+                              }));
+                              setActiveTab('inactive');
+                              message.success(`Đã tạm ngừng ${p?.name}`);
+                            }}
+                            className="px-2 py-1 text-[10px] font-bold border border-red-300 text-red-600 hover:bg-red-50"
+                          >
+                            Tạm ngừng
+                          </button>
                         </div>
                       </td>
                     </>
@@ -130,7 +159,7 @@ export default function AdminTourPrograms() {
                   {activeTab === 'inactive' && (
                     <>
                       <td className="px-4 py-4 text-sm text-[#2A2421]/70">{p.tourType === 'mua_le' ? 'Mùa lễ' : 'Quanh năm'}</td>
-                      <td className="px-4 py-4 text-sm text-[#2A2421]/70">—</td>
+                      <td className="px-4 py-4 text-sm text-[#2A2421]/70">{inactiveReasons[p.id] ?? '—'}</td>
                     </>
                   )}
                 </tr>
@@ -143,7 +172,43 @@ export default function AdminTourPrograms() {
           <p className="text-[11px] text-[#2A2421]/40">Hiển thị {filtered?.length} chương trình tour</p>
         </div>
       </div>
+
+      {viewProgram && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#2A2421]/40" onClick={() => setViewProgram(null)} />
+          <div role="dialog" aria-modal="true" aria-labelledby="program-detail-title" className="relative w-full max-w-3xl bg-white border border-[#D0C5AF]/40 shadow-2xl">
+            <div className="flex items-start justify-between border-b border-[#D0C5AF]/30 px-6 py-5">
+              <div>
+                <h2 id="program-detail-title" className="font-['Noto_Serif'] text-2xl text-[#2A2421]">Chi tiết chương trình tour</h2>
+                <p className="mt-1 text-xs text-[#2A2421]/50">{viewProgram.id} · {viewProgram.name}</p>
+              </div>
+              <button onClick={() => setViewProgram(null)} className="text-[#2A2421]/40 hover:text-[#2A2421]">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="grid gap-4 p-6 md:grid-cols-2">
+              {[
+                ['Điểm khởi hành', viewProgram.departurePoint],
+                ['Điểm tham quan', viewProgram.sightseeingSpots?.join(', ')],
+                ['Thời lượng', `${viewProgram.duration?.days} ngày ${viewProgram.duration?.nights} đêm`],
+                ['Loại tour', viewProgram.tourType === 'mua_le' ? 'Mùa lễ' : 'Quanh năm'],
+                ['Giá người lớn', fmtPrice(viewProgram.pricingConfig?.sellPriceAdult)],
+                ['Người tạo', viewProgram.createdBy],
+              ]?.map(([label, value]) => (
+                <div key={label} className="border border-[#D0C5AF]/30 bg-[#FAFAF5] px-4 py-3">
+                  <p className="text-[10px] uppercase tracking-widest text-[#2A2421]/45">{label}</p>
+                  <p className="mt-1 text-sm font-semibold text-[#2A2421]">{value}</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end border-t border-[#D0C5AF]/30 px-6 py-4">
+              <button onClick={() => setViewProgram(null)} className="px-4 py-2 text-xs font-bold uppercase tracking-widest border border-[#D0C5AF] text-[#2A2421]/70 hover:bg-[#FAFAF5]">
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-

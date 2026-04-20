@@ -96,6 +96,11 @@ export default function TourGenerationRules() {
   const [searchQuery, setSearchQuery] = useState('');
   const [generateModal, setGenerateModal] = useState<GenerateModalState | null>(null);
   const [viewModal, setViewModal] = useState<TourInstance | null>(null);
+  const [pendingApprovalItems, setPendingApprovalItems] = useState<TourInstance[]>(
+    () => mockTourInstances?.filter(instance => instance.status === 'cho_duyet_ban'),
+  );
+  const [editingPendingInstance, setEditingPendingInstance] = useState<TourInstance | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TourInstance | null>(null);
 
   const activePrograms = useMemo(() => {
     return mockTourPrograms
@@ -133,10 +138,7 @@ export default function TourGenerationRules() {
       });
   }, []);
 
-  const pendingApprovalInstances = useMemo(
-    () => mockTourInstances?.filter(instance => instance.status === 'cho_duyet_ban'),
-    [],
-  );
+  const pendingApprovalInstances = pendingApprovalItems;
 
   const filteredActivePrograms = useMemo(() => {
     const keyword = searchQuery?.trim()?.toLowerCase();
@@ -169,6 +171,14 @@ export default function TourGenerationRules() {
 
   const selectedCount = generateModal?.rows?.filter(row => row?.checked)?.length ?? 0;
   const unselectedCount = generateModal ? generateModal?.rows?.length - selectedCount : 0;
+
+  const savePendingInstance = (patch: Partial<TourInstance>) => {
+    if (!editingPendingInstance) return;
+    setPendingApprovalItems(prev => prev.map(instance => (
+      instance.id === editingPendingInstance.id ? { ...instance, ...patch } : instance
+    )));
+    setEditingPendingInstance(null);
+  };
 
   return (
     <div className="w-full bg-[var(--color-background)] min-h-screen pb-32">
@@ -333,10 +343,10 @@ export default function TourGenerationRules() {
                               <button onClick={() => setViewModal(instance)} className="px-3 py-1.5 border border-outline-variant/50 text-primary/60 text-[10px] uppercase tracking-wider hover:bg-surface transition-colors">
                                 Xem
                               </button>
-                              <button className="px-3 py-1.5 bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-blue-700 transition-colors">
+                              <button onClick={() => setEditingPendingInstance(instance)} className="px-3 py-1.5 bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-blue-700 transition-colors">
                                 Sửa
                               </button>
-                              <button className="px-3 py-1.5 border border-red-300 text-red-500 text-[10px] font-bold uppercase tracking-wider hover:bg-red-50 transition-colors">
+                              <button onClick={() => setDeleteTarget(instance)} className="px-3 py-1.5 border border-red-300 text-red-500 text-[10px] font-bold uppercase tracking-wider hover:bg-red-50 transition-colors">
                                 Xóa
                               </button>
                             </div>
@@ -415,6 +425,79 @@ export default function TourGenerationRules() {
           </div>
         )}
 
+        {editingPendingInstance && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-primary/40 backdrop-blur-sm" onClick={() => setEditingPendingInstance(null)} />
+            <div role="dialog" aria-modal="true" aria-labelledby="edit-pending-title" className="relative w-full max-w-lg bg-white shadow-2xl">
+              <div className="border-b border-outline-variant/30 px-6 py-5">
+                <h3 id="edit-pending-title" className="font-serif text-xl text-primary">Sửa yêu cầu chờ duyệt bán</h3>
+                <p className="text-xs text-primary/50 mt-1">{editingPendingInstance.programName}</p>
+              </div>
+              <div className="p-6 grid gap-4">
+                <label className="text-sm text-primary/70">
+                  <span className="block text-[10px] uppercase tracking-widest text-primary/50 mb-1">Ngày khởi hành gần nhất</span>
+                  <input
+                    type="date"
+                    value={editingPendingInstance.departureDate}
+                    onChange={e => setEditingPendingInstance(prev => prev ? { ...prev, departureDate: e.target.value } : prev)}
+                    className="w-full border border-outline-variant/50 px-4 py-2.5 outline-none"
+                  />
+                </label>
+                <label className="text-sm text-primary/70">
+                  <span className="block text-[10px] uppercase tracking-widest text-primary/50 mb-1">Số khách dự kiến</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={editingPendingInstance.expectedGuests ?? 1}
+                    onChange={e => setEditingPendingInstance(prev => prev ? { ...prev, expectedGuests: parseInt(e.target.value, 10) || 1 } : prev)}
+                    className="w-full border border-outline-variant/50 px-4 py-2.5 outline-none"
+                  />
+                </label>
+              </div>
+              <div className="border-t border-outline-variant/30 px-6 py-4 flex justify-end gap-3">
+                <button onClick={() => setEditingPendingInstance(null)} className="px-4 py-2 text-xs uppercase tracking-widest border border-outline-variant/50 text-primary/60">
+                  Hủy bỏ
+                </button>
+                <button
+                  onClick={() => savePendingInstance({
+                    departureDate: editingPendingInstance.departureDate,
+                    expectedGuests: editingPendingInstance.expectedGuests,
+                  })}
+                  className="px-4 py-2 text-xs uppercase tracking-widest bg-primary text-white"
+                >
+                  Lưu thay đổi
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {deleteTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-primary/40 backdrop-blur-sm" onClick={() => setDeleteTarget(null)} />
+            <div role="dialog" aria-modal="true" aria-labelledby="delete-pending-title" className="relative w-full max-w-md bg-white shadow-2xl">
+              <div className="px-6 py-5">
+                <h3 id="delete-pending-title" className="font-serif text-xl text-primary mb-2">Xóa yêu cầu chờ duyệt bán</h3>
+                <p className="text-sm text-primary/60">Yêu cầu cho {deleteTarget.programName} sẽ bị gỡ khỏi danh sách chờ duyệt bán.</p>
+              </div>
+              <div className="border-t border-outline-variant/30 px-6 py-4 flex justify-end gap-3">
+                <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 text-xs uppercase tracking-widest border border-outline-variant/50 text-primary/60">
+                  Hủy bỏ
+                </button>
+                <button
+                  onClick={() => {
+                    setPendingApprovalItems(prev => prev.filter(instance => instance.id !== deleteTarget.id));
+                    setDeleteTarget(null);
+                  }}
+                  className="px-4 py-2 text-xs uppercase tracking-widest border border-red-300 text-red-600"
+                >
+                  Xóa
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {generateModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-primary/40 backdrop-blur-sm" onClick={() => setGenerateModal(null)} />
@@ -455,7 +538,7 @@ export default function TourGenerationRules() {
                         </tr>
                       </thead>
                       <tbody>
-                        {generateModal?.rows?.map((row, index) => (
+                        {generateModal?.rows?.map(row => (
                           <tr key={row?.id} className={`border-b border-outline-variant/20 last:border-0 ${row?.checked ? 'bg-white' : 'bg-gray-100 text-gray-400'}`}>
                             <td className="px-4 py-3 font-mono text-xs">{row?.id}</td>
                             <td className="px-4 py-3 text-sm whitespace-nowrap">{formatDate(row?.departureDate)}</td>
@@ -564,4 +647,3 @@ export default function TourGenerationRules() {
     </div>
   );
 }
-
