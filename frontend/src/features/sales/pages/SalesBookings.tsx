@@ -1,15 +1,13 @@
 ﻿import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Pagination, DatePicker } from 'antd';
-import dayjs from 'dayjs';
-import type { Dayjs } from 'dayjs';
+import { Pagination } from 'antd';
 import { loadBookings, saveBookings, type Booking } from '@entities/booking/data/bookings';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type BookingTab = 'pending_confirm' | 'confirmed' | 'completed' | 'cancelled';
 type ConfirmSubFilter = 'all' | 'pending_book' | 'pending_cancel';
-type RefundSubFilter = 'all' | 'pending' | 'refunded' | 'not_required';
+type RefundSubFilter = 'all' | 'pending' | 'completed';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -29,10 +27,9 @@ const CONFIRM_SUB_FILTERS: { key: ConfirmSubFilter; label: string }[] = [
 ];
 
 const REFUND_SUB_FILTERS: { key: RefundSubFilter; label: string }[] = [
-  { key: 'all',         label: 'Tất cả trạng thái' },
-  { key: 'pending',    label: 'Chưa hoàn' },
-  { key: 'refunded',   label: 'Đã hoàn' },
-  { key: 'not_required', label: 'Không cần hoàn' },
+  { key: 'all', label: 'Tất cả trạng thái' },
+  { key: 'pending', label: 'Chưa hoàn' },
+  { key: 'completed', label: 'Hoàn thành' },
 ];
 
 // Label & style for paymentStatus (partial = Đã cọc, paid = 100%)
@@ -69,16 +66,16 @@ const ORDER_STATUS_STYLE: Record<string, string> = {
 
 // Label & style for refund status
 const REFUND_STATUS_LABEL: Record<string, string> = {
-  none:         '—',
-  pending:      'Chưa hoàn',
-  refunded:     'Đã hoàn',
-  not_required: 'Không cần hoàn',
+  none: '—',
+  pending: 'Chưa hoàn',
+  refunded: 'Hoàn thành',
+  not_required: 'Hoàn thành',
 };
 const REFUND_STATUS_STYLE: Record<string, string> = {
-  none:         'text-[#2A2421]/30',
-  pending:      'bg-amber-100 text-amber-700',
-  refunded:     'bg-emerald-100 text-emerald-700',
-  not_required: 'bg-gray-100 text-gray-500',
+  none: 'text-[#2A2421]/30',
+  pending: 'bg-amber-100 text-amber-700',
+  refunded: 'bg-emerald-100 text-emerald-700',
+  not_required: 'bg-emerald-100 text-emerald-700',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -106,6 +103,12 @@ function bookingMemo(booking: Booking) {
     : (booking?.contactInfo?.note ?? '—');
 }
 
+function matchesRefundSubFilter(booking: Booking, filter: RefundSubFilter) {
+  if (filter === 'all') return true;
+  if (filter === 'pending') return booking?.refundStatus === 'pending';
+  return booking?.refundStatus === 'refunded' || booking?.refundStatus === 'not_required';
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function BookingManagement() {
@@ -120,9 +123,6 @@ export default function BookingManagement() {
   const [searchKeyword,   setSearchKeyword]    = useState('');
   const [searchInput,      setSearchInput]       = useState('');
   const [currentPage,     setCurrentPage]       = useState(1);
-
-  // Date range state (dayjs | null)
-  const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null]>([null, null]);
 
   // Live bookings state (mutable for demo)
   const [bookings, setBookings] = useState<Booking[]>(() => loadBookings());
@@ -178,8 +178,7 @@ export default function BookingManagement() {
   // Sub-filter: "Đã hủy" → phân biệt refund status
   const refundFiltered = useMemo(() => {
     if (activeTab !== 'cancelled') return subFiltered;
-    if (refundSubFilter === 'all') return subFiltered;
-    return subFiltered?.filter(b => b.refundStatus === refundSubFilter);
+    return subFiltered?.filter(booking => matchesRefundSubFilter(booking, refundSubFilter));
   }, [subFiltered, activeTab, refundSubFilter]);
 
   // Search keyword filter
@@ -193,23 +192,11 @@ export default function BookingManagement() {
     );
   }, [refundFiltered, searchKeyword]);
 
-  // Date range filter
-  const dateFiltered = useMemo(() => {
-    if (!dateRange[0] || !dateRange[1]) return searchFiltered;
-    const [start, end] = dateRange;
-    return searchFiltered?.filter(b => {
-      const d = dayjs(b?.createdAt)?.startOf('day');
-      const s = start?.startOf('day');
-      const e = end?.startOf('day');
-      return d?.diff(s, 'day') >= 0 && e?.diff(d, 'day') >= 0;
-    });
-  }, [searchFiltered, dateRange]);
-
   // Paginate
   const paginated = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
-    return dateFiltered?.slice(start, start + PAGE_SIZE);
-  }, [dateFiltered, currentPage]);
+    return searchFiltered?.slice(start, start + PAGE_SIZE);
+  }, [searchFiltered, currentPage]);
 
   // Tab counts
   const tabCounts = useMemo(() => ({
@@ -259,7 +246,6 @@ export default function BookingManagement() {
     // activeTab === 'cancelled'
     return [
       ...base,
-      { label: 'Trạng thái đơn', className: 'w-32' },
       { label: 'Lý do hủy',    className: 'w-36' },
       { label: 'Số tiền hoàn', className: 'w-28' },
       { label: 'TT hoàn tiền', className: 'w-28 text-center' },
@@ -278,7 +264,7 @@ export default function BookingManagement() {
             <p className="text-xs text-[#2A2421]/50">Danh sách đơn hàng theo từng trạng thái booking.</p>
           </div>
 
-          {/* Search + date range controls stay directly under the title. */}
+          {/* Search controls stay directly under the title. */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center border border-[#D0C5AF]/40 bg-white focus-within:border-[#D4AF37] transition-colors flex-1 min-w-[260px] max-w-xl">
               <input
@@ -307,18 +293,9 @@ export default function BookingManagement() {
               </button>
             </div>
 
-            <DatePicker.RangePicker
-              value={dateRange}
-              onChange={val => { setDateRange(val as [Dayjs | null, Dayjs | null]); setCurrentPage(1); }}
-              format="DD/MM/YYYY"
-              placeholder={['Từ ngày', 'Đến ngày']}
-              allowClear
-              className="h-9 text-xs"
-            />
-
             {searchKeyword && (
               <p className="text-[11px] text-[#D4AF37] flex-shrink-0">
-                Kết quả: "{searchKeyword}" ({dateFiltered?.length} đơn)
+                Kết quả: "{searchKeyword}" ({searchFiltered?.length} đơn)
               </p>
             )}
           </div>
@@ -506,13 +483,6 @@ export default function BookingManagement() {
 
                   {activeTab === 'cancelled' && (
                     <>
-                      {/* Trạng thái đơn */}
-                      <td className="px-4 py-4">
-                        <span className={`inline-block px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded ${ORDER_STATUS_STYLE[booking?.status] ?? ''}`}>
-                          {ORDER_STATUS_LABEL[booking?.status] ?? booking?.status}
-                        </span>
-                      </td>
-
                       {/* Lý do hủy */}
                       <td className="px-4 py-4 text-xs text-[#2A2421]/50 max-w-36 truncate" title={booking?.cancellationReason ?? '—'}>
                         {booking?.cancellationReason ?? '—'}
@@ -545,12 +515,12 @@ export default function BookingManagement() {
         </div>
 
         {/* ── Pagination ── */}
-        {dateFiltered?.length > 0 && (
+        {searchFiltered?.length > 0 && (
           <div className="mt-4 flex justify-end">
             <Pagination
               current={currentPage}
               pageSize={PAGE_SIZE}
-              total={dateFiltered?.length}
+              total={searchFiltered?.length}
               onChange={page => setCurrentPage(page)}
               showSizeChanger={false}
               showTotal={(total, [from, to]) => (
@@ -565,7 +535,7 @@ export default function BookingManagement() {
         {/* Footer */}
         <div className="mt-3 flex flex-wrap justify-end items-center gap-3">
           <p className="text-[11px] text-[#2A2421]/40">
-            Hiển thị {dateFiltered?.length > 0 ? Math.min((currentPage - 1) * PAGE_SIZE + 1, dateFiltered?.length) : 0}–{Math.min(currentPage * PAGE_SIZE, dateFiltered?.length)} trong {dateFiltered?.length} đơn
+            Hiển thị {searchFiltered?.length > 0 ? Math.min((currentPage - 1) * PAGE_SIZE + 1, searchFiltered?.length) : 0}–{Math.min(currentPage * PAGE_SIZE, searchFiltered?.length)} trong {searchFiltered?.length} đơn
           </p>
         </div>
 

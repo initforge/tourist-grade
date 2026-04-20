@@ -21,6 +21,8 @@ test.describe('Manager and coordinator dashboard feedback', () => {
     await expect(urgent.getByRole('heading', { name: 'Phê duyệt yêu cầu bán' })).toBeVisible();
     await expect(urgent.getByRole('heading', { name: 'Xử lý tour không đủ điều kiện khởi hành' })).toBeVisible();
     await expect(urgent.getByRole('heading', { name: 'Xem quyết toán mới tạo' })).toBeVisible();
+    await expect(report.getByRole('heading', { name: 'Báo cáo doanh thu theo ngày' })).toBeVisible();
+    await expect(report.getByRole('heading', { name: 'Điểm kiểm soát' })).toHaveCount(0);
   });
 
   test('coordinator dashboard splits work and report areas with filterable exports', async ({ page }) => {
@@ -42,5 +44,7 @@ test.describe('Manager and coordinator dashboard feedback', () => {
     await expect(urgent.getByRole('heading', { name: 'Quyết toán' })).toBeVisible();
     await expect(urgent.getByRole('heading', { name: /Cảnh báo cần tạo tour/i })).toBeVisible();
     await expect(urgent.getByRole('heading', { name: /Hoàn thiện bản nháp chương trình tour/i })).toBeVisible();
+    await expect(report.getByRole('heading', { name: 'Báo cáo doanh thu theo ngày' })).toBeVisible();
+    await expect(report.getByRole('heading', { name: 'Điểm kiểm soát' })).toHaveCount(0);
   });
 });

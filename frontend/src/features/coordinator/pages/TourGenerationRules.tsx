@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Breadcrumb } from 'antd';
 import { mockTourPrograms, mockTourInstances, type TourInstance } from '@entities/tour-program/data/tourProgram';
+import { PageSearchInput } from '@shared/ui/PageSearchInput';
 
 type SubTab = 'quy_tac' | 'cho_duyet_ban';
 
@@ -92,6 +93,7 @@ function buildPreviewRows(programId: string): PreviewRow[] {
 
 export default function TourGenerationRules() {
   const [subTab, setSubTab] = useState<SubTab>('quy_tac');
+  const [searchQuery, setSearchQuery] = useState('');
   const [generateModal, setGenerateModal] = useState<GenerateModalState | null>(null);
   const [viewModal, setViewModal] = useState<TourInstance | null>(null);
 
@@ -135,6 +137,35 @@ export default function TourGenerationRules() {
     () => mockTourInstances?.filter(instance => instance.status === 'cho_duyet_ban'),
     [],
   );
+
+  const filteredActivePrograms = useMemo(() => {
+    const keyword = searchQuery?.trim()?.toLowerCase();
+    if (!keyword) return activePrograms;
+    return activePrograms?.filter(row =>
+      [
+        row?.program?.id,
+        row?.program?.name,
+        row?.program?.departurePoint,
+        row?.program?.sightseeingSpots?.join(' '),
+        row?.statusLabel,
+      ]?.join(' ')?.toLowerCase()?.includes(keyword),
+    );
+  }, [activePrograms, searchQuery]);
+
+  const filteredPendingApprovalInstances = useMemo(() => {
+    const keyword = searchQuery?.trim()?.toLowerCase();
+    if (!keyword) return pendingApprovalInstances;
+    return pendingApprovalInstances?.filter(instance => {
+      const program = mockTourPrograms?.find(item => item.id === instance?.programId);
+      return [
+        instance?.id,
+        instance?.programName,
+        instance?.departureDate,
+        instance?.createdAt,
+        program?.tourType,
+      ]?.join(' ')?.toLowerCase()?.includes(keyword);
+    });
+  }, [pendingApprovalInstances, searchQuery]);
 
   const selectedCount = generateModal?.rows?.filter(row => row?.checked)?.length ?? 0;
   const unselectedCount = generateModal ? generateModal?.rows?.length - selectedCount : 0;
@@ -186,6 +217,15 @@ export default function TourGenerationRules() {
           </button>
         </div>
 
+        <PageSearchInput
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder={subTab === 'quy_tac'
+            ? 'Tìm theo chương trình tour, điểm khởi hành, trạng thái...'
+            : 'Tìm theo mã yêu cầu, chương trình tour, ngày khởi hành...'}
+          className="my-6"
+        />
+
         {subTab === 'quy_tac' && (
           <div className="bg-white border-x border-b border-outline-variant/30 overflow-hidden">
             <div className="overflow-x-auto">
@@ -209,14 +249,14 @@ export default function TourGenerationRules() {
                   </tr>
                 </thead>
                 <tbody>
-                  {activePrograms.length === 0 && (
+                  {filteredActivePrograms.length === 0 && (
                     <tr>
                       <td colSpan={8} className="px-5 py-16 text-center text-sm text-primary/40">
                         Chưa có chương trình tour. Kết nối API hoặc tạo dữ liệu thật để bắt đầu.
                       </td>
                     </tr>
                   )}
-                  {activePrograms?.map((row, index) => (
+                  {filteredActivePrograms?.map((row, index) => (
                     <tr key={row?.program?.id} className={index % 2 === 0 ? 'bg-white' : 'bg-[var(--color-surface)]/20'}>
                       <td className="px-5 py-4 text-sm font-medium text-primary">{row?.program?.name}</td>
                       <td className="px-5 py-4 text-sm">{row?.program.tourType === 'mua_le' ? 'Mùa lễ' : 'Quanh năm'}</td>
@@ -254,7 +294,7 @@ export default function TourGenerationRules() {
 
         {subTab === 'cho_duyet_ban' && (
           <div className="bg-white border-x border-b border-outline-variant/30 overflow-hidden">
-            {pendingApprovalInstances.length === 0 ? (
+            {filteredPendingApprovalInstances.length === 0 ? (
               <div className="py-20 text-center">
                 <span className="material-symbols-outlined text-5xl text-primary/10 block mb-3">inbox</span>
                 <p className="text-sm text-primary/40">Không có tour nào chờ duyệt bán</p>
@@ -272,7 +312,7 @@ export default function TourGenerationRules() {
                     </tr>
                   </thead>
                   <tbody>
-                    {pendingApprovalInstances?.map((instance, index) => {
+                    {filteredPendingApprovalInstances?.map((instance, index) => {
                       const program = mockTourPrograms?.find(item => item.id === instance?.programId);
                       return (
                         <tr key={instance?.id} className={`border-b border-outline-variant/20 last:border-0 ${index % 2 === 0 ? 'bg-white' : 'bg-[var(--color-surface)]/30'}`}>

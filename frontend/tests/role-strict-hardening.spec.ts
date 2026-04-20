@@ -86,11 +86,12 @@ test.describe('Strict role hardening audit', () => {
     await expect(page.getByText('Chưa thanh toán', { exact: true })).toHaveCount(0);
 
     await page.getByRole('button', { name: /Đã hủy/i }).first().click();
-    await page.locator('select').selectOption('not_required');
-    await expect(page.locator('tbody')).toContainText('Không cần hoàn');
+    await page.locator('select').selectOption('completed');
+    await expect(page.locator('tbody')).toContainText('Hoàn thành');
+    await expect(page.locator('tbody')).not.toContainText('Không cần hoàn');
     await expect(page.locator('tbody')).not.toContainText('Đã hoàn');
 
-    await page.goto('/sales/vouchers/VOU-05');
+    await page.goto('/sales/vouchers/VOU-07');
     await page.waitForLoadState('domcontentloaded');
     await expect(page.getByRole('button', { name: /Chỉnh sửa/i })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Gửi phê duyệt/i })).toHaveCount(0);
@@ -117,7 +118,7 @@ test.describe('Strict role hardening audit', () => {
     await page.goto('/coordinator/tours/TI004/settle');
     await page.waitForLoadState('domcontentloaded');
     await expect(page.getByRole('button', { name: /Thêm hạng mục/i })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /Chỉnh sửa giá/i }).first()).toBeVisible();
+    await expect(page.locator('tbody input[type="number"]').first()).toBeVisible();
 
     await page.goto('/coordinator/tour-programs/create');
     await page.waitForLoadState('domcontentloaded');

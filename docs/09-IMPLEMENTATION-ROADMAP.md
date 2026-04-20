@@ -16,6 +16,19 @@
 
 ## 9.2 Thứ tự implement tối ưu
 
+### Phase 0. Audit + chuẩn hóa migration
+
+- khóa inventory file/module hiện tại
+- chốt module nào còn mock
+- chuẩn hóa docs `12`, `13`
+- chốt seed strategy và test matrix
+
+Done khi:
+
+- có codebase audit
+- có migration playbook
+- biết rõ module nào cắt mock trước/sau
+
 ### Phase 1. Foundation
 
 - cài backend deps
@@ -73,9 +86,17 @@ Done khi:
 ### Phase 6. Supplier + Cost Estimate + Settlement
 
 - supplier catalog
+- service catalog
+- guide profile
 - service variants
 - estimate save/approve
 - settlement save
+
+Done khi:
+
+- supplier / service / guide có API và DB thật
+- quote history có persistence
+- estimate / settlement không còn dựng từ mock row nội bộ
 
 ### Phase 7. Reports
 
@@ -98,6 +119,7 @@ Done khi:
 3. Làm migration trước UI integration.
 4. Không cho frontend tự suy đoán business status nếu backend có thể trả thẳng.
 5. Với mỗi module, hoàn thành theo thứ tự `schema -> repository -> service -> controller -> frontend integration`.
+6. Với module đang có page rất lớn, tách mapper và form state trước khi nối API.
 
 ## 9.4 Checklist trước khi chuyển phase
 

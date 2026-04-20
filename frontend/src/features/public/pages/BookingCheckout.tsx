@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { mockTours } from '@entities/tour/data/tours';
 import { mockBookings, type Passenger } from '@entities/booking/data/bookings';
 import { useAuthStore } from '@shared/store/useAuthStore';
+import { NationalitySelect } from '@shared/ui/NationalitySelect';
 import type { Tour, DepartureScheduleEntry } from '@entities/tour/data/tours';
 
 
@@ -11,6 +12,13 @@ interface ContactInfo {
   phone: string;
   email: string;
   note: string;
+}
+
+interface BookingSuccessInfo {
+  bookingId: string;
+  bookingCode: string;
+  tourName: string;
+  amount: number;
 }
 
 export default function BookingCheckout() {
@@ -29,6 +37,7 @@ export default function BookingCheckout() {
   const [paymentMethod, setPaymentMethod] = useState<'bank' | 'card'>('bank');
   const [paymentRatio, setPaymentRatio] = useState<'deposit' | 'full'>('full');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successInfo, setSuccessInfo] = useState<BookingSuccessInfo | null>(null);
 
   // Số phòng
   const [roomCounts, setRoomCounts] = useState({ single: 0, double: 1, triple: 0 });
@@ -149,10 +158,14 @@ export default function BookingCheckout() {
       createdAt: new Date()?.toISOString(),
     };
 
-    // Navigate with booking data
-    navigate('/booking/success', {
-      state: { bookingId: newBooking?.id, bookingCode: newBooking?.bookingCode, tourName: tour!?.title, amount: subtotal }
+    setSuccessInfo({
+      bookingId: newBooking?.id,
+      bookingCode: newBooking?.bookingCode,
+      tourName: tour!?.title,
+      amount: subtotal,
     });
+    setIsSubmitting(false);
+    setStep(3);
   };
 
   if (!tour || !schedule) {
@@ -196,9 +209,9 @@ export default function BookingCheckout() {
           <div className="flex items-center gap-0 relative">
             <div className="absolute top-4 left-0 w-full h-[1px] bg-outline-variant/30 -z-10" />
             {[
-              { id: 1, label: 'Liên hệ' },
-              { id: 2, label: 'Hành khách' },
-              { id: 3, label: 'Thanh toán' },
+              { id: 1, label: 'Thông tin' },
+              { id: 2, label: 'Thanh toán' },
+              { id: 3, label: 'Hoàn tất' },
             ]?.map(item => (
               <div key={item?.id} className="flex flex-col items-center gap-2 flex-1">
                 <div className={`w-8 h-8 flex items-center justify-center border text-sm font-bold transition-all ${
@@ -281,24 +294,11 @@ export default function BookingCheckout() {
                   </div>
                 </section>
 
-                <div className="flex justify-end pt-4">
-                  <button
-                    onClick={() => setStep(2)}
-                    disabled={!canProceedContact}
-                    className={`px-12 py-4 font-sans uppercase tracking-[0.2em] text-[12px] font-bold transition-all ${
-                      canProceedContact
-                        ? 'bg-primary text-surface hover:bg-[var(--color-secondary)]'
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    }`}
-                  >
-                    Tiếp tục: Hành khách
-                  </button>
-                </div>
               </div>
             )}
 
-            {/* STEP 2 */}
-            {step === 2 && (
+            {/* STEP 1: Passenger Info */}
+            {step === 1 && (
               <div className="space-y-8">
                 <section>
                   <h2 className="font-headline text-xl text-primary mb-1">Số lượng hành khách</h2>
@@ -337,11 +337,17 @@ export default function BookingCheckout() {
                           <span className="text-lg font-bold w-8 text-center">{counts[type]}</span>
                           <button
                             onClick={() => {
+                              if (totalPassengers >= maxSeats) return;
                               const next = { ...counts, [type]: counts[type] + 1 };
                               setCounts(next);
                               syncPassengers(next);
                             }}
-                            className="w-8 h-8 border border-outline-variant/50 flex items-center justify-center hover:border-[var(--color-secondary)] transition-colors"
+                            disabled={totalPassengers >= maxSeats}
+                            className={`w-8 h-8 border border-outline-variant/50 flex items-center justify-center transition-colors ${
+                              totalPassengers >= maxSeats
+                                ? 'opacity-40 cursor-not-allowed'
+                                : 'hover:border-[var(--color-secondary)]'
+                            }`}
                           >
                             <span className="material-symbols-outlined text-base">add</span>
                           </button>
@@ -425,15 +431,14 @@ export default function BookingCheckout() {
                             <label className="block text-[10px] font-label uppercase tracking-widest text-primary/60 mb-1">
                               Quốc tịch
                             </label>
-                            <input
+                            <NationalitySelect
                               value={p?.nationality ?? 'Việt Nam'}
-                              onChange={e => updatePassenger(idx, 'nationality', e?.target?.value)}
-                              className="w-full bg-transparent border-t-0 border-x-0 border-b border-outline-variant focus:border-[var(--color-secondary)] px-0 py-2 text-sm placeholder:text-primary/20 transition-all"
-                              placeholder="Việt Nam"
+                              onChange={value => updatePassenger(idx, 'nationality', value)}
+                              ariaLabel={`Quốc tịch hành khách ${idx + 1}`}
                             />
                           </div>
                           {p.type === 'adult' && (
-                            <div className="rounded-sm border border-outline-variant/30 bg-[var(--color-surface)]/60 p-4">
+                            <div className="pt-2">
                               <p className="text-[10px] font-label uppercase tracking-widest text-primary/60 mb-2">Tùy chọn phòng</p>
                 <label className="flex items-center gap-3 cursor-pointer group">
                   <input
@@ -458,8 +463,8 @@ export default function BookingCheckout() {
               </div>
             )}
 
-            {/* STEP 3 */}
-            {step === 3 && (
+            {/* STEP 2 */}
+            {step === 2 && (
               <div className="space-y-8">
                 <div>
                   <h2 className="font-headline text-2xl text-primary">Xác nhận thông tin</h2>
@@ -535,10 +540,51 @@ export default function BookingCheckout() {
                       </div>
                     ))}
                   </div>
-                  <button onClick={() => setStep(2)} className="mt-4 text-xs text-[var(--color-secondary)] hover:underline">
+                  <button onClick={() => setStep(1)} className="mt-4 text-xs text-[var(--color-secondary)] hover:underline">
                     Chỉnh sửa thông tin hành khách
                   </button>
                 </section>
+              </div>
+            )}
+
+            {/* STEP 3 */}
+            {step === 3 && (
+              <div className="bg-white border border-outline-variant/30 p-8 md:p-10 text-center">
+                <span className="material-symbols-outlined text-5xl text-emerald-600 mb-4 block" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  check_circle
+                </span>
+                <h2 className="font-headline text-2xl text-primary">Hoàn tất đặt tour</h2>
+                <p className="text-sm text-primary/60 mt-2">
+                  Đơn {successInfo?.bookingCode ?? 'đặt tour'} đã được ghi nhận.
+                </p>
+                <div className="mt-8 grid gap-4 sm:grid-cols-2 text-left">
+                  <div className="bg-[var(--color-surface)] p-4">
+                    <p className="text-[10px] uppercase tracking-widest text-primary/45 font-label">Mã đơn</p>
+                    <p className="font-serif text-lg text-primary mt-1">{successInfo?.bookingCode ?? '—'}</p>
+                  </div>
+                  <div className="bg-[var(--color-surface)] p-4">
+                    <p className="text-[10px] uppercase tracking-widest text-primary/45 font-label">Tổng tiền</p>
+                    <p className="font-serif text-lg text-primary mt-1">{(successInfo?.amount ?? subtotal)?.toLocaleString('vi-VN')}đ</p>
+                  </div>
+                  <div className="bg-[var(--color-surface)] p-4 sm:col-span-2">
+                    <p className="text-[10px] uppercase tracking-widest text-primary/45 font-label">Hành trình</p>
+                    <p className="font-medium text-primary mt-1">{successInfo?.tourName ?? tour?.title}</p>
+                  </div>
+                </div>
+                <div className="mt-8 flex flex-wrap justify-center gap-3">
+                  <button
+                    onClick={() => navigate(successInfo?.bookingId ? `/customer/bookings/${successInfo?.bookingId}` : '/customer/bookings')}
+                    className="px-6 py-3 bg-primary text-white font-sans uppercase tracking-[0.15em] text-[11px] font-bold hover:bg-[var(--color-secondary)] transition-colors"
+                  >
+                    Xem đơn
+                  </button>
+                  <button
+                    onClick={() => navigate('/tours')}
+                    className="px-6 py-3 border border-outline-variant text-primary font-sans uppercase tracking-[0.15em] text-[11px] font-bold hover:border-primary transition-colors"
+                  >
+                    Xem tour khác
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -633,22 +679,9 @@ export default function BookingCheckout() {
                   {step === 1 ? (
                     <button
                       onClick={() => setStep(2)}
-                      disabled={!canProceedContact}
+                      disabled={!(canProceedContact && canProceedPassengers)}
                       className={`w-full py-3.5 font-sans uppercase tracking-[0.15em] text-[11px] font-bold transition-all flex items-center justify-center gap-2 ${
-                        canProceedContact
-                          ? 'bg-primary text-surface hover:bg-[var(--color-secondary)] cursor-pointer'
-                          : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                      }`}
-                    >
-                      Tiếp tục: Hành khách
-                      <span className="material-symbols-outlined text-lg">arrow_forward</span>
-                    </button>
-                  ) : step === 2 ? (
-                    <button
-                      onClick={() => setStep(3)}
-                      disabled={!canProceedPassengers}
-                      className={`w-full py-3.5 font-sans uppercase tracking-[0.15em] text-[11px] font-bold transition-all flex items-center justify-center gap-2 ${
-                        canProceedPassengers
+                        canProceedContact && canProceedPassengers
                           ? 'bg-primary text-surface hover:bg-[var(--color-secondary)] cursor-pointer'
                           : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                       }`}
@@ -656,6 +689,21 @@ export default function BookingCheckout() {
                       Tiếp tục: Thanh toán
                       <span className="material-symbols-outlined text-lg">arrow_forward</span>
                     </button>
+                  ) : step === 3 ? (
+                    <div className="space-y-3">
+                      <button
+                        onClick={() => navigate(successInfo?.bookingId ? `/customer/bookings/${successInfo?.bookingId}` : '/customer/bookings')}
+                        className="w-full py-3.5 bg-primary text-white font-sans uppercase tracking-[0.15em] text-[11px] font-bold hover:bg-[var(--color-secondary)] transition-colors"
+                      >
+                        Xem đơn
+                      </button>
+                      <button
+                        onClick={() => navigate('/tours')}
+                        className="w-full py-3 border border-outline-variant/60 text-primary/60 text-xs font-sans uppercase tracking-widest hover:bg-surface transition-all"
+                      >
+                        Xem tour khác
+                      </button>
+                    </div>
                   ) : (
                     <div className="space-y-3">
                       {/* Payment ratio */}
@@ -699,6 +747,7 @@ export default function BookingCheckout() {
 
                       {/* Payment methods */}
                       <div className="space-y-2">
+                        <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Hình thức thanh toán</p>
                         <label className={`block p-3 border cursor-pointer flex items-center gap-3 transition-colors ${
                           paymentMethod === 'bank'
                             ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/5'
@@ -748,7 +797,7 @@ export default function BookingCheckout() {
                       </button>
 
                       <button
-                        onClick={() => setStep(2)}
+                        onClick={() => setStep(1)}
                         className="w-full py-2 border border-outline-variant/60 text-primary/60 text-xs font-sans uppercase tracking-widest hover:bg-surface transition-all"
                       >
                         Quay lại

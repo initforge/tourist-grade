@@ -299,7 +299,7 @@ function SelectedToursActionPopup({
                     'Ngày KH',
                     'Số KH hiện tại/tối thiểu',
                     'Hạn bán',
-                    'Doanh thu hiện tại',
+                    'Dự kiến hoàn',
                     'Lợi nhuận dự kiến',
                     ...(mode === 'extend' ? ['Gia hạn đến ngày'] : []),
                     'Thao tác',
@@ -569,7 +569,7 @@ export default function AdminActiveTours() {
                 <thead>
                   <tr className="bg-[#FAFAF5] border-b border-[#D0C5AF]/30">
                     <th className="px-4 py-3.5 w-10" />
-                    {['Mã tour', 'Tên chương trình', 'Ngày KH', 'Số KH hiện tại/tối thiểu', 'Hạn bán', 'Doanh thu', 'Lợi nhuận dự kiến']?.map(h => (
+                    {['Mã tour', 'Tên chương trình', 'Ngày KH', 'Số KH hiện tại/tối thiểu', 'Hạn bán', 'Dự kiến hoàn', 'Lợi nhuận dự kiến']?.map(h => (
                       <th key={h} className="px-4 py-3.5 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">{h}</th>
                     ))}
                   </tr>

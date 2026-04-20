@@ -27,12 +27,24 @@ function formatCurrency(value: number) {
   return `${value?.toLocaleString('vi-VN')} đ`;
 }
 
+function cleanText(value?: string) {
+  return (value ?? '-').replace(/\?\./g, '.').replace(/\s+\?/g, '');
+}
+
 function getUsageMetric(unit: string, quantity: number) {
   const normalizedUnit = unit?.toLowerCase();
   if (normalizedUnit?.includes('đêm')) return `${quantity} đêm`;
   if (normalizedUnit?.includes('bữa') || normalizedUnit?.includes('bàn')) return `${quantity} bữa`;
   if (normalizedUnit?.includes('lượt') || normalizedUnit?.includes('chuyến')) return `${quantity} lượt`;
   return `${quantity} lượt`;
+}
+
+function getTargetLabel(itemName: string) {
+  const normalized = itemName?.toLowerCase();
+  if (normalized?.includes('trẻ em')) return 'Trẻ em';
+  if (normalized?.includes('sơ sinh')) return 'Trẻ sơ sinh';
+  if (normalized?.includes('người lớn')) return 'Người lớn';
+  return 'Tất cả';
 }
 
 export default function TourEstimate() {
@@ -53,7 +65,7 @@ export default function TourEstimate() {
           <span className="material-symbols-outlined text-5xl text-[var(--color-primary)]/20">calculate</span>
           <h1 className="font-serif text-2xl text-[var(--color-primary)]">Chưa có dữ liệu dự toán</h1>
           <p className="text-sm text-[var(--color-primary)]/50">
-            API tour instance và tour program chưa được kết nối hoặc chưa có dữ liệu khả dụng?.
+            API tour instance và tour program chưa được kết nối hoặc chưa có dữ liệu khả dụng.
           </p>
         </div>
       </div>
@@ -218,8 +230,8 @@ export default function TourEstimate() {
             <span className="material-symbols-outlined text-[14px]">chevron_right</span>
             <span className="text-[var(--color-primary)] font-bold">{id ?? instance?.id}</span>
           </nav>
-          <h1 className="font-serif text-3xl text-[var(--color-primary)]">Lập Dự Toán Chi Ph?</h1>
-          <p className="text-sm text-[var(--color-primary)]/50 mt-1">{instance?.programName} ? {instance?.departureDate}</p>
+          <h1 className="font-serif text-3xl text-[var(--color-primary)]">Lập Dự Toán Chi Phí</h1>
+          <p className="text-sm text-[var(--color-primary)]/50 mt-1">{instance?.programName} - {instance?.departureDate}</p>
         </div>
         <div className="flex gap-4">
           {role === 'manager' ? (
@@ -271,7 +283,7 @@ export default function TourEstimate() {
             <div className="flex items-center justify-between gap-4 border-b border-[#D0C5AF]/30 pb-4">
               <div>
                 <h3 className="font-serif text-lg text-[var(--color-primary)]">Thông tin Tour</h3>
-                <p className="text-xs text-[var(--color-primary)]/50 mt-1">Tab tổng quan chỉ giữ thông tin vận hành cốt lõi, không lặp lại dữ liệu giá và nhà cung cấp?.</p>
+                <p className="text-xs text-[var(--color-primary)]/50 mt-1">Tab tổng quan chỉ giữ thông tin vận hành cốt lõi, không lặp lại dữ liệu giá và nhà cung cấp.</p>
               </div>
               <span className="px-3 py-1 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] text-[10px] uppercase tracking-widest font-bold">
                 {instance.transport === 'xe' ? 'Tour xe' : 'Tour máy bay'}
@@ -287,7 +299,7 @@ export default function TourEstimate() {
                 ['Điểm tham quan', instance?.sightseeingSpots?.join(', ')],
                 ['Phương tiện', instance.transport === 'xe' ? 'Xe' : 'Máy bay'],
                 ['Người tạo chương trình', program?.createdBy],
-                ['Mô tả', program?.itinerary[0]?.description ?? '-'],
+                ['Mô tả', cleanText(program?.itinerary[0]?.description)],
               ]?.map(([label, value]) => (
                 <div key={label} className="flex justify-between gap-4 text-sm border-b border-[#D0C5AF]/15 pb-3">
                   <span className="text-[var(--color-primary)]/50">{label}</span>
@@ -365,7 +377,7 @@ export default function TourEstimate() {
                     ))}
                   </div>
                 </div>
-                <p className="text-sm text-[var(--color-primary)]/60 leading-relaxed">{day?.description}</p>
+                <p className="text-sm text-[var(--color-primary)]/60 leading-relaxed">{cleanText(day?.description)}</p>
               </div>
             </div>
           ))}
@@ -393,7 +405,7 @@ export default function TourEstimate() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[#D4AF37] text-white shadow-sm">
-                    {['Khoản mục', 'Dịch vụ', 'Nhà cung cấp', 'Đơn vị', 'Đêm/Lượt/Bữa', 'Số lượng', 'Đơn giá', 'Thành tiền', 'Ghi chú', 'Sửa giá']?.map(header => (
+                    {['STT', 'Khoản mục', 'Đơn vị', 'Đối tượng', 'Số lượng', 'Đêm/Lượt/Bữa', 'Đơn giá áp dụng', 'Thành tiền', 'Thao tác']?.map(header => (
                       <th key={header} className="py-4 px-6 text-[10px] tracking-widest uppercase font-bold whitespace-nowrap">
                         {header}
                       </th>
@@ -404,62 +416,101 @@ export default function TourEstimate() {
                   {groupedRows?.map(category => (
                     <React.Fragment key={category?.categoryId}>
                       <tr className="bg-[var(--color-surface)] border-t border-[#D0C5AF]/30">
-                        <td colSpan={10} className="px-6 py-3 font-bold text-[var(--color-primary)]">
+                        <td colSpan={9} className="px-6 py-3 font-bold text-[var(--color-primary)]">
                           {category?.categoryId}. {category?.categoryName}
                         </td>
                       </tr>
-                      {category?.items?.map(item => {
+                      {category?.items?.map((item, itemIndex) => {
                         const itemKey = `${category?.categoryId}-${item?.itemId}`;
-                        const visibleRows = expandedItems[itemKey] ? item?.rows : item?.rows?.slice(0, 1);
+                        const appliedRow = item?.rows?.find(row => row?.isPrimary) ?? item?.rows?.[0];
                         const hasMoreRows = item?.rows?.length > 1;
+                        const appliedTotal = (appliedRow?.unitPrice ?? 0) * item?.quantity;
 
                         return (
                         <React.Fragment key={`${category?.categoryId}-${item?.itemId}`}>
-                          {visibleRows?.map((row, rowIndex) => (
-                            <tr key={row?.rowId} className={`border-t border-[#D0C5AF]/10 ${row?.isPrimary ? 'bg-emerald-50/40' : 'bg-white'}`}>
-                              <td className="px-6 py-3 text-sm font-medium">{rowIndex === 0 ? row?.itemName : ''}</td>
-                              <td className="px-6 py-3 text-sm">
-                                <div className="flex items-center gap-2">
-                                  <span>{row?.serviceVariant}</span>
-                                  {rowIndex === 0 && hasMoreRows && (
+                            <tr className="border-t border-[#D0C5AF]/10 bg-white">
+                              <td className="px-6 py-3 text-sm text-[var(--color-primary)]/60">{itemIndex + 1}</td>
+                              <td className="px-6 py-3 text-sm font-medium">{item?.itemName}</td>
+                              <td className="px-6 py-3">{item?.unit}</td>
+                              <td className="px-6 py-3">{getTargetLabel(item?.itemName)}</td>
+                              <td className="px-6 py-3">{item?.quantity}</td>
+                              <td className="px-6 py-3 whitespace-nowrap">{getUsageMetric(item?.unit, item?.quantity)}</td>
+                              <td className="px-6 py-3 text-right">{formatCurrency(appliedRow?.unitPrice ?? 0)}</td>
+                              <td className="px-6 py-3 text-right font-bold">{formatCurrency(appliedTotal)}</td>
+                              <td className="px-6 py-3">
+                                <div className="flex items-center justify-end gap-3">
+                                  {hasMoreRows && (
                                     <button
                                       type="button"
                                       onClick={() => toggleExpandedItem(itemKey)}
-                                      className="text-[10px] uppercase tracking-widest text-[var(--color-secondary)] font-bold"
+                                      className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest text-[var(--color-secondary)] font-bold"
+                                      aria-label={`${expandedItems[itemKey] ? 'Thu gọn' : 'Mở rộng'} ${item?.itemName}`}
                                     >
-                                      {expandedItems[itemKey] ? 'Thu gọn' : `Mở rộng (${item?.rows?.length})`}
+                                      <span className="material-symbols-outlined text-base">{expandedItems[itemKey] ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}</span>
+                                      {expandedItems[itemKey] ? 'Thu gọn' : 'Mở rộng'}
+                                    </button>
+                                  )}
+                                  {appliedRow && (
+                                    <button
+                                      onClick={() => setPricePopup({ rowId: appliedRow?.rowId, itemName: appliedRow?.itemName, supplierName: appliedRow?.supplierName, systemPrice: appliedRow?.unitPrice })}
+                                      className="text-[var(--color-secondary)] hover:text-[var(--color-primary)]"
+                                      aria-label={`Chỉnh sửa giá ${appliedRow?.itemName}`}
+                                    >
+                                      <span className="material-symbols-outlined text-[18px]">edit</span>
                                     </button>
                                   )}
                                 </div>
                               </td>
-                              <td className="px-6 py-3">
-                                <label className="flex items-center gap-2">
-                                  <input
-                                    type="radio"
-                                    name={`${category?.categoryId}-${item?.itemId}-primary`}
-                                    checked={row?.isPrimary}
-                                    onChange={() => setPrimarySupplier(row?.rowId)}
-                                  />
-                                  <span>{row?.supplierName}</span>
-                                </label>
-                              </td>
-                              <td className="px-6 py-3">{row?.unit}</td>
-                              <td className="px-6 py-3 whitespace-nowrap">{getUsageMetric(row?.unit, row?.quantity)}</td>
-                              <td className="px-6 py-3">{row?.quantity}</td>
-                              <td className="px-6 py-3 text-right">{formatCurrency(row?.unitPrice)}</td>
-                              <td className="px-6 py-3 text-right font-bold">{formatCurrency(row?.total)}</td>
-                              <td className="px-6 py-3">{row?.note || '-'}</td>
-                              <td className="px-6 py-3 text-center">
-                                <button
-                                  onClick={() => setPricePopup({ rowId: row?.rowId, itemName: row?.itemName, supplierName: row?.supplierName, systemPrice: row?.unitPrice })}
-                                  className="text-[var(--color-secondary)] hover:text-[var(--color-primary)]"
-                                  aria-label={`Chỉnh sửa giá ${row?.itemName}`}
-                                >
-                                  <span className="material-symbols-outlined text-[18px]">edit</span>
-                                </button>
-                              </td>
                             </tr>
-                          ))}
+                            {expandedItems[itemKey] && (
+                              <tr className="bg-[#FBFBFB] border-t border-[#D0C5AF]/10">
+                                <td colSpan={9} className="px-6 py-4">
+                                  <div className="border border-[#D0C5AF]/30 bg-white">
+                                    <div className="px-4 py-3 border-b border-[#D0C5AF]/20 flex items-center justify-between">
+                                      <p className="text-[10px] uppercase tracking-widest text-[var(--color-primary)]/50 font-bold">Bảng giá</p>
+                                      <span className="text-xs text-[var(--color-primary)]/40">Chọn một nhà cung cấp để cập nhật đơn giá áp dụng</span>
+                                    </div>
+                                    <table className="w-full text-left">
+                                      <thead>
+                                        <tr className="bg-[var(--color-surface)]">
+                                          {['Nhà cung cấp', 'Dịch vụ', 'Báo giá', 'Ghi chú', 'Sử dụng', 'Sửa giá']?.map(header => (
+                                            <th key={header} className="px-4 py-2 text-[10px] uppercase tracking-widest text-[var(--color-primary)]/50">{header}</th>
+                                          ))}
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {item?.rows?.map(row => (
+                                          <tr key={row?.rowId} className="border-t border-[#D0C5AF]/10">
+                                            <td className="px-4 py-3">{row?.supplierName}</td>
+                                            <td className="px-4 py-3">{row?.serviceVariant}</td>
+                                            <td className="px-4 py-3 text-right">{formatCurrency(row?.unitPrice)}</td>
+                                            <td className="px-4 py-3">{row?.note || '-'}</td>
+                                            <td className="px-4 py-3">
+                                              <input
+                                                type="radio"
+                                                name={`${category?.categoryId}-${item?.itemId}-primary`}
+                                                checked={row?.isPrimary}
+                                                onChange={() => setPrimarySupplier(row?.rowId)}
+                                                aria-label={`Sử dụng ${row?.supplierName}`}
+                                              />
+                                            </td>
+                                            <td className="px-4 py-3 text-center">
+                                              <button
+                                                onClick={() => setPricePopup({ rowId: row?.rowId, itemName: row?.itemName, supplierName: row?.supplierName, systemPrice: row?.unitPrice })}
+                                                className="text-[var(--color-secondary)] hover:text-[var(--color-primary)]"
+                                                aria-label={`Chỉnh sửa giá ${row?.itemName}`}
+                                              >
+                                                <span className="material-symbols-outlined text-[18px]">edit</span>
+                                              </button>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
                         </React.Fragment>
                       )})}
                     </React.Fragment>
@@ -473,7 +524,7 @@ export default function TourEstimate() {
                     <td className="py-5 px-6 font-bold text-lg text-[var(--color-primary)] text-right">
                       {formatCurrency(totalCost)}
                     </td>
-                    <td colSpan={2}></td>
+                    <td></td>
                   </tr>
                 </tfoot>
               </table>
@@ -505,7 +556,7 @@ export default function TourEstimate() {
               <div className="border border-[#D0C5AF]/30 p-4 space-y-3">
                 <p className="text-[10px] uppercase tracking-widest text-[var(--color-primary)]/50 font-bold">Ghi chú booking</p>
                 <p className="text-sm text-[var(--color-primary)]/70 leading-relaxed">
-                  {guestPopup?.contactInfo?.note?.trim() || 'Không có ghi chú bổ sung từ khách hàng?.'}
+                  {guestPopup?.contactInfo?.note?.trim() || 'Không có ghi chú bổ sung từ khách hàng.'}
                 </p>
               </div>
               <div className="border border-[#D0C5AF]/30 p-4 space-y-3">
@@ -575,7 +626,7 @@ export default function TourEstimate() {
               </label>
               <label className="text-sm">
                 <span className="block text-[10px] uppercase tracking-widest text-[var(--color-primary)]/60 mb-1">Lý do</span>
-                <input type="text" className="w-full border border-[#D0C5AF]/50 px-4 py-3 text-sm outline-none" placeholder="Nhập l? do" />
+                <input type="text" className="w-full border border-[#D0C5AF]/50 px-4 py-3 text-sm outline-none" placeholder="Nhập lý do" />
               </label>
             </div>
             <label className="flex items-center gap-2 text-sm text-[var(--color-primary)]/70">

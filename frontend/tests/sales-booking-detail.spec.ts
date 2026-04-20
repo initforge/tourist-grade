@@ -19,7 +19,6 @@ async function fillPendingPassengerData(page: any) {
   await expect(modal?.getByRole('columnheader', { name: 'CCCD / GKS *' }))?.toBeVisible();
 
   await modal?.locator('input[placeholder="Số GKS"]')?.fill('GKS-2018-0001');
-  await modal?.locator('input[placeholder="Việt Nam"]')?.nth(2)?.fill('Việt Nam');
   await modal?.getByRole('button', { name: /Lưu/ })?.click();
 }
 
@@ -36,7 +35,6 @@ test?.describe('Sales Booking Detail Verification', () => {
     await expect(saveButton)?.toBeDisabled();
 
     await modal?.locator('input[placeholder="Số GKS"]')?.fill('GKS-2018-0001');
-    await modal?.locator('input[placeholder="Việt Nam"]')?.nth(2)?.fill('Việt Nam');
     await expect(saveButton)?.toBeEnabled();
 
     await modal?.locator('input[placeholder="012345678901"]')?.first()?.fill('ABC');

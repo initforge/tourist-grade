@@ -10,6 +10,7 @@ type SettlementRow = {
   itemId: number;
   itemName: string;
   supplierName: string;
+  serviceName: string;
   estimated: number;
   actual: number;
   note: string;
@@ -53,6 +54,7 @@ export default function TourSettlement() {
           itemId: item?.id,
           itemName: item?.name,
           supplierName: item?.suppliers[0]?.supplierName ?? '-',
+          serviceName: item?.suppliers[0]?.serviceVariant ?? item?.name,
           estimated: item?.total,
           actual: item?.total,
           note: item?.suppliers[0]?.notes ?? '',
@@ -70,6 +72,7 @@ export default function TourSettlement() {
             itemId: item?.id,
             itemName: item?.name,
             supplierName: supplier?.supplierName,
+            serviceName: supplier?.serviceVariant,
             estimated: supplier?.quotedPrice * item?.quantity,
             actual: supplier?.quotedPrice * item?.quantity,
             note: supplier?.notes ?? '',
@@ -79,9 +82,14 @@ export default function TourSettlement() {
     }
 
     return [
-      { rowId: 'A-1', categoryId: 'A', categoryName: 'Vận chuyển', itemId: 1, itemName: 'Xe vận chuyển', supplierName: 'Saigon Tourist', estimated: 48000000, actual: 48000000, note: '' },
-      { rowId: 'B-1', categoryId: 'B', categoryName: 'Khách sạn', itemId: 1, itemName: 'Phòng đôi', supplierName: 'InterContinental', estimated: 72000000, actual: 72000000, note: '' },
-      { rowId: 'C-1', categoryId: 'C', categoryName: 'Chi phí ăn', itemId: 1, itemName: 'Bữa ăn đoàn', supplierName: 'Hương Việt', estimated: 21000000, actual: 21000000, note: '' },
+      { rowId: 'A-1', categoryId: 'A', categoryName: 'Vận chuyển', itemId: 1, itemName: 'Xe vận chuyển', supplierName: 'NCC A', serviceName: 'Xe tham quan', estimated: 8100000, actual: 8200000, note: 'Nhập ghi chú' },
+      { rowId: 'A-2', categoryId: 'A', categoryName: 'Vận chuyển', itemId: 2, itemName: 'Vé máy bay', supplierName: 'Đại lý bán vé máy bay A', serviceName: 'Vé máy bay', estimated: 25200000, actual: 25200000, note: 'Nhập ghi chú' },
+      { rowId: 'B-1', categoryId: 'B', categoryName: 'Khách sạn', itemId: 1, itemName: 'Phòng đôi - Đêm 1, Đêm 2', supplierName: 'Khách sạn C', serviceName: 'Phòng đôi', estimated: 2700000, actual: 2700000, note: 'Nhập ghi chú' },
+      { rowId: 'B-2', categoryId: 'B', categoryName: 'Khách sạn', itemId: 2, itemName: 'Phòng đôi - Đêm 3', supplierName: 'Khách sạn E', serviceName: 'Phòng đôi', estimated: 1440000, actual: 1440000, note: 'Nhập ghi chú' },
+      { rowId: 'C-1', categoryId: 'C', categoryName: 'Chi phí ăn', itemId: 1, itemName: 'Ngày 1 - Bữa trưa', supplierName: 'Nhà hàng A', serviceName: 'Set 1', estimated: 2880000, actual: 2880000, note: 'Nhập ghi chú' },
+      { rowId: 'D-1', categoryId: 'D', categoryName: 'Vé thắng cảnh', itemId: 1, itemName: 'Ngày 1 - Vé tham quan Sunworld', supplierName: 'NCC A', serviceName: 'Vé tham quan Sunworld', estimated: 6000000, actual: 6000000, note: 'Nhập ghi chú' },
+      { rowId: 'E-1', categoryId: 'E', categoryName: 'Hướng dẫn viên', itemId: 1, itemName: 'Hướng dẫn viên', supplierName: 'Tên HDV', serviceName: 'Hướng dẫn viên', estimated: 1600000, actual: 1600000, note: 'Nhập ghi chú' },
+      { rowId: 'F-1', categoryId: 'F', categoryName: 'Chi phí khác', itemId: 1, itemName: 'Bảo hiểm du lịch', supplierName: 'NCC V', serviceName: 'Bảo hiểm du lịch', estimated: 960000, actual: 960000, note: 'Nhập ghi chú' },
     ];
   }, [instance]);
 
@@ -167,7 +175,7 @@ export default function TourSettlement() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[#D4AF37] text-white">
-                    {['Khoản mục', 'Dịch vụ', 'Nhà cung cấp', 'Dự toán (VNĐ)', 'Thực chi (VNĐ)', 'Chênh lệch', 'Ghi chú QT', 'Sửa giá']?.map(header => (
+                    {['STT', 'Nhà cung cấp', 'Dịch vụ', 'Dự toán', 'Thực chi', 'Chênh lệch', 'Ghi chú']?.map(header => (
                       <th key={header} className="py-4 px-6 text-[10px] tracking-widest uppercase font-bold whitespace-nowrap">
                         {header}
                       </th>
@@ -178,17 +186,20 @@ export default function TourSettlement() {
                   {groupedRows?.map(category => (
                     <React.Fragment key={category?.categoryId}>
                       <tr className="bg-[var(--color-surface)] border-t border-[#D0C5AF]/30">
-                        <td colSpan={8} className="px-6 py-3 font-bold text-[var(--color-primary)]">
+                        <td colSpan={7} className="px-6 py-3 font-bold text-[var(--color-primary)]">
                           {category?.categoryId}. {category?.categoryName}
                         </td>
                       </tr>
-                      {category?.rows?.map(row => {
+                      {category?.rows?.map((row, index) => {
                         const diff = row?.actual - row?.estimated;
                         return (
                           <tr key={row?.rowId} className="border-t border-[#D0C5AF]/10">
-                            <td className="px-6 py-3 text-[var(--color-primary)]/45">Kế thừa từ dự toán tour</td>
-                            <td className="px-6 py-3 font-medium">{row?.itemName}</td>
+                            <td className="px-6 py-3 text-[var(--color-primary)]/50">{index + 1}</td>
                             <td className="px-6 py-3">{row?.supplierName}</td>
+                            <td className="px-6 py-3">
+                              <div className="font-medium">{row?.serviceName}</div>
+                              <div className="text-[10px] text-[var(--color-primary)]/40 mt-0.5">Kế thừa từ dự toán tour</div>
+                            </td>
                             <td className="px-6 py-3 text-right text-[var(--color-primary)]/50">{formatCurrency(row?.estimated)}</td>
                             <td className="px-6 py-3">
                               <div className="flex items-center justify-center gap-2">
@@ -202,8 +213,9 @@ export default function TourSettlement() {
                                   type="number"
                                   value={row?.actual}
                                   min={0}
+                                  step={500000}
                                   onChange={event => updateActual(row?.rowId, parseInt(event?.target?.value, 10) || 0)}
-                                  className="w-36 bg-transparent border-none p-1 text-center font-bold text-[var(--color-primary)] text-sm outline-none"
+                                  className="w-36 border border-[#D0C5AF]/40 bg-white px-2 py-1 text-center font-bold text-[var(--color-primary)] text-sm outline-none focus:border-[#D4AF37]"
                                 />
                                 <button
                                   onClick={() => adjustActual(row?.rowId, 1)}
@@ -216,15 +228,13 @@ export default function TourSettlement() {
                             <td className={`px-6 py-3 text-right font-bold ${diff > 0 ? 'text-red-500' : diff < 0 ? 'text-emerald-600' : 'text-[var(--color-primary)]'}`}>
                               {diff > 0 ? '+' : ''}{formatCurrency(diff)?.replace(' đ', '')}
                             </td>
-                            <td className="px-6 py-3">{row?.note || '-'}</td>
-                            <td className="px-6 py-3 text-center">
-                              <button
-                                onClick={() => setPricePopup({ rowId: row?.rowId, itemName: row?.itemName, currentPrice: row?.actual })}
-                                className="text-[var(--color-secondary)] hover:text-[var(--color-primary)] transition-colors"
-                                aria-label={`Chỉnh sửa giá ${row?.itemName}`}
-                              >
-                                <span className="material-symbols-outlined text-[18px]">edit</span>
-                              </button>
+                            <td className="px-6 py-3">
+                              <input
+                                value={row?.note}
+                                onChange={event => setRows(previous => previous?.map(item => item.rowId === row.rowId ? { ...item, note: event?.target?.value } : item))}
+                                className="w-full bg-transparent border-none outline-none text-sm text-[var(--color-primary)]/60"
+                                aria-label={`Ghi chú ${row?.serviceName}`}
+                              />
                             </td>
                           </tr>
                         );
@@ -244,7 +254,7 @@ export default function TourSettlement() {
                     <td className={`py-5 px-6 text-right font-bold text-lg ${variance > 0 ? 'text-red-500' : variance < 0 ? 'text-emerald-600' : 'text-[var(--color-primary)]'}`}>
                       {variance > 0 ? '+' : ''}{formatCurrency(variance)?.replace(' đ', '')}
                     </td>
-                    <td colSpan={2}></td>
+                    <td></td>
                   </tr>
                 </tfoot>
               </table>

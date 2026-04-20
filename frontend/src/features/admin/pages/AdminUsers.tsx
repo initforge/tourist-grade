@@ -119,7 +119,7 @@ export default function AdminUsers() {
         <section className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div className="space-y-2">
             <p className="text-[10px] uppercase tracking-[0.2em] text-secondary font-semibold">Phân Quyền & Truy Cập</p>
-            <h1 className="text-4xl md:text-5xl font-serif font-bold text-primary tracking-tighter">Quản trị Người dùng</h1>
+            <h1 className="text-4xl md:text-5xl font-serif font-bold text-primary tracking-tighter">Quản lý Người dùng</h1>
           </div>
           {activeTab === 'staff' && (
             <button onClick={() => openDrawer()} className="bg-tertiary text-white px-8 py-4 flex items-center justify-center space-x-3 hover:opacity-90 transition-opacity active:scale-95 group">

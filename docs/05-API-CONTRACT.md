@@ -47,6 +47,16 @@ Base URL:
 ### `POST /tour-programs`
 
 - Tạo CT tour mới.
+- Input nên bao gồm:
+  - thông tin chung: `name`, `days`, `nights`, `departurePoint`, `sightseeingSpots`, `routeDescription`, `bookingDeadline`, `transport`, `arrivalPoint`
+  - loại tour: `tourType`
+  - nếu `tourType = mua_le`: `holiday`, `selectedDates[]`
+  - nếu `tourType = quanh_nam`: `yearRoundStartDate`, `yearRoundEndDate`, `weekdays[]`, `coverageMonths`
+  - `itinerary[]`: `day`, `title`, `meals[]`, `description`, `accommodationPoint`
+  - `pricingConfig`: `expectedGuests`, `profitMargin`, `taxRate`, `otherCostFactor`, `guideUnitPrice`, `manualOverrides`
+  - `costEstimateDraft`: danh sách nhóm chi phí, NCC/dịch vụ dự kiến, đơn giá, dòng mặc định và ghi chú
+  - `previewRows[]`: các tour dự kiến đang được tick tạo, gồm `departureDate`, `endDate`, `dayType`, `expectedGuests`, `costPerAdult`, `sellPrice`, `profitPercent`, `bookingDeadline`
+- Backend cần validate `selectedDates[]` hoặc `yearRoundStartDate/yearRoundEndDate` theo `tourType`; frontend hiện đã sinh preview nhưng backend vẫn là nguồn kiểm tra cuối.
 
 ### `GET /tour-programs/:id`
 
@@ -76,6 +86,7 @@ Base URL:
   - `programId`
   - `rows[]`
   - mỗi row gồm `departureDate`, `endDate`, `expectedGuests`, `sellPrice`, `bookingDeadline`
+- Với luồng tạo mới chương trình, `rows[]` có thể lấy từ `previewRows[]` của `POST /tour-programs` sau khi CT tour được lưu và được phép sinh tour dự kiến.
 
 ### `GET /tour-instances/:id`
 
@@ -84,10 +95,16 @@ Base URL:
 ### `POST /tour-instances/:id/receive`
 
 - Coordinator nhận điều hành.
+- Backend cần set `receivedBy`, `receivedAt`, `assignedCoordinatorId` và chuyển tour sang tab xử lý tiếp theo của đúng điều phối viên đã nhận.
+- Sau khi nhận, tour không được còn xuất hiện ở tab `Chờ nhận điều hành` của điều phối viên khác.
 
 ### `POST /tour-instances/:id/estimate`
 
 - Lưu dự toán.
+- Payload dự toán nên lưu bảng chính theo khoản mục tính tiền và bảng giá NCC/dịch vụ tách riêng:
+  - dòng chính: `categoryId`, `categoryName`, `itemId`, `itemName`, `unit`, `target`, `quantity`, `usageMetric`, `appliedUnitPrice`, `total`
+  - bảng giá: `supplierId`, `supplierName`, `serviceVariant`, `quotedPrice`, `notes`, `isPrimary`
+- UI expand theo từng dòng chính để hiển thị bảng giá; API nên trả dữ liệu đủ để render hai lớp này.
 
 ### `POST /tour-instances/:id/estimate/approve`
 
@@ -96,6 +113,9 @@ Base URL:
 ### `POST /tour-instances/:id/settlement`
 
 - Lưu quyết toán.
+- Payload quyết toán kế thừa dòng từ dự toán tour, không thêm mới dịch vụ/hạng mục.
+- Mỗi dòng gồm `supplierId`, `supplierName`, `serviceName`, `estimated`, `actual`, `variance`, `note`, kèm `categoryId/categoryName` để nhóm theo khoản mục.
+- Chỉ `actual` và `note` là trường chỉnh sửa trên màn quyết toán hiện tại.
 
 ### `POST /tour-instances/:id/cancel`
 
@@ -175,10 +195,15 @@ Base URL:
 ### `GET /suppliers`
 
 - Query: `type`, `keyword`, `page`, `pageSize`
+- Trả về list NCC phục vụ màn catalog và màn chọn NCC trong dự toán.
 
 ### `POST /suppliers`
 
 - Tạo NCC.
+- Body nên tách rõ:
+  - thông tin NCC
+  - `services`
+  - `mealServices` nếu là khách sạn có dịch vụ ăn kèm
 
 ### `PATCH /suppliers/:id`
 
@@ -188,7 +213,70 @@ Base URL:
 
 - Thêm biến thể dịch vụ/bảng giá.
 
-## 5.8 Blogs
+### `POST /suppliers/:id/quotes`
+
+- Tạo đợt báo giá mới cho nhiều dòng dịch vụ cùng lúc.
+- Dùng cho:
+  - khách sạn cập nhật đồng thời lưu trú + ăn uống
+  - vận chuyển cập nhật theo loại phương tiện
+  - nhà hàng cập nhật set menu
+
+### `GET /suppliers/:id`
+
+- Chi tiết NCC.
+- Trả kèm:
+  - service lines
+  - meal service lines
+  - price history theo từng line
+
+## 5.8 Services Catalog
+
+### `GET /services`
+
+- Query: `category`, `keyword`, `status`, `page`, `pageSize`
+- Dùng cho kho dịch vụ coordinator.
+
+### `POST /services`
+
+- Chỉ áp dụng cho service catalog tạo từ UI như `Vé tham quan`, `Các dịch vụ khác`.
+
+### `PATCH /services/:id`
+
+- Sửa metadata service catalog.
+
+### `POST /services/:id/prices`
+
+- Thêm bảng giá mới cho service catalog.
+
+### `PATCH /services/:id/prices/:priceId`
+
+- Chỉnh sửa riêng một dòng bảng giá.
+
+## 5.9 Guides
+
+### `GET /guides`
+
+- Query: `keyword`, `language`, `status`, `page`, `pageSize`
+
+### `POST /guides`
+
+- Tạo hồ sơ HDV.
+- Body gồm:
+  - thông tin cá nhân
+  - số thẻ
+  - ngày cấp/hết hạn
+  - nơi cấp
+  - ngoại ngữ
+
+### `PATCH /guides/:id`
+
+- Cập nhật hồ sơ HDV.
+
+### `GET /guides/:id`
+
+- Chi tiết HDV.
+
+## 5.10 Blogs
 
 ### `GET /blogs`
 
@@ -198,7 +286,7 @@ Base URL:
 
 - Chi tiết bài viết.
 
-## 5.9 Reports
+## 5.11 Reports
 
 ### `GET /reports/sales-dashboard`
 
@@ -212,7 +300,7 @@ Base URL:
 
 - Aggregate cho manager.
 
-## 5.10 Chuẩn pagination
+## 5.12 Chuẩn pagination
 
 Input:
 

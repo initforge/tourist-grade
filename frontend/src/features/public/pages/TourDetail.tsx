@@ -45,6 +45,7 @@ export default function TourDetail() {
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<DepartureScheduleEntry | null>(null);
   const [expandedAccordion, setExpandedAccordion] = useState<string | null>(null);
+  const [collapsedItineraryDays, setCollapsedItineraryDays] = useState<number[]>([]);
 
   const tour = mockTours?.find(item => item.slug === slug);
 
@@ -70,6 +71,11 @@ export default function TourDetail() {
   const galleryImages = [tour?.image, ...tour?.gallery]?.slice(0, 4);
   const sideTopImage = galleryImages[1] ?? tour?.image;
   const sideBottomImages = [galleryImages[2] ?? tour?.image, galleryImages[3] ?? sideTopImage];
+  const reviewItems = [
+    { name: 'Minh Anh', date: '12/03/2026', rating: 5, comment: 'Lịch trình hợp lý, hướng dẫn viên theo sát đoàn và du thuyền sạch.' },
+    { name: 'Gia Huy', date: '28/02/2026', rating: 5, comment: 'Khâu đặt tour nhanh, thông tin trước ngày đi rõ ràng, bữa ăn trên tàu ổn.' },
+    { name: 'Thu Hà', date: '09/02/2026', rating: 4, comment: 'Cảnh đẹp, phòng tốt. Nên giữ thêm thời gian ở Ti Tốp cho khách chụp ảnh.' },
+  ];
 
   const toggleWishlist = (event: React.MouseEvent) => {
     event?.preventDefault();
@@ -88,6 +94,15 @@ export default function TourDetail() {
   const toggleAccordion = (key: string) => {
     setExpandedAccordion(current => current === key ? null : key);
   };
+
+  const toggleItineraryDay = (day: number) => {
+    setCollapsedItineraryDays(current =>
+      current?.includes(day) ? current?.filter(item => item !== day) : [...current, day]
+    );
+  };
+
+  const mealLabel = (meal: string) =>
+    meal === 'breakfast' ? 'sáng' : meal === 'lunch' ? 'trưa' : 'chiều';
 
   const AccordionItem = ({
     title,
@@ -261,48 +276,47 @@ export default function TourDetail() {
                 </div>
               </div>
 
-              <div className="relative">
-                <div className="hidden md:block absolute left-10 top-24 bottom-10 vertical-gold-thread" />
-                <div className="flex items-center gap-4 mb-8">
+              <div>
+                <div className="flex items-center gap-4 mb-6">
                   <h3 className="font-headline text-xl text-primary">Lịch trình chi tiết</h3>
                   <div className="flex-grow h-px bg-outline-variant/30" />
                 </div>
-                <div className="space-y-10 md:space-y-12">
-                  {tour?.itinerary?.map((day, index) => (
-                    <div key={day?.day} className="relative pl-8 md:pl-12">
-                      <div className={`absolute left-[4px] md:left-[13px] top-1 w-[11px] h-[11px] border border-surface shadow-sm ring-4 ring-surface ${
-                        index === 0 ? 'bg-secondary' : 'bg-outline-variant'
-                      }`} />
-                      <div className="mb-3">
-                        <span className={`font-label text-[10px] uppercase tracking-widest ${
-                          index === 0 ? 'text-secondary' : 'text-secondary/60'
-                        }`}>
-                          Ngày {String(day?.day)?.padStart(2, '0')}
-                        </span>
-                        <h4 className="font-headline text-lg mt-1 text-primary">{day?.title}</h4>
-                        {day?.meals?.length > 0 && (
-                          <div className="flex gap-2 mt-2 flex-wrap">
-                            {day?.meals?.map(meal => (
-                              <span key={meal} className="text-[10px] bg-[var(--color-surface)] px-2 py-1 text-primary/60 font-label uppercase tracking-wider">
-                                {meal === 'breakfast' ? 'Sáng' : meal === 'lunch' ? 'Trưa' : 'Tối'}
-                              </span>
-                            ))}
+                <div className="space-y-5">
+                  {tour?.itinerary?.map(day => {
+                    const isCollapsed = collapsedItineraryDays?.includes(day?.day);
+                    const meals = day?.meals?.map(mealLabel)?.join(', ');
+                    return (
+                      <article key={day?.day} className="bg-white border border-outline-variant/20 shadow-sm px-5 py-5 md:px-6 md:py-6">
+                        <button
+                          type="button"
+                          onClick={() => toggleItineraryDay(day?.day)}
+                          className="w-full flex items-start justify-between gap-4 text-left"
+                        >
+                          <h4 className="font-headline text-base md:text-lg font-bold leading-snug text-primary tracking-wide">
+                            Ngày {String(day?.day)?.padStart(2, '0')}: {day?.title?.toUpperCase()}
+                            {meals && <span className="font-sans text-sm font-semibold normal-case"> (Ăn {meals})</span>}
+                          </h4>
+                          <span className={`material-symbols-outlined shrink-0 mt-0.5 h-9 w-9 rounded-full bg-sky-50 text-sky-600 flex items-center justify-center transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}>
+                            keyboard_arrow_down
+                          </span>
+                        </button>
+                        {!isCollapsed && (
+                          <div className="mt-5 space-y-4">
+                            <p className="text-sm md:text-base text-primary/75 leading-7">{day?.description}</p>
+                            {day?.activities?.length > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                {day?.activities?.map((activity, activityIndex) => (
+                                  <span key={activityIndex} className="px-3 py-1 bg-[var(--color-surface)] text-xs text-primary/60">
+                                    {activity}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
-                      </div>
-                      <p className="text-sm text-primary/70 leading-relaxed">{day?.description}</p>
-                      {day?.activities?.length > 0 && (
-                        <ul className="mt-3 space-y-1.5">
-                          {day?.activities?.map((activity, activityIndex) => (
-                            <li key={activityIndex} className="flex items-center gap-2 text-xs text-primary/60">
-                              <span className="w-1 h-1 rounded-full bg-[var(--color-secondary)]" />
-                              {activity}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  ))}
+                      </article>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -489,6 +503,46 @@ export default function TourDetail() {
                 </span>
                 {isWishlisted ? 'Đã lưu yêu thích' : 'Lưu yêu thích'}
               </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-12 md:mt-14">
+          <div className="flex items-center gap-4 mb-6">
+            <h3 className="font-headline text-xl text-primary">Đánh giá tour</h3>
+            <div className="flex-grow h-px bg-outline-variant/30" />
+          </div>
+          <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+            <div className="bg-white border border-outline-variant/20 p-6">
+              <p className="font-headline text-4xl text-primary leading-none">{tour?.rating?.toFixed(1) ?? '4.8'}</p>
+              <div className="flex gap-1 mt-3 text-secondary">
+                {[1, 2, 3, 4, 5]?.map(star => (
+                  <span key={star} className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    star
+                  </span>
+                ))}
+              </div>
+              <p className="text-sm text-primary/60 mt-3">{tour?.reviewCount ?? reviewItems?.length} lượt đánh giá</p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              {reviewItems?.map(review => (
+                <article key={review?.name} className="bg-white border border-outline-variant/20 p-5">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                      <p className="font-semibold text-primary">{review?.name}</p>
+                      <p className="text-xs text-primary/45">{review?.date}</p>
+                    </div>
+                    <div className="flex text-secondary">
+                      {Array.from({ length: review?.rating })?.map((_, index) => (
+                        <span key={index} className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
+                          star
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-sm text-primary/70 leading-relaxed">{review?.comment}</p>
+                </article>
+              ))}
             </div>
           </div>
         </section>

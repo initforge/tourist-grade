@@ -83,7 +83,7 @@ test?.describe('Coordinator Role — Full Verification', () => {
     await page?.waitForTimeout(500);
 
     // Modal title phải hiện
-    await expect(page?.locator('h3', { hasText: 'Điều phối hướng dẫn viên' }))?.toBeVisible({ timeout: 3000 });
+    await expect(page?.locator('h3', { hasText: 'Phân công HDV' }))?.toBeVisible({ timeout: 3000 });
 
     // Danh sách HDV phải hiện
     await expect(page?.locator('p', { hasText: 'Chọn hướng dẫn viên' }))?.toBeVisible();
@@ -139,7 +139,7 @@ test?.describe('Coordinator Role — Full Verification', () => {
     await page?.waitForTimeout(500);
 
     // Phải có title modal
-    await expect(page?.locator('h3', { hasText: 'Điều phối hướng dẫn viên' }))?.toBeVisible({ timeout: 3000 });
+    await expect(page?.locator('h3', { hasText: 'Phân công HDV' }))?.toBeVisible({ timeout: 3000 });
 
     // KHÔNG có input nhập thông tin xe (biển số, loại xe...)
     const xeInput = page?.locator('input[placeholder*="xe"], input[placeholder*="Xe"], input[placeholder*="biển"]');

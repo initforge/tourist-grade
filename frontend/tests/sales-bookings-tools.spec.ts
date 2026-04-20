@@ -92,15 +92,16 @@ test?.describe('Sales Booking Tools Verification', () => {
     await page?.getByRole('button', { name: /Cần xác nhận hủy/i })?.click();
     await expect(page?.locator('tbody'))?.toContainText('BK-102938');
     await expect(page?.locator('tbody'))?.not?.toContainText('BK-394821');
-    await expect(page?.locator('tbody td[title=\"Thay đổi kế hoạch công tác\"]'))?.toBeVisible();
+    await expect(page?.locator('tbody td[title="Thay đổi kế hoạch công tác"]'))?.toBeVisible();
 
     await page?.getByRole('button', { name: /Đã hủy/ })?.first()?.click();
-    await page?.locator('select')?.selectOption('refunded');
-    await expect(page?.locator('tbody'))?.toContainText('Đã hoàn');
+    await page?.locator('select')?.selectOption('completed');
+    await expect(page?.locator('tbody'))?.toContainText('Hoàn thành');
     await expect(page?.locator('tbody'))?.not?.toContainText('Không cần hoàn');
-
-    await page?.locator('select')?.selectOption('not_required');
-    await expect(page?.locator('tbody'))?.toContainText('Không cần hoàn');
     await expect(page?.locator('tbody'))?.not?.toContainText('Đã hoàn');
+
+    await page?.locator('select')?.selectOption('pending');
+    await expect(page?.locator('tbody'))?.toContainText('Chưa hoàn');
+    await expect(page?.locator('tbody'))?.not?.toContainText('Hoàn thành');
   });
 });

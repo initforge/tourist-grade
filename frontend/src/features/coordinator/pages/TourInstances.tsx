@@ -11,6 +11,7 @@ import {
   type TourInstanceStatus,
 } from '@entities/tour-program/data/tourProgram';
 import { DispatchHDVModal } from '@shared/ui/DispatchHDVModal';
+import { PageSearchInput } from '@shared/ui/PageSearchInput';
 
 type TabKey =
   | 'cho_nhan_dieu_hanh'
@@ -43,6 +44,7 @@ const COL_CANCELLED = ['Mã tour', 'Tên chương trình', 'Ngày KH', 'Số KH 
 export default function AdminTourPrograms() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabKey>('cho_nhan_dieu_hanh');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showDispatchModal, setShowDispatchModal] = useState(false);
   const [dispatchTarget, setDispatchTarget] = useState<TourInstance | null>(null);
 
@@ -63,7 +65,21 @@ export default function AdminTourPrograms() {
     return acc;
   }, {} as Record<TabKey, number>);
 
-  const filtered = instances?.filter(i => i.status === tabStatusMap[activeTab]);
+  const filtered = instances
+    ?.filter(i => i.status === tabStatusMap[activeTab])
+    ?.filter(instance => {
+      const keyword = searchQuery?.trim()?.toLowerCase();
+      if (!keyword) return true;
+      return [
+        instance?.id,
+        instance?.programName,
+        instance?.departurePoint,
+        instance?.sightseeingSpots?.join(' '),
+        instance?.createdBy,
+        instance?.assignedGuide?.name,
+        instance?.cancelReason,
+      ]?.join(' ')?.toLowerCase()?.includes(keyword);
+    });
 
   const getColumns = (tab: TabKey) => {
     if (tab === 'hoan_thanh') return COL_COMPLETED;
@@ -214,6 +230,13 @@ export default function AdminTourPrograms() {
             { title: <Link to="/coordinator/tours" className="text-[var(--color-primary)]/50 hover:text-[var(--color-primary)]">Điều hành tour</Link> },
             { title: <span className="text-[var(--color-primary)]/30">Danh sách tour</span> },
           ]}
+        />
+
+        <PageSearchInput
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Tìm theo mã tour, chương trình, điểm khởi hành, HDV..."
+          className="mb-6"
         />
 
         {/* 8 Tabs */}

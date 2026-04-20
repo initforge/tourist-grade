@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Button, Checkbox, Modal } from 'antd';
 import { mockBookings } from '@entities/booking/data/bookings';
 import { mockSuppliers, mockTourInstances, mockTourPrograms } from '@entities/tour-program/data/tourProgram';
+import { buildDailyRevenueRows } from '@shared/lib/bookingReports';
 
 type CoordinatorReportType = 'operations_summary' | 'tour_volume' | 'supplier_snapshot';
 
@@ -87,6 +88,7 @@ export default function CoordinatorDashboard() {
     () => mockBookings.filter((booking) => inRange(booking.createdAt, dateFrom, dateTo)),
     [dateFrom, dateTo],
   );
+  const dailyRevenue = useMemo(() => buildDailyRevenueRows(filteredBookings), [filteredBookings]);
 
   const taskGroups = useMemo<CoordinatorTaskGroup[]>(() => {
     const receiveDispatch = mockTourInstances
@@ -354,19 +356,21 @@ export default function CoordinatorDashboard() {
             <div className="flex items-center gap-2 mb-5">
               <div className="w-1 h-4 bg-blue-500" />
               <h3 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">
-                Điểm kiểm soát
+                Báo cáo doanh thu theo ngày
               </h3>
             </div>
-            <div className="space-y-3 text-sm text-[#2A2421]/70">
-              <div className="border border-[#D0C5AF]/15 bg-[#FAFAF5] p-4">
-                Công việc cần làm không chứa filter ngày hay nút xuất để tránh lẫn với báo cáo.
-              </div>
-              <div className="border border-[#D0C5AF]/15 bg-[#FAFAF5] p-4">
-                Các nhóm như nhận điều hành, dự toán, phân công HDV và quyết toán đã được tách riêng để tránh bỏ sót.
-              </div>
-              <div className="border border-[#D0C5AF]/15 bg-[#FAFAF5] p-4">
-                Báo cáo cho phép chọn loại báo cáo trước khi xuất thay vì chỉ có một file cứng.
-              </div>
+            <div className="space-y-3">
+              {dailyRevenue.length === 0 ? (
+                <div className="py-8 text-center text-sm text-[#2A2421]/40">Không có doanh thu trong khoảng thời gian đã chọn.</div>
+              ) : dailyRevenue.map((item) => (
+                <div key={item.date} className="border border-[#D0C5AF]/15 bg-[#FAFAF5] p-4 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-[#2A2421]">{formatDate(item.date)}</p>
+                    <p className="text-[11px] text-[#2A2421]/50 mt-1">{item.bookingCount} booking</p>
+                  </div>
+                  <p className="text-xs font-semibold text-[#D4AF37]">{formatCurrency(item.revenue)}đ</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>

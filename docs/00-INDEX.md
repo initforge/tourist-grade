@@ -21,6 +21,8 @@
 8. [08-CLEANUP-DECISIONS.md](08-CLEANUP-DECISIONS.md)
 9. [09-IMPLEMENTATION-ROADMAP.md](09-IMPLEMENTATION-ROADMAP.md)
 10. [10-SETUP-TO-PRODUCTION.md](10-SETUP-TO-PRODUCTION.md)
+11. [12-CODEBASE-AUDIT.md](12-CODEBASE-AUDIT.md)
+12. [13-MIGRATION-PLAYBOOK.md](13-MIGRATION-PLAYBOOK.md)
 
 ## Source Of Truth
 
@@ -32,6 +34,8 @@
 - Database schema draft: `backend/prisma/schema.prisma`
 - Docker local stack: `docker-compose.yml`
 - Setup / release runbook: `docs/10-SETUP-TO-PRODUCTION.md`
+- Codebase audit snapshot: `docs/12-CODEBASE-AUDIT.md`
+- Migration playbook: `docs/13-MIGRATION-PLAYBOOK.md`
 
 ## Quy ước làm tiếp
 
@@ -39,3 +43,4 @@
 - Mọi dữ liệu production phải đi qua API.
 - Nếu cần dữ liệu demo cho QA, ưu tiên seed DB riêng ở backend thay vì hard-code vào page/component.
 - Mọi thay đổi domain/API phải cập nhật docs `03`, `05`, `06`, `09`.
+- Trước khi cắt mock của một module, phải cập nhật thêm `12` và `13`.

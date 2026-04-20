@@ -5,6 +5,7 @@ import { mockBookings, type Booking } from '@entities/booking/data/bookings';
 const STATUS_LABEL: Record<string, string> = {
   booked: 'Đã đặt',
   pending: 'Chờ xác nhận',
+  pending_cancel: 'Chờ xác nhận hủy',
   confirmed: 'Đã xác nhận',
   completed: 'Hoàn thành',
   cancelled: 'Đã hủy',
@@ -51,8 +52,9 @@ export default function OrderLookup() {
   const isPast = foundBooking
     ? foundBooking.status === 'completed'
     : false;
+  const hasPendingCancelRequest = foundBooking?.status === 'pending_cancel';
   const canCancel = foundBooking
-    ? isFuture && foundBooking?.status !== 'cancelled' && foundBooking?.status !== 'completed'
+    ? isFuture && foundBooking?.status !== 'cancelled' && foundBooking?.status !== 'completed' && foundBooking?.status !== 'pending_cancel'
     : false;
   const canPay = foundBooking
     ? isFuture && (foundBooking.paymentStatus === 'unpaid' || foundBooking.paymentStatus === 'partial')
@@ -160,6 +162,11 @@ export default function OrderLookup() {
               {foundBooking.paymentStatus === 'partial' && (
                 <span className="text-[10px] px-2 py-0.5 bg-orange-50 text-orange-700 border border-orange-200 font-label">
                   Còn nợ {foundBooking?.remainingAmount?.toLocaleString('vi-VN')}đ
+                </span>
+              )}
+              {hasPendingCancelRequest && (
+                <span className="text-[10px] px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 font-label uppercase tracking-wider">
+                  Đã gửi yêu cầu hủy
                 </span>
               )}
             </div>

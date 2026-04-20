@@ -112,7 +112,7 @@ test.describe('Feedback hardening audit', () => {
     await page.getByPlaceholder('Nguyễn Văn A').fill('Nguyễn Văn A');
     await page.getByPlaceholder('0901 234 567').fill('0901234567');
     await page.getByPlaceholder('email@example.com').fill('nguyenvana@example.com');
-    await page.getByRole('button', { name: /Tiếp tục: Hành khách/i }).first().click();
+    await page.getByRole('radio', { name: /Nam/i }).first().check();
     await page.getByPlaceholder('Đúng theo CCCD/Passport').fill('Nguyễn Văn A');
     await page.locator('input[type="date"]').first().fill('1990-01-01');
     await page.locator('section').filter({ hasText: /Thông tin hành khách/i }).getByRole('checkbox', { name: /Phòng đơn/i }).check();
@@ -155,7 +155,6 @@ test.describe('Feedback hardening audit', () => {
     await page.getByRole('button', { name: /Chỉnh sửa$/i }).first().click();
     const passengerDialog = page.getByRole('dialog');
     await passengerDialog.locator('input[placeholder="Số GKS"]').fill('GKS-2018-0001');
-    await passengerDialog.locator('input[placeholder="Việt Nam"]').nth(2).fill('Việt Nam');
     await passengerDialog.getByRole('button', { name: /Lưu/i }).click();
     await expect(page.getByRole('button', { name: /Xác nhận đơn đặt/i })).toBeEnabled();
 
@@ -208,8 +207,8 @@ test.describe('Feedback hardening audit', () => {
 
     await page.goto(appUrl('/coordinator/tours/TI004/settle'));
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /Chỉnh sửa giá/i }).first().click();
-    await expect(page.getByRole('dialog').getByRole('heading', { name: /Chỉnh sửa giá/i })).toBeVisible();
+    await expect(page.getByRole('spinbutton').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /Thêm dịch vụ|Thêm mới/i })).toHaveCount(0);
 
     await page.goto(appUrl('/coordinator/services'));
     await page.waitForLoadState('domcontentloaded');
@@ -231,6 +230,14 @@ test.describe('Feedback hardening audit', () => {
     await page.getByLabel(/Mô tả/i).first().fill('Nhà cung cấp hardening hiển thị đủ trường.');
     await page.getByRole('button', { name: /Lưu nhà cung cấp/i }).click();
     await expect(page.getByRole('dialog').getByText(/NCC vận chuyển hardening/i)).toBeVisible();
+    await page.getByRole('dialog').locator('button').first().click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    await page.getByRole('button', { name: /Hướng dẫn viên/i }).click();
+    await expect(page.getByRole('button', { name: /Thêm HDV/i })).toBeVisible();
+    await page.getByRole('button', { name: /Thêm HDV/i }).click();
+    await expect(page.getByRole('dialog').getByRole('heading', { name: /Thêm hướng dẫn viên/i })).toBeVisible();
+    await expect(page.getByRole('dialog').getByText(/Ngoại ngữ/i)).toBeVisible();
 
     await expectCleanRuntime(issues, testInfo);
   });

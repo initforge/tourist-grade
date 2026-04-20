@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Button, Checkbox, Modal } from 'antd';
 import { mockBookings } from '@entities/booking/data/bookings';
+import { bookingNoteLabel, buildDailyRevenueRows, passengerCountLabel } from '@shared/lib/bookingReports';
 
 type SalesReportType = 'booking_summary' | 'top_programs' | 'refund_followup';
 
@@ -116,6 +117,7 @@ export default function SalesDashboard() {
     () => mockBookings.filter((booking) => inRange(booking.createdAt, dateFrom, dateTo)),
     [dateFrom, dateTo],
   );
+  const dailyRevenue = useMemo(() => buildDailyRevenueRows(bookingsInRange), [bookingsInRange]);
 
   const pendingBookingTasks = useMemo(
     () =>
@@ -230,13 +232,15 @@ export default function SalesDashboard() {
             ['Từ ngày', dateFrom],
             ['Đến ngày', dateTo],
             [],
-            ['Mã đơn', 'Khách hàng', 'Tour', 'Ngày tạo', 'Ngày khởi hành', 'Tổng tiền', 'Trạng thái'],
+            ['Mã đơn', 'Khách hàng', 'Tour', 'Ngày tạo', 'Ngày khởi hành', 'Số lượng khách', 'Ghi chú', 'Tổng tiền', 'Trạng thái'],
             ...bookingsInRange.map((booking) => [
               booking.bookingCode,
               booking.contactInfo.name,
               booking.tourName,
               formatDate(booking.createdAt),
               formatDate(booking.tourDate),
+              passengerCountLabel(booking),
+              bookingNoteLabel(booking),
               formatCurrency(booking.totalAmount),
               booking.status,
             ]),
@@ -268,14 +272,21 @@ export default function SalesDashboard() {
           `BaoCao_HoanTien_${dateFrom}_${dateTo}`,
           'BÁO CÁO THEO DÕI HOÀN TIỀN',
           [
-            ['Mã đơn', 'Khách hàng', 'Tour', 'Số tiền hoàn', 'Ngày xác nhận hủy'],
-            ...refundTasks.map((task) => [
-              task.code,
-              task.customer,
-              task.tour,
-              task.amount,
-              task.dateLabel.replace('Đã xác nhận hủy: ', ''),
-            ]),
+            ['Mã đơn', 'Khách hàng', 'Tour', 'Ngày khởi hành', 'Số lượng khách', 'Tổng tiền', 'Trạng thái đơn', 'Lý do hủy', 'Số tiền hoàn', 'TT hoàn tiền'],
+            ...bookingsInRange
+              .filter((booking) => booking.status === 'cancelled' && booking.refundStatus === 'pending')
+              .map((booking) => [
+                booking.bookingCode,
+                booking.contactInfo.name,
+                booking.tourName,
+                formatDate(booking.tourDate),
+                passengerCountLabel(booking),
+                formatCurrency(booking.totalAmount),
+                'Đã hủy',
+                booking.cancellationReason ?? '-',
+                booking.refundAmount ? formatCurrency(booking.refundAmount) : '-',
+                'Chưa hoàn',
+              ]),
           ],
         );
       }
@@ -406,19 +417,21 @@ export default function SalesDashboard() {
             <div className="flex items-center gap-2 mb-5">
               <div className="w-1 h-4 bg-blue-500" />
               <h3 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">
-                Ghi chú xử lý
+                Báo cáo doanh thu theo ngày
               </h3>
             </div>
-            <div className="space-y-3 text-sm text-[#2A2421]/70">
-              <div className="border border-[#D0C5AF]/15 bg-[#FAFAF5] p-4">
-                Các báo cáo được lọc theo khoảng ngày tạo booking.
-              </div>
-              <div className="border border-[#D0C5AF]/15 bg-[#FAFAF5] p-4">
-                Phần công việc không chứa filter ngày hay nút xuất để tránh trộn lẫn với báo cáo.
-              </div>
-              <div className="border border-[#D0C5AF]/15 bg-[#FAFAF5] p-4">
-                Báo cáo doanh thu theo ngày đã được thay bằng top 5 chương trình tour có số lượt booking nhiều nhất.
-              </div>
+            <div className="space-y-3">
+              {dailyRevenue.length === 0 ? (
+                <div className="py-8 text-center text-sm text-[#2A2421]/40">Không có doanh thu trong khoảng thời gian đã chọn.</div>
+              ) : dailyRevenue.map((item) => (
+                <div key={item.date} className="border border-[#D0C5AF]/15 bg-[#FAFAF5] p-4 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-[#2A2421]">{formatDate(item.date)}</p>
+                    <p className="text-[11px] text-[#2A2421]/50 mt-1">{item.bookingCount} booking</p>
+                  </div>
+                  <p className="text-xs font-semibold text-[#D4AF37]">{formatCurrency(item.revenue)}đ</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>

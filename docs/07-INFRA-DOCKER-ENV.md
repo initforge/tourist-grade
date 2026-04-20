@@ -86,3 +86,30 @@ npm run prisma:migrate
 3. Tạo migration đầu tiên.
 4. Implement `/health` + `/auth/login`.
 5. Nối frontend auth.
+
+## 7.8 Mục tiêu Docker sau khi chuyển khỏi mock
+
+Stack mục tiêu:
+
+- `frontend`: build static từ cùng codebase hiện tại
+- `api`: serve REST API + healthcheck
+- `db`: PostgreSQL
+- tùy chọn thêm `seed` job riêng cho local/staging
+
+Điều cần có thêm:
+
+- `api` healthcheck rõ ràng
+- command migrate riêng trước khi boot app
+- command seed riêng, không trộn vào startup production
+- biến env staging/production tách khỏi local
+
+## 7.9 Kế hoạch test hạ tầng sau migration
+
+Tối thiểu cần verify:
+
+1. `docker compose up --build` chạy được full stack local.
+2. `api` kết nối DB và trả `/health`.
+3. frontend đọc được `VITE_API_BASE_URL`.
+4. migrate chạy được trên DB trống.
+5. seed QA chạy được trên DB staging giả lập.
+6. teardown/rebuild không làm hỏng state volume khi dev.

@@ -15,7 +15,7 @@ test?.describe('Admin Users Verification', () => {
   test('Row 26: admin users are split into staff and customer tabs with the correct actions', async ({ page }) => {
     await loginAsAdmin(page);
 
-    await expect(page?.getByRole('heading', { name: /Quản trị Người dùng/i }))?.toBeVisible();
+    await expect(page?.getByRole('heading', { name: /Qu.*n l.* Ng/i }))?.toBeVisible();
     await expect(page?.getByRole('button', { name: 'Nhân viên', exact: true }))?.toBeVisible();
     await expect(page?.getByRole('button', { name: 'Khách hàng', exact: true }))?.toBeVisible();
     await expect(page?.getByRole('button', { name: /Thêm tài khoản/i }))?.toBeVisible();

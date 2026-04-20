@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { mockVouchers, VOUCHER_STATUS_LABEL as STATUS_LABEL, VOUCHER_STATUS_STYLE as STATUS_STYLE } from '@entities/voucher/data/vouchers';
 import type { Voucher, VoucherStatus } from '@entities/voucher/data/vouchers';
 import { mockTourPrograms } from '@entities/tour-program/data/tourProgram';
+import { MANAGER_APPROVAL_WARNING, approvedVoucherStatus, hasManagerApprovalWarning, normalizeVoucherLifecycle } from '@entities/voucher/lib/voucherRules';
 
 const PENDING_VOUCHERS = mockVouchers
+  ?.map((voucher) => normalizeVoucherLifecycle(voucher))
   ?.filter(voucher => voucher.status === 'pending_approval')
   ?.sort((left, right) => left?.startDate?.localeCompare(right?.startDate));
 
@@ -11,21 +13,12 @@ function getTourName(id: string) {
   return mockTourPrograms?.find(tour => tour.id === id)?.name ?? id;
 }
 
-function daysUntilStart(voucher: Voucher) {
-  const today = new Date();
-  const startDate = new Date(voucher?.startDate);
-  today?.setHours(0, 0, 0, 0);
-  startDate?.setHours(0, 0, 0, 0);
-  return Math.ceil((startDate?.getTime() - today?.getTime()) / 86400000);
-}
-
 function hasStartWarning(voucher: Voucher) {
-  const remainingDays = daysUntilStart(voucher);
-  return remainingDays >= 1 && remainingDays <= 2;
+  return hasManagerApprovalWarning(voucher?.startDate);
 }
 
 function approvedStatusFor(voucher: Voucher): VoucherStatus {
-  return voucher?.startDate > new Date()?.toISOString()?.slice(0, 10) ? 'upcoming' : 'active';
+  return approvedVoucherStatus(voucher?.startDate);
 }
 
 function RejectPopup({
@@ -208,7 +201,7 @@ export default function ManagerVoucherApproval() {
                     {hasStartWarning(voucher) && (
                       <div
                         className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold"
-                        title="Voucher sắp đến hạn bắt đầu, cần phải phê duyệt ngay."
+                        title={MANAGER_APPROVAL_WARNING}
                       >
                         <span className="material-symbols-outlined text-[12px]">warning</span>
                         Sắp đến ngày bắt đầu

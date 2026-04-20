@@ -21,12 +21,16 @@
 - Là template nghiệp vụ của một sản phẩm tour.
 - Chứa tuyến điểm, thời lượng, itinerary, pricing config, booking deadline.
 - Không phải lần khởi hành cụ thể.
+- Với loại `mua_le`, lịch dự kiến lấy từ các ngày khởi hành được chọn trong dịp lễ.
+- Với loại `quanh_nam`, lịch dự kiến lấy từ khoảng `yearRoundStartDate` - `yearRoundEndDate` và bộ lọc thứ trong tuần nếu có.
+- Itinerary có thể chứa `accommodationPoint` theo ngày để backend/DB suy ra nhóm lưu trú khách sạn theo các ngày liên tiếp cùng địa điểm.
 
 ### TourInstance
 
 - Là lần khởi hành cụ thể sinh ra từ `TourProgram`.
 - Có ngày khởi hành, giá bán snapshot, trạng thái vận hành, số khách kỳ vọng.
 - Đây là record phải dùng cho booking thật.
+- Màn tạo mới chương trình có bước `Tour dự kiến` để preview các `TourInstance` sẽ sinh trước khi gửi duyệt.
 
 ### Booking
 
@@ -110,6 +114,8 @@
 
 - `Booking` phải snapshot tên tour, contact info, payment state tại thời điểm đặt.
 - `TourInstance` phải snapshot `programName`, giá bán, tuyến điểm, booking deadline.
+- `TourInstance` sinh từ preview phải snapshot `departureDate`, `endDate`, `expectedGuests`, `costPerAdult`, `sellPrice`, `profitPercent`, `bookingDeadline` và trạng thái chọn tạo tại thời điểm submit.
+- Dự toán chương trình phải snapshot NCC/dịch vụ mặc định đang chọn, đơn giá áp dụng và các giá bán đã sửa tay nếu người dùng bật manual override.
 
 ### Không nên snapshot nếu chưa cần
 

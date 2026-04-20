@@ -13,6 +13,12 @@ const TRANSPORT_LABEL: Record<string, string> = {
   xe: 'Xe ? t?',
   maybay: 'Máy bay',
 };
+const PROGRAM_STATUS_LABEL: Record<TourProgram['status'], string> = {
+  draft: 'Nháp',
+  active: 'Đang hoạt động',
+  inactive: 'Vô hiệu',
+};
+
 function fmt(n: number) {
   return new Intl.NumberFormat('vi-VN')?.format(n) + ' VND';
 }
@@ -75,11 +81,14 @@ export default function AdminTourProgramApproval() {
   const [showReject, setShowReject] = useState(false);
   const [showApprove, setShowApprove] = useState(false);
   const [rejected, setRejected] = useState<string | null>(null);
+  const [approved, setApproved] = useState(false);
 
   const program: TourProgram | undefined = mockTourPrograms?.find(p => p.id === id);
 
-  const handleApprove = () => { setShowApprove(false); };
-  const handleReject = (reason: string) => { setRejected(reason); setShowReject(false); };
+  const displayStatus: TourProgram['status'] = approved ? 'active' : (program?.status ?? 'draft');
+
+  const handleApprove = () => { setApproved(true); setRejected(null); setShowApprove(false); };
+  const handleReject = (reason: string) => { setRejected(reason); setApproved(false); setShowReject(false); };
 
   if (!program) {
     return (
@@ -112,7 +121,15 @@ export default function AdminTourProgramApproval() {
           <div>
             <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold">Phê duyệt chương trình tour</p>
             <h1 className="font-['Noto_Serif'] text-xl text-[#2A2421]">{program?.name}</h1>
+            <span className={`inline-flex mt-2 px-2.5 py-1 text-[10px] uppercase tracking-widest font-bold border ${
+              displayStatus === 'active'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-amber-50 text-amber-700 border-amber-200'
+            }`}>
+              {PROGRAM_STATUS_LABEL[displayStatus]}
+            </span>
           </div>
+          {!approved && !rejected && (
           <div className="flex gap-2">
             <button onClick={() => setShowReject(true)}
               className="flex items-center gap-2 px-4 py-2.5 text-xs font-['Inter'] uppercase tracking-widest font-bold border border-red-300 text-red-600 hover:bg-red-50 transition-colors">
@@ -125,7 +142,18 @@ export default function AdminTourProgramApproval() {
               Duyệt chương trình tour
             </button>
           </div>
+          )}
         </div>
+
+        {approved && (
+          <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 flex items-start gap-2">
+            <span className="material-symbols-outlined text-emerald-600 text-[16px] shrink-0">check_circle</span>
+            <div>
+              <p className="text-xs font-bold text-emerald-700">Đã duyệt chương trình tour</p>
+              <p className="text-xs text-emerald-600 mt-1">Trạng thái hiện tại: Đang hoạt động.</p>
+            </div>
+          </div>
+        )}
 
         {/* Rejected notice */}
         {rejected && (
@@ -238,6 +266,10 @@ export default function AdminTourProgramApproval() {
                 <div>
                   <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold mb-1">Cập nhật lần cuối</p>
                   <p className="text-sm font-medium">{fmtDate(program?.updatedAt)}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold mb-1">Trạng thái</p>
+                  <p className="text-sm font-medium">{PROGRAM_STATUS_LABEL[displayStatus]}</p>
                 </div>
                 <div>
                   <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold mb-1">Mã chương trình</p>

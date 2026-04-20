@@ -2,6 +2,7 @@
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { loadBookings, saveBookings, type Booking, type Passenger } from '@entities/booking/data/bookings';
 import { useAuthStore } from '@shared/store/useAuthStore';
+import { NationalitySelect } from '@shared/ui/NationalitySelect';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -50,11 +51,30 @@ const PAYMENT_METHOD_LABEL: Record<Booking['paymentMethod'], string> = {
   stripe: 'Thẻ / Stripe',
 };
 
+type RoomCounts = NonNullable<Booking['roomCounts']>;
+type RoomCountsDraft = Record<keyof RoomCounts, string>;
+
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat('vi-VN')?.format(amount) + ' VND';
 }
 function formatDate(dateStr: string) {
   return new Date(dateStr)?.toLocaleDateString('vi-VN', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+function toRoomCountsDraft(roomCounts?: Booking['roomCounts']): RoomCountsDraft {
+  return {
+    single: String(roomCounts?.single ?? 0),
+    double: String(roomCounts?.double ?? 0),
+    triple: String(roomCounts?.triple ?? 0),
+  };
+}
+
+function parseRoomCountsDraft(draft: RoomCountsDraft): RoomCounts {
+  return {
+    single: Math.max(0, Number(draft.single) || 0),
+    double: Math.max(0, Number(draft.double) || 0),
+    triple: Math.max(0, Number(draft.triple) || 0),
+  };
 }
 
 function isValidPassengerDocument(passenger: Passenger) {
@@ -89,7 +109,7 @@ interface PassengerEditModalProps {
 }
 
 function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalProps) {
-  const [drafts, setDrafts] = useState<Passenger[]>(passengers?.map(p => ({ ...p })));
+  const [drafts, setDrafts] = useState<Passenger[]>(passengers?.map(p => ({ nationality: 'Việt Nam', ...p })));
 
   const handleChange = (idx: number, field: keyof Passenger, value: string) => {
     setDrafts(prev => prev?.map((p, i) => i === idx ? { ...p, [field]: value } : p));
@@ -100,7 +120,7 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="passenger-edit-title">
       <div className="absolute inset-0 bg-[#2A2421]/50 backdrop-blur-sm" onClick={onClose}></div>
-      <div className="relative bg-white w-full max-w-2xl mx-4 shadow-2xl border border-[#D0C5AF]/30 max-h-[85vh] flex flex-col">
+      <div className="relative bg-white w-[calc(100vw-2rem)] max-w-6xl mx-4 shadow-2xl border border-[#D0C5AF]/30 max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="p-6 border-b border-[#D0C5AF]/20 flex items-center justify-between shrink-0">
           <div>
@@ -117,56 +137,57 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
           <p className="text-xs text-[#2A2421]/50 mb-4">
             Vui lòng nhập CCCD cho người lớn và số giấy khai sinh cho trẻ em hoặc em bé dưới 14 tuổi.
           </p>
-          <table className="w-full text-left">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[1060px] text-left table-fixed">
             <thead>
               <tr className="border-b border-[#D0C5AF]/20">
-                <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-8">STT</th>
-                <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Họ và tên</th>
-                <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Loại</th>
-                <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Giới tính</th>
-                <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Ngày sinh</th>
-                <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">CCCD / GKS *</th>
-                <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Quốc tịch</th>
+                <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-10">STT</th>
+                <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-44">Họ và tên</th>
+                <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-24">Loại</th>
+                <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-28">Giới tính</th>
+                <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-40">Ngày sinh</th>
+                <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-44">CCCD / GKS *</th>
+                <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-52">Quốc tịch</th>
                 {drafts?.some(p => p.type === 'adult') && (
-                  <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold text-right">Phụ thu đơn</th>
+                  <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold text-right w-24">Phụ thu đơn</th>
                 )}
               </tr>
             </thead>
             <tbody className="divide-y divide-[#D0C5AF]/10">
               {drafts?.map((p, idx) => (
                 <tr key={idx}>
-                  <td className="py-3 text-sm text-[#2A2421]/60">{idx + 1}</td>
-                  <td className="py-3">
+                  <td className="py-3 pr-3 text-sm text-[#2A2421]/60">{idx + 1}</td>
+                  <td className="py-3 pr-3">
                     <input
                       value={p?.name}
                       onChange={e => handleChange(idx, 'name', e?.target?.value)}
                       className="w-full border border-[#D0C5AF]/40 px-2 py-1 text-sm focus:border-[#D4AF37] outline-none"
                     />
                   </td>
-                  <td className="py-3 text-xs">
-                    <span className={`px-2 py-0.5 ${p.type === 'adult' ? 'bg-blue-50 text-blue-600' : p.type === 'child' ? 'bg-amber-50 text-amber-600' : 'bg-pink-50 text-pink-600'}`}>
+                  <td className="py-3 pr-3 text-xs">
+                    <span className={`inline-flex px-2 py-0.5 whitespace-nowrap ${p.type === 'adult' ? 'bg-blue-50 text-blue-600' : p.type === 'child' ? 'bg-amber-50 text-amber-600' : 'bg-pink-50 text-pink-600'}`}>
                       {PASSENGER_TYPE[p?.type]}
                     </span>
                   </td>
-                  <td className="py-3">
+                  <td className="py-3 pr-3">
                     <select
                       value={p?.gender}
                       onChange={e => handleChange(idx, 'gender', e?.target?.value)}
-                      className="border border-[#D0C5AF]/40 px-2 py-1 text-xs focus:border-[#D4AF37] outline-none bg-white"
+                      className="w-full border border-[#D0C5AF]/40 px-2 py-1 text-xs focus:border-[#D4AF37] outline-none bg-white"
                     >
                       <option value="male">Nam</option>
                       <option value="female">Nữ</option>
                     </select>
                   </td>
-                  <td className="py-3">
+                  <td className="py-3 pr-3">
                     <input
                       type="date"
                       value={p?.dob}
                       onChange={e => handleChange(idx, 'dob', e?.target?.value)}
-                      className="border border-[#D0C5AF]/40 px-2 py-1 text-sm focus:border-[#D4AF37] outline-none"
+                      className="w-full border border-[#D0C5AF]/40 px-2 py-1 text-sm focus:border-[#D4AF37] outline-none"
                     />
                   </td>
-                  <td className="py-3">
+                  <td className="py-3 pr-3">
                     <input
                       value={p?.cccd ?? ''}
                       onChange={e => handleChange(idx, 'cccd', e?.target?.value)}
@@ -174,12 +195,11 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
                       className="w-full border border-[#D0C5AF]/40 px-2 py-1 text-sm focus:border-[#D4AF37] outline-none font-mono"
                     />
                   </td>
-                  <td className="py-3">
-                    <input
-                      value={p?.nationality ?? ''}
-                      onChange={e => handleChange(idx, 'nationality', e?.target?.value)}
-                      placeholder="Việt Nam"
-                      className="w-full border border-[#D0C5AF]/40 px-2 py-1 text-xs focus:border-[#D4AF37] outline-none"
+                  <td className="py-3 pr-3">
+                    <NationalitySelect
+                      value={p?.nationality ?? 'Việt Nam'}
+                      onChange={value => handleChange(idx, 'nationality', value)}
+                      ariaLabel={`Quốc tịch hành khách ${idx + 1}`}
                     />
                   </td>
                   {p.type === 'adult' ? (
@@ -193,6 +213,7 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
               ))}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* Footer */}
@@ -279,8 +300,8 @@ export default function SalesBookingDetail() {
   const [billPreview, setBillPreview] = useState<string | null>(null);
   const [billFile, setBillFile] = useState<File | null>(null);
   const [isEditingBill, setIsEditingBill] = useState(false);
-  const [roomCountsDraft, setRoomCountsDraft] = useState<{ single: number; double: number; triple: number }>(
-    (foundBooking ?? booking)?.roomCounts ?? { single: 0, double: 0, triple: 0 }
+  const [roomCountsDraft, setRoomCountsDraft] = useState<RoomCountsDraft>(
+    toRoomCountsDraft(foundBooking?.roomCounts)
   );
   const [showEmailToast, setShowEmailToast] = useState(false);
 
@@ -305,7 +326,8 @@ export default function SalesBookingDetail() {
   const isPendingBook = booking.status === 'pending';
 
   const hasValidPassengerData = booking?.passengers?.every(hasCompletePassengerData);
-  const hasAssignedRooms = Object.values(roomCountsDraft)?.some(count => count > 0);
+  const parsedRoomCounts = parseRoomCountsDraft(roomCountsDraft);
+  const hasAssignedRooms = Object.values(parsedRoomCounts)?.some(count => count > 0);
   const canConfirm = booking.status === 'pending' && hasValidPassengerData && hasAssignedRooms;
   const canRefund = booking.status === 'cancelled' && booking.refundStatus === 'pending';
 
@@ -323,6 +345,12 @@ export default function SalesBookingDetail() {
     if (billPreview?.startsWith('blob:')) URL?.revokeObjectURL(billPreview);
     setBillFile(null);
     setBillPreview(null);
+  };
+  const handleCancelBillEdit = () => {
+    if (billFile && billPreview?.startsWith('blob:')) URL?.revokeObjectURL(billPreview);
+    setBillPreview(booking?.refundBillUrl ?? null);
+    setBillFile(null);
+    setIsEditingBill(false);
   };
   const handleConfirmRefund = () => {
     if (!billPreview) return;
@@ -343,7 +371,7 @@ export default function SalesBookingDetail() {
   };
 
   const handleSaveRoomCounts = () => {
-    persistBooking(prev => ({ ...prev, roomCounts: { ...roomCountsDraft } }));
+    persistBooking(prev => ({ ...prev, roomCounts: parseRoomCountsDraft(roomCountsDraft) }));
   };
 
   const handleSavePassengers = (updated: Passenger[]) => {
@@ -358,7 +386,7 @@ export default function SalesBookingDetail() {
     persistBooking(prev => ({
       ...prev,
       status: 'confirmed' as const,
-      roomCounts: { ...roomCountsDraft },
+      roomCounts: parseRoomCountsDraft(roomCountsDraft),
       confirmedBy: userName,
       confirmedAt: now,
     }));
@@ -608,12 +636,12 @@ export default function SalesBookingDetail() {
                           <label key={key} className="text-[10px] text-[#2A2421]/60">
                             {label}
                             <input
-                              type="number"
-                              min={0}
+                              type="text"
+                              inputMode="numeric"
                               value={roomCountsDraft[key]}
                               onChange={e => setRoomCountsDraft(prev => ({
                                 ...prev,
-                                [key]: Math.max(0, Number(e?.target?.value) || 0),
+                                [key]: e?.target?.value,
                               }))}
                               className="mt-1 w-full border border-[#D0C5AF]/40 px-2 py-1 text-xs outline-none focus:border-[#D4AF37]"
                             />
@@ -690,35 +718,36 @@ export default function SalesBookingDetail() {
                 </div>
               )}
 
-              <table className="w-full text-left">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[920px] text-left table-fixed">
                 <thead>
                   <tr className="border-b border-[#D0C5AF]/20">
-                    <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-8">STT</th>
-                    <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Họ và tên</th>
-                    <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Loại</th>
-                    <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Giới tính</th>
-                    <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Ngày sinh</th>
-                    <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">CCCD / GKS</th>
-                    <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold">Quốc tịch</th>
+                    <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-10">STT</th>
+                    <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-48">Họ và tên</th>
+                    <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-24">Loại</th>
+                    <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-24">Giới tính</th>
+                    <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-32">Ngày sinh</th>
+                    <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-44">CCCD / GKS</th>
+                    <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-40">Quốc tịch</th>
                     {booking?.passengers?.some(p => p.type === 'adult') && (
-                      <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold text-right">Phụ thu đơn</th>
+                      <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold text-right w-28">Phụ thu đơn</th>
                     )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#D0C5AF]/10">
                   {booking?.passengers?.map((p, idx) => (
                     <tr key={idx}>
-                      <td className="py-3 text-sm text-[#2A2421]/60">{idx + 1}</td>
-                      <td className="py-3 text-sm font-semibold">{p?.name}</td>
-                      <td className="py-3 text-xs">
-                        <span className={`px-2 py-0.5 ${p.type === 'adult' ? 'bg-blue-50 text-blue-600' : p.type === 'child' ? 'bg-amber-50 text-amber-600' : 'bg-pink-50 text-pink-600'}`}>
+                      <td className="py-3 pr-3 text-sm text-[#2A2421]/60">{idx + 1}</td>
+                      <td className="py-3 pr-3 text-sm font-semibold">{p?.name}</td>
+                      <td className="py-3 pr-3 text-xs">
+                        <span className={`inline-flex px-2 py-0.5 whitespace-nowrap ${p.type === 'adult' ? 'bg-blue-50 text-blue-600' : p.type === 'child' ? 'bg-amber-50 text-amber-600' : 'bg-pink-50 text-pink-600'}`}>
                           {PASSENGER_TYPE[p?.type]}
                         </span>
                       </td>
-                      <td className="py-3 text-xs text-[#2A2421]/70">{p.gender === 'male' ? 'Nam' : 'Nữ'}</td>
-                      <td className="py-3 text-sm text-[#2A2421]/60">{p?.dob}</td>
-                      <td className="py-3 text-sm font-mono text-[#2A2421]/70">{p?.cccd || '—'}</td>
-                      <td className="py-3 text-xs text-[#2A2421]/60">{p?.nationality || 'Việt Nam'}</td>
+                      <td className="py-3 pr-3 text-xs text-[#2A2421]/70">{p.gender === 'male' ? 'Nam' : 'Nữ'}</td>
+                      <td className="py-3 pr-3 text-sm text-[#2A2421]/60">{p?.dob}</td>
+                      <td className="py-3 pr-3 text-sm font-mono text-[#2A2421]/70">{p?.cccd || '—'}</td>
+                      <td className="py-3 pr-3 text-xs text-[#2A2421]/60">{p?.nationality || 'Việt Nam'}</td>
                       {p.type === 'adult' ? (
                         <td className="py-3 text-sm text-right font-medium text-amber-600">
                           {p?.singleRoomSupplement ? `+${p?.singleRoomSupplement?.toLocaleString('vi-VN')}đ` : '—'}
@@ -730,6 +759,7 @@ export default function SalesBookingDetail() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </section>
 
             {/* Refund Bill — editable after refund completed */}
@@ -786,12 +816,7 @@ export default function SalesBookingDetail() {
                     )}
                     <div className="flex gap-3">
                       <button
-                        onClick={() => {
-                          if (billFile && billPreview) URL?.revokeObjectURL(billPreview);
-                          setBillPreview(null);
-                          setBillFile(null);
-                          setIsEditingBill(false);
-                        }}
+                        onClick={handleCancelBillEdit}
                         className="flex-1 py-2.5 text-xs font-['Inter'] uppercase tracking-widest border border-[#2A2421]/20 hover:bg-gray-50 transition-colors"
                       >
                         Hủy bỏ

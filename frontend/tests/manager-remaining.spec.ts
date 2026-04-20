@@ -48,13 +48,14 @@ test.describe('Manager remaining feedback', () => {
 
     await page?.getByRole('button', { name: /Kh.*ng .*K KH/i })?.click();
     await expect(page?.getByRole('button', { name: /Ti.*p t.*c tri.*n khai/i }))?.toBeVisible();
+    await expect(page?.getByRole('columnheader', { name: /D.* ki.*n ho.*n/i }))?.toBeVisible();
     await expect(page?.getByRole('columnheader', { name: /L.*i nhu.*n d.* ki.*n/i }))?.toBeVisible();
 
     await page?.locator('tbody input[type="checkbox"]')?.first()?.check();
     await page?.getByRole('button', { name: /Ti.*p t.*c tri.*n khai/i })?.click();
     const continueDialog = page?.getByRole('dialog');
     await expect(continueDialog?.getByRole('heading', { name: /Ti.*p t.*c tri.*n khai tour/i }))?.toBeVisible();
-    await expect(continueDialog?.getByRole('columnheader', { name: /Doanh thu hi.*n t.*i/i }))?.toBeVisible();
+    await expect(continueDialog?.getByRole('columnheader', { name: /D.* ki.*n ho.*n/i }))?.toBeVisible();
     await expect(continueDialog?.getByRole('button', { name: /B.* TI007/i }))?.toBeVisible();
     await continueDialog?.getByRole('button', { name: /B.* TI007/i })?.click();
     await expect(continueDialog)?.toHaveCount(0);
@@ -94,6 +95,8 @@ test.describe('Manager remaining feedback', () => {
     await page?.getByRole('button', { name: /Duy.*t ch.*ng tr.*nh tour/i })?.click();
     await expect(page?.getByRole('dialog')?.getByRole('heading', { name: /Duy.*t ch.*ng tr.*nh tour/i }))?.toBeVisible();
     await expect(page?.getByText(/.*ang ho.*t .*ng/i))?.toBeVisible();
+    await page?.getByRole('dialog')?.getByRole('button', { name: /Duy.*t$/i })?.click();
+    await expect(page?.getByText(/Tr.*ng th.*i hi.*n t.*i: .*ang ho.*t .*ng/i))?.toBeVisible();
   });
 
   test('tour estimate approval exposes request-edit, reject, and approve confirmation flows', async ({ page }) => {

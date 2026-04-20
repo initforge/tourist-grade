@@ -61,15 +61,14 @@ test?.describe('Customer + Public Booking Verification', () => {
     await page?.waitForLoadState('domcontentloaded');
 
     await expect(page?.getByRole('heading', { name: /Thông tin liên hệ/i }))?.toBeVisible();
-    await expect(page?.getByText(/^Liên hệ$/))?.toBeVisible();
-    await expect(page?.getByText(/^Hành khách$/))?.toBeVisible();
+    await expect(page?.getByText(/^Thông tin$/))?.toBeVisible();
     await expect(page?.getByText(/^Thanh toán$/))?.toBeVisible();
+    await expect(page?.getByText(/^Hoàn tất$/))?.toBeVisible();
     await expect(page?.getByText(/Mã giảm giá/i))?.toBeVisible();
 
     await page?.getByPlaceholder('Nguyễn Văn A')?.fill('Nguyễn Văn A');
     await page?.getByPlaceholder('0901 234 567')?.fill('0901 234 567');
     await page?.getByPlaceholder('email@example.com')?.fill('nguyenvana@example.com');
-    await page?.getByRole('button', { name: /Tiếp tục: Hành khách/i })?.first()?.click();
 
     await expect(page?.getByRole('heading', { name: /Số lượng hành khách/i }))?.toBeVisible();
     await expect(page?.getByRole('heading', { name: /Thông tin hành khách/i }))?.toBeVisible();
@@ -87,6 +86,7 @@ test?.describe('Customer + Public Booking Verification', () => {
     await page?.getByRole('button', { name: /Tiếp tục: Thanh toán/i })?.first()?.click();
     await expect(page?.getByRole('heading', { name: /Xác nhận thông tin/i }))?.toBeVisible();
     await expect(page?.getByText(/Tỷ lệ thanh toán/i))?.toBeVisible();
+    await expect(page?.getByText(/Hình thức thanh toán/i))?.toBeVisible();
     await expect(page?.getByText(/Thanh toán 50%/i))?.toBeVisible();
     await expect(page?.getByText(/Thanh toán toán bộ/i))?.toBeVisible();
     await expect(page?.getByText(/Chuyển khoản VietQR/i))?.toBeVisible();
@@ -151,6 +151,11 @@ test?.describe('Customer + Public Booking Verification', () => {
     await expect(resultRegion?.getByText('BK-582910'))?.toBeVisible();
     await expect(resultRegion?.getByRole('button', { name: /Hủy/i }))?.toBeVisible();
     await expect(resultRegion?.getByRole('button', { name: /Thanh toán/i }))?.toHaveCount(0);
+
+    await lookupBooking(page, 'BK-102938', '0988888888');
+    await expect(resultRegion?.getByText('BK-102938'))?.toBeVisible();
+    await expect(resultRegion?.getByText(/Đã gửi yêu cầu hủy/i))?.toBeVisible();
+    await expect(resultRegion?.getByRole('button', { name: /Hủy/i }))?.toHaveCount(0);
 
     await lookupBooking(page, 'BK-847291', '0977654321');
     await expect(resultRegion?.getByText('BK-847291'))?.toBeVisible();

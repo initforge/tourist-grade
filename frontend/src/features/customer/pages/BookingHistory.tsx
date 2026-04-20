@@ -19,7 +19,7 @@ export default function BookingHistory() {
   const [reviewText, setReviewText] = useState('');
 
   const statusMap: Record<string, string[]> = {
-    upcoming: ['booked', 'pending', 'confirmed'],
+    upcoming: ['booked', 'pending', 'pending_cancel', 'confirmed'],
     completed: ['completed'],
     cancelled: ['cancelled'],
   };
@@ -116,6 +116,12 @@ export default function BookingHistory() {
                         <p className="text-xs text-orange-600 mt-1 flex items-center gap-1">
                           <span className="material-symbols-outlined text-[14px]">info</span>
                           Còn nợ {booking?.remainingAmount?.toLocaleString('vi-VN')}đ
+                        </p>
+                      )}
+                      {booking.status === 'pending_cancel' && (
+                        <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">hourglass_top</span>
+                          Đã gửi yêu cầu hủy
                         </p>
                       )}
                     </div>

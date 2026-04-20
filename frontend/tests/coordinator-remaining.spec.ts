@@ -16,6 +16,7 @@ test?.describe('Coordinator remaining feedback', () => {
     await page?.waitForLoadState('domcontentloaded');
 
     await expect(page?.getByRole('heading', { name: /Quản lý Chương trình tour/i }))?.toBeVisible();
+    await expect(page?.getByPlaceholder(/Tìm theo mã chương trình/i))?.toBeVisible();
     await expect(page?.getByRole('button', { name: /Nháp/i }))?.toBeVisible();
     await expect(page?.getByRole('button', { name: /Đang hoạt động/i }))?.toBeVisible();
     await expect(page?.getByRole('button', { name: /Ngừng hoạt động/i }))?.toBeVisible();
@@ -27,6 +28,7 @@ test?.describe('Coordinator remaining feedback', () => {
     await expect(page?.getByRole('columnheader', { name: /Người tạo chương trình tour/i }))?.toBeVisible();
 
     await page?.goto('/coordinator/tours');
+    await expect(page?.getByPlaceholder(/Tìm theo mã tour/i))?.toBeVisible();
     await expect(page?.getByRole('button', { name: /Chờ nhận điều hành/i }))?.toBeVisible();
     await expect(page?.getByRole('button', { name: /Phân công HDV/i }))?.toBeVisible();
     await expect(page?.getByRole('button', { name: /Đang khởi hành/i }))?.toBeVisible();
@@ -56,7 +58,7 @@ test?.describe('Coordinator remaining feedback', () => {
     await expect(nextToPricing)?.toBeEnabled();
     await nextToPricing?.click();
 
-    await expect(page?.getByRole('heading', { name: /Thông tin cấu hành giá tour/i }))?.toBeVisible();
+    await expect(page?.getByRole('heading', { name: /Thông tin cấu hình giá tour/i }))?.toBeVisible();
   });
 
   test('tour program wizard supports holiday departures with a real calendar and route description', async ({ page }) => {
@@ -81,11 +83,41 @@ test?.describe('Coordinator remaining feedback', () => {
     await expect(page?.getByText(/6\/4\/2026|06\/04\/2026/i)?.last())?.toBeVisible();
   });
 
+  test('tour program wizard year-round type generates expected dates and create-only tour preview tab', async ({ page }) => {
+    await loginAsCoordinator(page);
+    await page?.goto('/coordinator/tour-programs/create');
+    await page?.waitForLoadState('domcontentloaded');
+
+    await page?.getByLabel(/Quanh năm/i)?.check();
+    await page?.getByLabel(/Ngày bắt đầu/i)?.fill('2026-04-20');
+    await page?.getByLabel(/Ngày kết thúc/i)?.fill('2026-04-22');
+
+    await expect(page?.getByText(/Danh sách ngày khởi hành dự kiến/i)?.last())?.toBeVisible();
+    await expect(page?.getByText(/3 ngày dự kiến/i))?.toBeVisible();
+    await expect(page?.getByText(/20\/4\/2026|20\/04\/2026/i))?.toBeVisible();
+
+    await page?.getByRole('button', { name: /Tiếp theo: Lịch trình/i })?.click();
+    await page?.getByRole('button', { name: /Tiếp theo: Giá & Cấu hình/i })?.click();
+    await expect(page?.getByText(/V\. Hướng dẫn viên/i))?.toBeVisible();
+    const guideBlock = page?.locator('h4', { hasText: /V\. Hướng dẫn viên/i })?.locator('..');
+    await expect(guideBlock?.getByText(/^Đơn giá$/i))?.toBeVisible();
+    await expect(guideBlock?.getByText(/^Số lần$/i))?.toHaveCount(0);
+    await expect(guideBlock?.getByText(/^Thành tiền$/i))?.toHaveCount(0);
+
+    await page?.getByRole('button', { name: /Tiếp theo: Tour dự kiến/i })?.click();
+    await expect(page?.getByRole('heading', { name: /Tour dự kiến/i }))?.toBeVisible();
+    await expect(page?.getByText('Preview danh sách tour', { exact: true }))?.toBeVisible();
+    await expect(page?.getByRole('columnheader', { name: /Ngày kết thúc/i }))?.toBeVisible();
+    await expect(page?.getByText(/Đã chọn: 3 tour/i))?.toBeVisible();
+    await expect(page?.locator('tbody tr')?.first()?.locator('input[type="date"]'))?.toHaveCount(3);
+  });
+
   test('tour generation rules matches wireframe columns and generation preview table', async ({ page }) => {
     await loginAsCoordinator(page);
     await page?.goto('/coordinator/tour-rules');
     await page?.waitForLoadState('domcontentloaded');
 
+    await expect(page?.getByPlaceholder(/Tìm theo chương trình tour|Tìm theo mã yêu cầu/i))?.toBeVisible();
     await expect(page?.getByRole('columnheader', { name: /Ngày khởi hành xa nhất/i }))?.toBeVisible();
     await expect(page?.getByRole('columnheader', { name: /Độ bao phủ đã tính/i }))?.toBeVisible();
     await expect(page?.getByRole('columnheader', { name: /Độ phủ khả dụng/i }))?.toBeVisible();
@@ -144,6 +176,8 @@ test?.describe('Coordinator remaining feedback', () => {
     await expect(page?.getByText(/Vận chuyển/i)?.first())?.toBeVisible();
     await expect(page?.getByText(/Hướng dẫn viên/i)?.first())?.toBeVisible();
     await expect(page?.getByRole('columnheader', { name: /Đêm\/Lượt\/Bữa/i }))?.toBeVisible();
+    await expect(page?.getByRole('columnheader', { name: /^Dịch vụ$/i }))?.toHaveCount(0);
+    await expect(page?.getByRole('columnheader', { name: /^Nhà cung cấp$/i }))?.toHaveCount(0);
     await expect(page?.getByText(/Mở rộng/i))?.toBeVisible();
     await expect(page?.getByRole('button', { name: /Chỉnh sửa giá/i })?.first())?.toBeVisible();
     await page?.getByRole('button', { name: /Chỉnh sửa giá/i })?.first()?.click();
@@ -166,11 +200,47 @@ test?.describe('Coordinator remaining feedback', () => {
     await expect(page?.getByRole('button', { name: /Bảng Quyết Toán/i }))?.toBeVisible();
     await expect(page?.getByText(/Tăng 500.000/i))?.toBeVisible();
     await expect(page?.getByText(/Kế thừa từ dự toán tour/i)?.first())?.toBeVisible();
-    await expect(page?.getByRole('button', { name: /Chỉnh sửa giá/i })?.first())?.toBeVisible();
     await expect(page?.locator('button:has-text("Thêm hạng mục")'))?.toHaveCount(0);
-    await page?.getByRole('button', { name: /Chỉnh sửa giá/i })?.first()?.click();
-    await expect(page?.getByRole('dialog')?.getByRole('heading', { name: /Chỉnh sửa giá/i }))?.toBeVisible();
-    await expect(page?.getByRole('dialog')?.getByLabel(/Cập nhật vào bảng giá hệ thống/i))?.toHaveCount(0);
+    await expect(page?.getByRole('columnheader', { name: /^Nhà cung cấp$/i }))?.toBeVisible();
+    await expect(page?.getByRole('columnheader', { name: /^Dịch vụ$/i }))?.toBeVisible();
+    await expect(page?.getByRole('columnheader', { name: /^Thực chi$/i }))?.toBeVisible();
+    const firstActualInput = page?.locator('tbody input[type="number"]')?.first();
+    await expect(firstActualInput)?.toBeVisible();
+    await firstActualInput?.fill('8300000');
+    await expect(firstActualInput)?.toHaveValue('8300000');
+    await expect(page?.getByRole('button', { name: /Chỉnh sửa giá/i }))?.toHaveCount(0);
+  });
+
+  test('receive dispatch screen is read-only, has booking tab, and inherits estimate preview', async ({ page }) => {
+    await loginAsCoordinator(page);
+    await page?.goto('/coordinator/tour-programs/TI008/receive');
+    await page?.waitForLoadState('domcontentloaded');
+
+    await expect(page?.getByRole('button', { name: /Nhận điều hành/i }))?.toBeVisible();
+    await expect(page?.getByRole('button', { name: /Danh sách booking/i }))?.toBeVisible();
+    await page?.getByRole('button', { name: /Danh sách booking/i })?.click();
+    await expect(page?.getByRole('heading', { name: /Danh sách booking/i }))?.toBeVisible();
+
+    await page?.getByRole('button', { name: /^Dự toán$/i })?.click();
+    await expect(page?.getByRole('columnheader', { name: /Đơn giá áp dụng/i }))?.toBeVisible();
+    await expect(page?.getByRole('button', { name: /Mở rộng/i })?.first())?.toBeVisible();
+    await page?.getByRole('button', { name: /Mở rộng/i })?.first()?.click();
+    await expect(page?.getByText(/Bảng giá đang áp dụng/i))?.toBeVisible();
+    await expect(page?.getByRole('button', { name: /Chỉnh sửa giá/i }))?.toHaveCount(0);
+  });
+
+  test('guide dispatch modal only selects guide and hides vehicle and experience fields', async ({ page }) => {
+    await loginAsCoordinator(page);
+    await page?.goto('/coordinator/tours');
+    await page?.waitForLoadState('domcontentloaded');
+
+    await page?.getByRole('button', { name: /Phân công HDV/i })?.click();
+    await page?.getByRole('button', { name: /^Phân công HDV$/i })?.first()?.click();
+    const dialog = page?.getByRole('dialog');
+    await expect(dialog?.getByRole('heading', { name: /Phân công HDV/i }))?.toBeVisible();
+    await expect(dialog?.getByText(/SĐT:/i)?.first())?.toBeVisible();
+    await expect(dialog?.getByText(/Số lần đã dẫn tour này/i)?.first())?.toBeVisible();
+    await expect(dialog?.getByText(/năm KN|kinh nghiệm|thông tin xe|biển số|loại xe/i))?.toHaveCount(0);
   });
 
   test('service and supplier modules follow the revised catalog structure and supplier detail wireframes', async ({ page }) => {
@@ -179,20 +249,43 @@ test?.describe('Coordinator remaining feedback', () => {
     await page?.goto('/coordinator/services');
     await expect(page?.getByRole('columnheader', { name: /Đơn vị/i }))?.toBeVisible();
     await expect(page?.getByRole('columnheader', { name: /Thiết lập giá/i }))?.toBeVisible();
-    await expect(page?.getByRole('columnheader', { name: /Giá Người Lớn/i }))?.toHaveCount(0);
     await expect(page?.getByText(/Dịch vụ Hướng dẫn viên/i))?.toBeVisible();
     await expect(page?.getByText(/Phòng đơn/i))?.toBeVisible();
     await page?.getByRole('button', { name: /Thêm dịch vụ/i })?.click();
     const serviceDialog = page?.getByRole('dialog');
     await expect(serviceDialog?.getByLabel(/Phân loại/i))?.toBeVisible();
-    await expect(serviceDialog?.getByRole('option', { name: /Vận chuyển/i }))?.toBeAttached();
-    await expect(serviceDialog?.getByRole('option', { name: /Vé thắng cảnh/i }))?.toBeAttached();
-    await expect(serviceDialog?.getByRole('option', { name: /Các dịch vụ khác/i }))?.toBeAttached();
     await serviceDialog?.getByRole('button', { name: /Hủy bỏ/i })?.click();
+    await expect(page?.getByRole('dialog'))?.toHaveCount(0);
+
+    await page?.locator('table').first()?.getByRole('button', { name: /Xem/i })?.nth(4)?.click();
+    const serviceDetailDialog = page?.getByRole('dialog');
+    await expect(serviceDetailDialog?.getByRole('button', { name: /^Sửa$/i }))?.toBeVisible();
+    await expect(serviceDetailDialog?.getByRole('button', { name: /^Xóa$/i }))?.toBeVisible();
+    await expect(serviceDetailDialog?.getByRole('button', { name: /Thêm bảng giá/i }))?.toHaveCount(0);
+    await serviceDetailDialog?.getByRole('button', { name: /^Sửa$/i })?.click();
+    const serviceEditDialog = page?.getByRole('dialog');
+    await expect(serviceEditDialog?.getByRole('button', { name: /Thêm bảng giá/i }))?.toBeVisible();
+    await expect(serviceEditDialog?.getByRole('button', { name: /Chỉnh sửa/i })?.first())?.toBeVisible();
+    await serviceEditDialog?.getByRole('button', { name: /Thêm bảng giá/i })?.click();
+    const servicePriceDialog = page?.getByRole('dialog');
+    await expect(servicePriceDialog?.getByRole('heading', { name: /Thêm bảng giá/i }))?.toBeVisible();
+    await servicePriceDialog?.getByRole('button', { name: /Hủy bỏ/i })?.last()?.click();
+    await serviceEditDialog?.getByRole('button', { name: /Hủy bỏ/i })?.click();
 
     await page?.goto('/coordinator/suppliers');
     await expect(page?.getByRole('button', { name: /Nhà cung cấp dịch vụ/i }))?.toBeVisible();
     await expect(page?.getByRole('button', { name: /Hướng dẫn viên/i }))?.toBeVisible();
+    await page?.getByRole('button', { name: /Hướng dẫn viên/i })?.click();
+    await expect(page?.getByRole('button', { name: /Thêm HDV/i }))?.toBeVisible();
+    await page?.getByRole('button', { name: /Thêm HDV/i })?.click();
+    const guideCreateDialog = page?.getByRole('dialog');
+    await expect(guideCreateDialog?.getByRole('heading', { name: /Thêm hướng dẫn viên/i }))?.toBeVisible();
+    await expect(guideCreateDialog?.getByPlaceholder(/Số thẻ hướng dẫn viên/i))?.toBeVisible();
+    await expect(guideCreateDialog?.getByText(/Ngoại ngữ/i))?.toBeVisible();
+    await expect(guideCreateDialog?.getByLabel(/Tiếng Anh/i))?.toBeVisible();
+    await guideCreateDialog?.getByRole('button', { name: /Hủy/i })?.click();
+    await expect(page?.getByRole('row', { name: /Trần Minh Hoàng/i }))?.toBeVisible();
+    await page?.getByRole('button', { name: /Nhà cung cấp dịch vụ/i })?.click();
     await expect(page?.getByRole('columnheader', { name: /Khu vực hoạt động/i }))?.toBeVisible();
     await expect(page?.getByText(/Dừng hoạt động/i))?.toBeVisible();
 
@@ -201,24 +294,36 @@ test?.describe('Coordinator remaining feedback', () => {
     const hotelDialog = page?.getByRole('dialog');
     await expect(hotelDialog?.getByText(/Địa chỉ/i))?.toBeVisible();
     await expect(hotelDialog?.getByText(/Năm thành lập/i))?.toBeVisible();
-    await expect(hotelDialog?.getByRole('columnheader', { name: /Tên dịch vụ/i })?.first())?.toBeVisible();
-    await expect(hotelDialog?.getByRole('columnheader', { name: /Đơn giá/i }))?.toBeVisible();
-    await expect(hotelDialog?.getByRole('columnheader', { name: /Loại phương tiện/i }))?.toHaveCount(0);
-    await hotelDialog?.getByRole('button')?.first()?.click();
+    await expect(hotelDialog?.getByRole('button', { name: /^Sửa$/i }))?.toBeVisible();
+    await expect(hotelDialog?.getByRole('button', { name: /^Xóa$/i }))?.toBeVisible();
+    await expect(hotelDialog?.getByRole('button', { name: /Thêm bảng giá/i }))?.toHaveCount(0);
+    await hotelDialog?.getByRole('button', { name: /^Sửa$/i })?.click();
+    const hotelEditDialog = page?.getByRole('dialog');
+    await expect(hotelEditDialog?.getByRole('button', { name: /Thêm dịch vụ/i }))?.toBeVisible();
+    await expect(hotelEditDialog?.getByRole('button', { name: /Thêm bảng giá/i }))?.toBeVisible();
+    await hotelEditDialog?.getByRole('button', { name: /Thêm bảng giá/i })?.click();
+    const hotelQuoteDialog = page?.getByRole('dialog');
+    await expect(hotelQuoteDialog?.getByRole('columnheader', { name: /Nhóm dịch vụ/i }))?.toBeVisible();
+    await expect(hotelQuoteDialog?.getByRole('columnheader', { name: /Đơn giá hiện tại/i }))?.toBeVisible();
+    await expect(hotelQuoteDialog?.getByRole('columnheader', { name: /Đơn giá mới/i }))?.toBeVisible();
+    await hotelQuoteDialog?.getByRole('button', { name: /Hủy bỏ/i })?.last()?.click();
+    await hotelEditDialog?.getByRole('button', { name: /Hủy bỏ/i })?.click();
 
     const restaurantRow = page?.getByRole('row', { name: /The Lotus Dining Room/i });
     await restaurantRow?.getByRole('button', { name: /Xem/i })?.click();
     const restaurantDialog = page?.getByRole('dialog');
-    await expect(restaurantDialog?.getByRole('columnheader', { name: /Tên dịch vụ/i }))?.toBeVisible();
-    await expect(restaurantDialog?.getByRole('columnheader', { name: /Mô tả/i }))?.toBeVisible();
-    await expect(restaurantDialog?.getByRole('columnheader', { name: /Menu/i }))?.toBeVisible();
-    await expect(restaurantDialog?.getByRole('columnheader', { name: /Ghi chú/i }))?.toBeVisible();
-    await expect(restaurantDialog?.getByRole('columnheader', { name: /Loại phương tiện/i }))?.toHaveCount(0);
-    await restaurantDialog?.getByRole('button')?.first()?.click();
+    await restaurantDialog?.getByRole('button', { name: /^Sửa$/i })?.click();
+    const restaurantEditDialog = page?.getByRole('dialog');
+    await restaurantEditDialog?.getByRole('button', { name: /Thêm bảng giá/i })?.click();
+    const restaurantQuoteDialog = page?.getByRole('dialog');
+    await expect(restaurantQuoteDialog?.getByRole('columnheader', { name: /Đơn giá hiện tại/i }))?.toBeVisible();
+    await expect(restaurantQuoteDialog?.getByRole('columnheader', { name: /Đơn giá mới/i }))?.toBeVisible();
+    await restaurantQuoteDialog?.getByRole('button', { name: /Hủy bỏ/i })?.last()?.click();
+    await restaurantEditDialog?.getByRole('button', { name: /Hủy bỏ/i })?.click();
 
     await page?.getByRole('button', { name: /Thêm nhà cung cấp/i })?.click();
     await page?.getByLabel(/Phân loại/i)?.selectOption('Vận chuyển');
-    await expect(page?.getByLabel(/Loại phương tiện/i))?.toBeVisible();
+    await expect(page?.getByLabel(/Loại phương tiện/i)?.first())?.toBeVisible();
     await page?.getByRole('button', { name: /Thêm dịch vụ/i })?.click();
     await expect(page?.getByText(/Tên dịch vụ 2/i))?.toBeVisible();
     await page?.getByLabel(/Tên nhà cung cấp/i)?.fill('NCC vận chuyển kiểm thử');
@@ -234,5 +339,11 @@ test?.describe('Coordinator remaining feedback', () => {
     await expect(createdDialog?.getByText(/12 phố Kiểm Thử/i))?.toBeVisible();
     await expect(createdDialog?.getByText(/2020/i))?.toBeVisible();
     await expect(createdDialog?.getByRole('columnheader', { name: /Loại phương tiện/i }))?.toBeVisible();
+    await createdDialog?.getByRole('button', { name: /^Sửa$/i })?.click();
+    const transportEditDialog = page?.getByRole('dialog');
+    await transportEditDialog?.getByRole('button', { name: /Thêm bảng giá/i })?.click();
+    const transportQuoteDialog = page?.getByRole('dialog');
+    await expect(transportQuoteDialog?.getByRole('columnheader', { name: /Đơn giá hiện tại/i }))?.toBeVisible();
+    await expect(transportQuoteDialog?.getByRole('columnheader', { name: /Đơn giá mới/i }))?.toBeVisible();
   });
 });

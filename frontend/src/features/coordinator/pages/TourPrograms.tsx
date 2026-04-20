@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Breadcrumb } from 'antd';
 import { mockTourPrograms, type TourProgram } from '@entities/tour-program/data/tourProgram';
+import { PageSearchInput } from '@shared/ui/PageSearchInput';
 
 type TabKey = 'draft' | 'active' | 'inactive';
 
@@ -16,9 +17,20 @@ function tourTypeLabel(type: TourProgram['tourType']) {
 export default function CoordinatorTourPrograms() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabKey>('draft');
+  const [searchQuery, setSearchQuery] = useState('');
   const filtered = mockTourPrograms?.filter(p => {
     if (activeTab === 'draft') return p.status === 'draft';
     return p.status === activeTab;
+  })?.filter(program => {
+    const keyword = searchQuery?.trim()?.toLowerCase();
+    if (!keyword) return true;
+    return [
+      program?.id,
+      program?.name,
+      program?.departurePoint,
+      program?.sightseeingSpots?.join(' '),
+      program?.createdBy,
+    ]?.join(' ')?.toLowerCase()?.includes(keyword);
   });
 
   const headers = activeTab === 'draft'
@@ -45,6 +57,13 @@ export default function CoordinatorTourPrograms() {
             Tạo mới
           </button>
         </div>
+
+        <PageSearchInput
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Tìm theo mã chương trình, tên tour, điểm khởi hành..."
+          className="mb-6"
+        />
 
         <div className="bg-white border border-outline-variant/30 mb-6">
           {[

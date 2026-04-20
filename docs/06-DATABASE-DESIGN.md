@@ -102,3 +102,72 @@ Lý do:
 - Không seed business demo vào frontend.
 - Nếu cần QA/demo nội bộ, seed ở backend dưới dạng migration/seed script riêng.
 - Seed phải tách khỏi production path.
+
+## 6.8 Phần mở rộng bắt buộc trước khi cắt mock coordinator
+
+Schema draft hiện tại chưa đủ để thay thế hoàn toàn mock ở các màn:
+
+- kho dịch vụ
+- nhà cung cấp
+- hướng dẫn viên
+- dự toán / nhận điều hành / quyết toán
+
+Đề xuất bổ sung:
+
+### Service catalog
+
+- `ServiceCatalog`
+- `ServiceCatalogPrice`
+
+Field tối thiểu:
+
+- `category`
+- `name`
+- `unit`
+- `priceMode`
+- `setupMode`
+- `provinceCode` cho vé tham quan
+- `formulaCount`
+- `formulaQuantity`
+- `status`
+
+### Supplier operation
+
+- `SupplierServiceLine`
+- `SupplierServicePrice`
+
+Field tối thiểu:
+
+- `supplierId`
+- `serviceGroup` (`main`, `meal`)
+- `transportType` nếu là vận chuyển
+- `menu`, `note`
+- `priceEffectiveFrom`
+- `priceEffectiveTo`
+- `createdBy`
+
+### Guide profile
+
+- `GuideProfile`
+- `GuideLanguage`
+
+Field tối thiểu:
+
+- `phone`
+- `email`
+- `address`
+- `operatingArea`
+- `guideCardNumber`
+- `issueDate`
+- `expiryDate`
+- `issuePlace`
+- `languages`
+
+### Estimate and settlement persistence
+
+Nếu vẫn giữ snapshot JSON giai đoạn đầu, vẫn nên có metadata bảng riêng cho:
+
+- `TourInstanceEstimateVersion`
+- `TourInstanceSettlementVersion`
+
+để audit được ai sửa, sửa lúc nào, và rollback/read-only approval dễ hơn.

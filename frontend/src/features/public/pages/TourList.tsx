@@ -57,8 +57,8 @@ export default function TourList() {
 
   return (
     <div className="public-page">
-      <main className="public-container public-hero relative pb-16 md:pb-20">
-        <div aria-hidden="true" className="absolute pointer-events-none gold-thread h-16 md:h-20 left-4 sm:left-6 lg:left-8 top-0" />
+      <main className="public-container relative pt-8 md:pt-10 pb-16 md:pb-20">
+        <div aria-hidden="true" className="absolute pointer-events-none gold-thread h-7 md:h-8 left-4 sm:left-6 lg:left-8 top-0" />
 
         <nav className="flex items-center gap-2 mb-6 text-xs uppercase tracking-[0.2em] text-outline">
           <button onClick={() => navigate('/')} className="hover:text-secondary transition-colors cursor-pointer">Trang chủ</button>
@@ -66,7 +66,7 @@ export default function TourList() {
           <span className="text-secondary font-medium">Tour nội địa</span>
         </nav>
 
-        <header className="mb-8 md:mb-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] lg:items-end">
+        <header className="mb-6 md:mb-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] lg:items-end">
           <div>
             <h1 className="font-headline text-[2.4rem] md:text-[3.2rem] leading-none tracking-[-0.04em] text-primary max-w-3xl">
               Tour Nội Địa Nổi Bật
@@ -144,6 +144,10 @@ export default function TourList() {
                   Xóa bộ lọc
                 </button>
               </section>
+
+              <button className="w-full bg-primary text-white py-3.5 text-xs tracking-[0.2em] hover:bg-secondary transition-all duration-300 uppercase font-semibold">
+                Lọc / Tìm kiếm
+              </button>
             </div>
           </aside>
 

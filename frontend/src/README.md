@@ -27,6 +27,8 @@ This frontend is organized to absorb UI feedback quickly without spreading edits
   edit `shared/store/*` and `shared/hooks/*`
 - Shared mock/domain data:
   edit the matching module under `entities/*/data/*`
+- Business rules and API/database handoff notes:
+  edit `docs/business-rules.md`
 
 ## Working rules
 

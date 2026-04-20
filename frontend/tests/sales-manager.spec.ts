@@ -28,7 +28,9 @@ async function fillPendingPassengerData(page: any) {
 
   const modal = page?.getByRole('dialog');
   await modal?.locator('input[placeholder="Số GKS"]')?.fill('GKS-2018-0001');
-  await modal?.locator('input[placeholder="Việt Nam"]')?.nth(2)?.fill('Việt Nam');
+  await modal?.getByRole('combobox')?.last()?.click();
+  await page?.keyboard?.type('Việt Nam');
+  await page?.keyboard?.press('Enter');
   await modal?.getByRole('button', { name: /Lưu/ })?.click();
 }
 
@@ -67,7 +69,7 @@ test?.describe('Sales + Manager Verification', () => {
     await expect(page?.getByText('100%')?.first())?.toBeVisible();
 
     await page?.getByRole('button', { name: /Đã hủy/ })?.first()?.click();
-    await expect(page?.getByRole('columnheader', { name: 'Trạng thái đơn' }))?.toBeVisible();
+    await expect(page?.getByRole('columnheader', { name: 'Trạng thái đơn' }))?.toHaveCount(0);
     await expect(page?.getByRole('columnheader', { name: 'TT hoàn tiền' }))?.toBeVisible();
     await expect(page?.getByRole('columnheader', { name: 'TT thanh toán' }))?.toHaveCount(0);
   });
@@ -115,7 +117,9 @@ test?.describe('Sales + Manager Verification', () => {
     await expect(page?.getByRole('columnheader', { name: 'Ngày gửi phê duyệt' }))?.toBeVisible();
     await expect(page?.getByRole('columnheader', { name: 'Ngày tạo' }))?.toHaveCount(0);
     await expect(page?.getByRole('columnheader', { name: 'Tour áp dụng' }))?.toBeVisible();
-    await expect(page?.getByText('Sắp đến ngày bắt đầu'))?.toHaveCount(0);
+    const approvalWarning = page?.getByText('Sắp đến ngày bắt đầu')?.first();
+    await expect(approvalWarning)?.toBeVisible();
+    await expect(approvalWarning)?.toHaveAttribute('title', 'Voucher sắp đến hạn bắt đầu, cần phải phê duyệt ngay.');
     await expect(page?.getByText('Mùa Thu Kyoto & Osaka'))?.toBeVisible();
     await expect(page?.getByText('Chi tiết'))?.toHaveCount(0);
 
@@ -134,7 +138,7 @@ test?.describe('Sales + Manager Verification', () => {
     await loginAsManager(page);
 
     const rows = page?.locator('tbody tr');
-    await expect(rows?.nth(0))?.toContainText('PROMO10PCT');
+    await expect(rows?.nth(0))?.toContainText('APPROVENOW');
     await expect(rows?.nth(1))?.toContainText('VIPONLY30');
     await expect(rows?.nth(2))?.toContainText('AUTUMN20');
 

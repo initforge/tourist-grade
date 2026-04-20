@@ -3,6 +3,8 @@ import { Button, Checkbox, Modal } from 'antd';
 import { mockBookings } from '@entities/booking/data/bookings';
 import { mockTourInstances, mockTourPrograms } from '@entities/tour-program/data/tourProgram';
 import { mockVouchers } from '@entities/voucher/data/vouchers';
+import { buildDailyRevenueRows } from '@shared/lib/bookingReports';
+import { normalizeVoucherLifecycle } from '@entities/voucher/lib/voucherRules';
 
 type ManagerReportType = 'approval_summary' | 'tour_performance' | 'voucher_pipeline';
 
@@ -89,9 +91,11 @@ export default function ManagerDashboard() {
     () => mockBookings.filter((booking) => inRange(booking.createdAt, dateFrom, dateTo)),
     [dateFrom, dateTo],
   );
+  const normalizedVouchers = useMemo(() => mockVouchers.map((voucher) => normalizeVoucherLifecycle(voucher)), []);
+  const dailyRevenue = useMemo(() => buildDailyRevenueRows(filteredBookings), [filteredBookings]);
 
   const taskGroups = useMemo<TaskGroup[]>(() => {
-    const voucherApprovals = mockVouchers
+    const voucherApprovals = normalizedVouchers
       .filter((voucher) => voucher.status === 'pending_approval')
       .sort((left, right) => left.startDate.localeCompare(right.startDate) || (left.createdAt ?? '').localeCompare(right.createdAt ?? ''))
       .slice(0, 3)
@@ -165,13 +169,13 @@ export default function ManagerDashboard() {
       { label: 'Xử lý tour không đủ điều kiện khởi hành', count: underfilledTours.length, tone: 'bg-red-500', items: underfilledTours },
       { label: 'Xem quyết toán mới tạo', count: settlementReviews.length, tone: 'bg-purple-500', items: settlementReviews },
     ];
-  }, []);
+  }, [normalizedVouchers]);
 
   const reportStats = useMemo(
     () => [
       {
         label: 'Voucher chờ duyệt',
-        value: mockVouchers.filter((voucher) => voucher.status === 'pending_approval').length.toString(),
+        value: normalizedVouchers.filter((voucher) => voucher.status === 'pending_approval').length.toString(),
         icon: 'sell',
         color: 'bg-amber-50 text-amber-700',
       },
@@ -194,7 +198,7 @@ export default function ManagerDashboard() {
         color: 'bg-emerald-50 text-emerald-700',
       },
     ],
-    [filteredBookings],
+    [filteredBookings, normalizedVouchers],
   );
 
   const topRevenuePrograms = useMemo(() => {
@@ -246,7 +250,7 @@ export default function ManagerDashboard() {
           'BÁO CÁO PIPELINE VOUCHER',
           [
             ['Mã voucher', 'Ngày bắt đầu', 'Người tạo', 'Trạng thái'],
-            ...mockVouchers
+            ...normalizedVouchers
               .filter((voucher) => voucher.status === 'pending_approval')
               .map((voucher) => [
                 voucher.code,
@@ -366,19 +370,21 @@ export default function ManagerDashboard() {
             <div className="flex items-center gap-2 mb-5">
               <div className="w-1 h-4 bg-blue-500" />
               <h3 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">
-                Điểm kiểm soát
+                Báo cáo doanh thu theo ngày
               </h3>
             </div>
-            <div className="space-y-3 text-sm text-[#2A2421]/70">
-              <div className="border border-[#D0C5AF]/15 bg-[#FAFAF5] p-4">
-                Voucher chờ duyệt được ưu tiên theo ngày bắt đầu gần nhất, sau đó đến ngày gửi duyệt.
-              </div>
-              <div className="border border-[#D0C5AF]/15 bg-[#FAFAF5] p-4">
-                Báo cáo có filter ngày bắt đầu và ngày kết thúc, không trộn chung với danh sách tác vụ.
-              </div>
-              <div className="border border-[#D0C5AF]/15 bg-[#FAFAF5] p-4">
-                Các nhóm như phê duyệt dự toán hoặc xử lý tour không đủ điều kiện vẫn hiển thị rõ kể cả khi chưa có dữ liệu mẫu.
-              </div>
+            <div className="space-y-3">
+              {dailyRevenue.length === 0 ? (
+                <div className="py-8 text-center text-sm text-[#2A2421]/40">Không có doanh thu trong khoảng thời gian đã chọn.</div>
+              ) : dailyRevenue.map((item) => (
+                <div key={item.date} className="border border-[#D0C5AF]/15 bg-[#FAFAF5] p-4 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-[#2A2421]">{formatDate(item.date)}</p>
+                    <p className="text-[11px] text-[#2A2421]/50 mt-1">{item.bookingCount} booking</p>
+                  </div>
+                  <p className="text-xs font-semibold text-[#D4AF37]">{formatCurrency(item.revenue)}đ</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
