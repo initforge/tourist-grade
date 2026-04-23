@@ -120,6 +120,23 @@ test.describe('Manager remaining feedback', () => {
     await expect(page?.getByRole('dialog')?.getByRole('heading', { name: /Duy.*t d.* to.*n/i }))?.toBeVisible();
   });
 
+  test('manager tour program detail mirrors coordinator detail and pricing is read only', async ({ page }) => {
+    await loginAsManager(page);
+    await page?.goto('/manager/tour-programs/TP003');
+    await page?.waitForLoadState('domcontentloaded');
+
+    await expect(page?.getByRole('button', { name: /Thông tin chung/i }))?.toBeVisible();
+    await expect(page?.getByRole('button', { name: /Lịch trình/i }))?.toBeVisible();
+    await expect(page?.getByRole('button', { name: /Giá & Cấu hình/i }))?.toBeVisible();
+    await expect(page?.getByRole('button', { name: /Chỉnh sửa/i }))?.toHaveCount(0);
+
+    await page?.getByRole('button', { name: /Giá & Cấu hình/i })?.click();
+    await expect(page?.getByText(/Thông tin cấu hình giá tour/i))?.toBeVisible();
+    await expect(page?.getByText(/Bảng kê chi phí dự kiến/i))?.toBeVisible();
+    await expect(page?.getByText(/Tính toán dự kiến/i))?.toBeVisible();
+    await expect(page?.locator('fieldset[disabled]'))?.toBeVisible();
+  });
+
   test('manager tour programs and catalog match the revised scope', async ({ page }) => {
     await loginAsManager(page);
     await page?.goto('/manager/tour-programs');

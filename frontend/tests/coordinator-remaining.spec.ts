@@ -45,8 +45,11 @@ test.describe('Coordinator remaining feedback', () => {
     await expect(dialog.getByText(/Loại tour/i)).toBeVisible();
     await expect(dialog.getByText(/Điểm khởi hành/i)).toBeVisible();
     await expect(dialog.getByText(/Thời lượng tour/i)).toBeVisible();
+    await expect(dialog.getByLabel(/Sinh từ ngày/i)).toBeVisible();
+    await expect(dialog.getByLabel(/Đến ngày/i)).toBeVisible();
     await expect(dialog.getByText(/Preview danh sách tour/i)).toBeVisible();
     await expect(dialog.getByRole('columnheader', { name: /Ngày kết thúc/i })).toBeVisible();
+    await expect(dialog.getByRole('columnheader', { name: /Cùng thời điểm/i })).toBeVisible();
     await expect(dialog.getByRole('button', { name: /Lưu thay đổi/i })).toBeVisible();
   });
 
@@ -72,6 +75,7 @@ test.describe('Coordinator remaining feedback', () => {
 
     dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('button', { name: /Thêm mới bảng giá/i })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /Chuyển trạng thái dịch vụ/i })).toBeVisible();
   });
 
   test('supplier create and edit layouts follow new service table rules', async ({ page }) => {
@@ -88,15 +92,19 @@ test.describe('Coordinator remaining feedback', () => {
     await dialog.getByLabel(/Phân loại/i).selectOption('Khách sạn');
     await expect(dialog.getByRole('button', { name: /Thêm dịch vụ/i }).first()).toBeVisible();
     await expect(dialog.getByRole('columnheader', { name: /Đơn giá/i })).toBeVisible();
+    await dialog.getByRole('checkbox').check();
+    await expect(dialog.getByRole('columnheader', { name: /Đơn giá/i }).nth(1)).toBeVisible();
+    await dialog.getByLabel(/Phân loại/i).selectOption('Nhà hàng');
+    await expect(dialog.getByRole('columnheader', { name: /Đơn giá/i })).toBeVisible();
     await dialog.getByRole('button', { name: /Hủy bỏ/i }).click();
 
-    await page.getByRole('row', { name: /Khách sạn Di Sản Việt/i }).getByRole('button', { name: /Xem/i }).click();
+    await page.getByRole('row', { name: /Vận tải Xuyên Việt/i }).getByRole('button', { name: /Xem/i }).click();
     dialog = page.getByRole('dialog');
     await dialog.getByRole('button', { name: /^Sửa$/i }).click();
 
     dialog = page.getByRole('dialog');
-    await expect(dialog.getByRole('button', { name: /Mở rộng/i }).first()).toBeVisible();
-    await dialog.getByRole('button', { name: /Mở rộng/i }).first().click();
+    await expect(dialog.getByRole('button', { name: /Mở rộng bảng giá/i }).first()).toBeVisible();
+    await dialog.getByRole('button', { name: /Mở rộng bảng giá/i }).first().click();
     await expect(dialog.getByRole('columnheader', { name: /Đơn giá/i })).toBeVisible();
     await expect(dialog.getByRole('button', { name: /Thêm bảng giá/i }).first()).toBeVisible();
   });

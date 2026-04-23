@@ -53,6 +53,12 @@ function toDateInput(value: string) {
   return new Date(value)?.toISOString()?.split('T')[0];
 }
 
+function addDaysToDateInput(value: string, days: number) {
+  const date = new Date(value);
+  date.setDate(date.getDate() + days);
+  return toDateInput(date.toISOString());
+}
+
 function monthCoverage(start?: string | null, end?: string | null) {
   if (!start || !end) return '-';
   const diffDays = Math.max(0, Math.round((new Date(end)?.getTime() - new Date(start)?.getTime()) / 86400000));
@@ -104,14 +110,90 @@ function buildPreviewRows(programId: string): PreviewRow[] {
   });
 }
 
+function buildPreviewRowsForRange(programId: string, startDate: string, endDate: string, existingRows: PreviewRow[] = []): PreviewRow[] {
+  const program = mockTourPrograms?.find(item => item.id === programId);
+  if (!program || !startDate || !endDate) {
+    return existingRows;
+  }
+
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+    return existingRows;
+  }
+
+  const existingByDeparture = new Map(existingRows.map(row => [row.departureDate, row]));
+  const sellingRows = mockTourInstances?.filter(item => item.programId === programId && OPEN_SELLING_STATUSES?.has(item?.status));
+  const rows: PreviewRow[] = [];
+  const cursor = new Date(start);
+  let index = 0;
+
+  while (cursor <= end && rows.length < 24) {
+    const departureDate = toDateInput(cursor.toISOString());
+    const previousRow = existingByDeparture.get(departureDate);
+    const nextEndDate = addDaysToDateInput(departureDate, Math.max(0, (program?.duration?.days ?? 1) - 1));
+    const bookingDeadline = addDaysToDateInput(departureDate, -(program?.bookingDeadline ?? 7));
+    const sellPrice = previousRow?.sellPrice ?? ((program?.pricingConfig?.sellPriceAdult ?? 0) + index * 150000);
+    const costPerAdult = previousRow?.costPerAdult ?? Math.round(sellPrice * 0.68);
+    const profitPercent = sellPrice > 0
+      ? Number((((sellPrice - costPerAdult) / sellPrice) * 100).toFixed(1))
+      : 0;
+    const overlapping = sellingRows?.filter(instance => {
+      const gap = Math.abs(new Date(instance?.departureDate)?.getTime() - cursor?.getTime());
+      return gap <= 4 * 86400000;
+    });
+
+    rows.push({
+      id: previousRow?.id ?? `T${String(index + 1).padStart(3, '0')}`,
+      departureDate,
+      endDate: previousRow?.endDate ?? nextEndDate,
+      dayType: previousRow?.dayType ?? (program.tourType === 'mua_le'
+        ? 'Ngày lễ'
+        : cursor.getDay() === 0 || cursor.getDay() === 6
+          ? 'Cuối tuần'
+          : 'Ngày thường'),
+      expectedGuests: previousRow?.expectedGuests ?? ((program?.pricingConfig?.minParticipants ?? 8) + index),
+      costPerAdult,
+      sellPrice,
+      profitPercent,
+      bookingDeadline: previousRow?.bookingDeadline ?? bookingDeadline,
+      conflictLabel: previousRow?.conflictLabel ?? (
+        overlapping.length === 0
+          ? '0 tour trùng thời điểm'
+          : overlapping?.map(instance => `x ${instance.status === 'cho_duyet_ban' ? 'tour chờ duyệt' : 'tour mở bán'}`)?.join('\n')
+      ),
+      conflictDetails: previousRow?.conflictDetails ?? (overlapping.length === 0 ? [] : overlapping?.map(instance => `${instance?.id} - ${instance?.programName}`)),
+      checked: previousRow?.checked ?? true,
+    });
+
+    cursor.setDate(cursor.getDate() + 7);
+    index += 1;
+  }
+
+  return rows.length > 0 ? rows : existingRows;
+}
+
 function buildPendingApprovalEditState(instance: TourInstance): PendingApprovalEditState {
   const program = mockTourPrograms?.find(item => item.id === instance.programId);
-  const durationDays = Math.max(1, program?.duration?.days ?? 1);
-  const endDate = new Date(instance.departureDate);
-  endDate.setDate(endDate.getDate() + durationDays - 1);
   const sellPrice = Math.max(instance.priceAdult, program?.pricingConfig?.sellPriceAdult ?? 0);
   const costPerAdult = Math.round(sellPrice * 0.68);
   const profitPercent = sellPrice > 0 ? Number((((sellPrice - costPerAdult) / sellPrice) * 100).toFixed(1)) : 0;
+  const windowEndDate = addDaysToDateInput(instance.departureDate, 35);
+  const instanceRow: PreviewRow = {
+    id: instance.id,
+    departureDate: instance.departureDate,
+    endDate: addDaysToDateInput(instance.departureDate, Math.max(0, (program?.duration?.days ?? 1) - 1)),
+    dayType: program?.tourType === 'mua_le' ? 'Ngày lễ' : 'Quanh năm',
+    expectedGuests: Math.max(instance.expectedGuests, 1),
+    costPerAdult,
+    sellPrice,
+    profitPercent,
+    bookingDeadline: instance.bookingDeadline,
+    conflictLabel: 'Yêu cầu bán hiện tại',
+    conflictDetails: [],
+    checked: true,
+  };
+  const rows = buildPreviewRowsForRange(instance.programId, instance.departureDate, windowEndDate, [instanceRow]);
 
   return {
     requestId: instance.id,
@@ -122,23 +204,8 @@ function buildPendingApprovalEditState(instance: TourInstance): PendingApprovalE
     type: program?.tourType ?? 'quanh_nam',
     durationLabel: program ? `${program.duration.days} ngày ${program.duration.nights} đêm` : '-',
     startDate: instance.departureDate,
-    endDate: toDateInput(endDate.toISOString()),
-    rows: [
-      {
-        id: instance.id,
-        departureDate: instance.departureDate,
-        endDate: toDateInput(endDate.toISOString()),
-        dayType: program?.tourType === 'mua_le' ? 'Ngày lễ' : 'Quanh năm',
-        expectedGuests: Math.max(instance.expectedGuests, 1),
-        costPerAdult,
-        sellPrice,
-        profitPercent,
-        bookingDeadline: instance.bookingDeadline,
-        conflictLabel: 'Yêu cầu bán hiện tại',
-        conflictDetails: [],
-        checked: true,
-      },
-    ],
+    endDate: windowEndDate,
+    rows,
   };
 }
 
@@ -222,6 +289,8 @@ export default function TourGenerationRules() {
 
   const selectedCount = generateModal?.rows?.filter(row => row?.checked)?.length ?? 0;
   const unselectedCount = generateModal ? generateModal?.rows?.length - selectedCount : 0;
+  const selectedPendingCount = editingPendingInstance?.rows?.filter(row => row?.checked)?.length ?? 0;
+  const unselectedPendingCount = editingPendingInstance ? editingPendingInstance.rows.length - selectedPendingCount : 0;
 
   const savePendingInstance = (patch: Partial<TourInstance>) => {
     if (!editingPendingInstance) return;
@@ -480,11 +549,16 @@ export default function TourGenerationRules() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-primary/40 backdrop-blur-sm" onClick={() => setEditingPendingInstance(null)} />
             <div role="dialog" aria-modal="true" aria-labelledby="edit-pending-title" className="relative w-full max-w-6xl bg-white shadow-2xl max-h-[88vh] overflow-y-auto">
-              <div className="border-b border-outline-variant/30 px-6 py-5">
-                <h3 id="edit-pending-title" className="font-serif text-xl text-primary">Sửa yêu cầu chờ duyệt bán</h3>
-                <p className="text-xs text-primary/50 mt-1">{editingPendingInstance.programName}</p>
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-outline-variant/30 bg-white px-8 py-5">
+                <div>
+                  <h3 id="edit-pending-title" className="font-serif text-2xl text-primary">Sửa yêu cầu chờ duyệt bán</h3>
+                  <p className="text-xs text-primary/50 mt-0.5">{editingPendingInstance.programName}</p>
+                </div>
+                <button onClick={() => setEditingPendingInstance(null)} className="text-primary/40 hover:text-primary">
+                  <span className="material-symbols-outlined text-2xl">close</span>
+                </button>
               </div>
-              <div className="p-6 space-y-6">
+              <div className="p-8 space-y-6">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   {[
                     { label: 'Tên chương trình', value: editingPendingInstance.programName },
@@ -500,79 +574,157 @@ export default function TourGenerationRules() {
                   ))}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <label className="text-sm text-primary/70">
-                  <span className="block text-[10px] uppercase tracking-widest text-primary/50 mb-1">Ngày khởi hành gần nhất</span>
-                  <input
-                    type="date"
-                    value={editingPendingInstance.rows[0]?.departureDate ?? ''}
-                    onChange={e => setEditingPendingInstance(prev => prev ? ({
-                      ...prev,
-                      rows: prev.rows.map((row, index) => index === 0 ? { ...row, departureDate: e.target.value } : row),
-                    }) : prev)}
-                    className="w-full border border-outline-variant/50 px-4 py-2.5 outline-none"
-                  />
-                </label>
-                <label className="text-sm text-primary/70">
-                  <span className="block text-[10px] uppercase tracking-widest text-primary/50 mb-1">Số khách dự kiến</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={editingPendingInstance.rows[0]?.expectedGuests ?? 1}
-                    onChange={e => setEditingPendingInstance(prev => prev ? ({
-                      ...prev,
-                      rows: prev.rows.map((row, index) => index === 0 ? { ...row, expectedGuests: parseInt(e.target.value, 10) || 1 } : row),
-                    }) : prev)}
-                    className="w-full border border-outline-variant/50 px-4 py-2.5 outline-none"
-                  />
-                </label>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-primary mb-3">Preview danh sách tour</p>
-                <div className="overflow-x-auto border border-outline-variant/30">
-                  <table className="w-full min-w-[980px]">
-                    <thead>
-                      <tr className="bg-[var(--color-surface)] border-b border-outline-variant/30">
-                        {['Mã tour', 'Ngày khởi hành', 'Ngày kết thúc', 'Loại ngày', 'Số khách dự kiến', 'Giá vốn', 'Giá bán', 'Lợi nhuận', 'Hạn đặt tour'].map(header => (
-                          <th key={header} className="text-left text-[10px] uppercase tracking-widest text-primary/50 font-medium px-4 py-3 whitespace-nowrap">
-                            {header}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {editingPendingInstance.rows.map(row => (
-                        <tr key={row.id} className="border-b border-outline-variant/20 last:border-0">
-                          <td className="px-4 py-3 font-mono text-xs">{row.id}</td>
-                          <td className="px-4 py-3 text-sm whitespace-nowrap">{formatDate(row.departureDate)}</td>
-                          <td className="px-4 py-3 text-sm whitespace-nowrap">{formatDate(row.endDate)}</td>
-                          <td className="px-4 py-3 text-sm">{row.dayType}</td>
-                          <td className="px-4 py-3 text-sm">{row.expectedGuests}</td>
-                          <td className="px-4 py-3 text-sm">{row.costPerAdult.toLocaleString('vi-VN')}đ</td>
-                          <td className="px-4 py-3 text-sm">{row.sellPrice.toLocaleString('vi-VN')}đ</td>
-                          <td className="px-4 py-3 text-sm">{row.profitPercent}%</td>
-                          <td className="px-4 py-3 text-sm">{formatDate(row.bookingDeadline)}</td>
+                <div className="grid grid-cols-2 gap-4 max-w-xl">
+                  <label className="text-sm text-primary/70">
+                    <span className="block text-[10px] uppercase tracking-widest text-primary/50 mb-1">Sinh từ ngày</span>
+                    <input
+                      type="date"
+                      value={editingPendingInstance.startDate}
+                      onChange={event => setEditingPendingInstance(current => {
+                        if (!current) return current;
+                        const startDate = event.target.value;
+                        return {
+                          ...current,
+                          startDate,
+                          rows: buildPreviewRowsForRange(current.programId, startDate, current.endDate, current.rows),
+                        };
+                      })}
+                      className="w-full border border-outline-variant/50 px-4 py-2.5 outline-none"
+                    />
+                  </label>
+                  <label className="text-sm text-primary/70">
+                    <span className="block text-[10px] uppercase tracking-widest text-primary/50 mb-1">Đến ngày</span>
+                    <input
+                      type="date"
+                      value={editingPendingInstance.endDate}
+                      onChange={event => setEditingPendingInstance(current => {
+                        if (!current) return current;
+                        const endDate = event.target.value;
+                        return {
+                          ...current,
+                          endDate,
+                          rows: buildPreviewRowsForRange(current.programId, current.startDate, endDate, current.rows),
+                        };
+                      })}
+                      className="w-full border border-outline-variant/50 px-4 py-2.5 outline-none"
+                    />
+                  </label>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-primary mb-3">Preview danh sách tour</p>
+                  <div className="overflow-x-auto border border-outline-variant/30">
+                    <table className="w-full min-w-[1320px]">
+                      <thead>
+                        <tr className="bg-[var(--color-surface)] border-b border-outline-variant/30">
+                          {['Mã tour', 'Ngày khởi hành', 'Ngày kết thúc', 'Loại ngày', 'Số khách dự kiến', 'Giá vốn', 'Giá bán', 'Lợi nhuận', 'Hạn đặt tour', 'Cùng thời điểm', 'Tạo'].map(header => (
+                            <th key={header} className="text-left text-[10px] uppercase tracking-widest text-primary/50 font-medium px-4 py-3 whitespace-nowrap">
+                              {header}
+                            </th>
+                          ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {editingPendingInstance.rows.map(row => (
+                          <tr key={row.id} className={`border-b border-outline-variant/20 last:border-0 ${row.checked ? 'bg-white' : 'bg-gray-100 text-gray-400'}`}>
+                            <td className="px-4 py-3 font-mono text-xs">{row.id}</td>
+                            <td className="px-4 py-3 text-sm whitespace-nowrap">{formatDate(row.departureDate)}</td>
+                            <td className="px-4 py-3 text-sm whitespace-nowrap">{formatDate(row.endDate)}</td>
+                            <td className="px-4 py-3 text-sm">{row.dayType}</td>
+                            <td className="px-4 py-3">
+                              <input
+                                type="number"
+                                min={1}
+                                value={row.expectedGuests}
+                                disabled={!row.checked}
+                                onChange={event => setEditingPendingInstance(current => current ? ({
+                                  ...current,
+                                  rows: current.rows.map(item => item.id === row.id ? { ...item, expectedGuests: Math.max(1, Number(event.target.value) || 1) } : item),
+                                }) : current)}
+                                className="w-24 border border-outline-variant/40 px-2 py-1 text-sm disabled:bg-transparent disabled:text-gray-400"
+                              />
+                            </td>
+                            <td className="px-4 py-3 text-sm">{row.costPerAdult.toLocaleString('vi-VN')}</td>
+                            <td className="px-4 py-3">
+                              <input
+                                type="number"
+                                value={row.sellPrice}
+                                disabled={!row.checked}
+                                onChange={event => setEditingPendingInstance(current => current ? ({
+                                  ...current,
+                                  rows: current.rows.map(item => {
+                                    if (item.id !== row.id) return item;
+                                    const sellPrice = Math.max(0, Number(event.target.value) || 0);
+                                    const profitPercent = sellPrice > 0 ? Number((((sellPrice - item.costPerAdult) / sellPrice) * 100).toFixed(1)) : 0;
+                                    return { ...item, sellPrice, profitPercent };
+                                  }),
+                                }) : current)}
+                                className="w-28 border border-outline-variant/40 px-2 py-1 text-sm disabled:bg-transparent disabled:text-gray-400"
+                              />
+                            </td>
+                            <td className="px-4 py-3 text-sm">{row.profitPercent}%</td>
+                            <td className="px-4 py-3">
+                              <input
+                                type="date"
+                                value={row.bookingDeadline}
+                                disabled={!row.checked}
+                                onChange={event => setEditingPendingInstance(current => current ? ({
+                                  ...current,
+                                  rows: current.rows.map(item => item.id === row.id ? { ...item, bookingDeadline: event.target.value } : item),
+                                }) : current)}
+                                className="border border-outline-variant/40 px-2 py-1 text-sm disabled:bg-transparent disabled:text-gray-400"
+                              />
+                            </td>
+                            <td className="px-4 py-3 text-xs whitespace-pre-line" title={row.conflictDetails.join('\n')}>
+                              {row.conflictLabel}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={row.checked}
+                                aria-label={`Chọn ${row.id}`}
+                                onChange={() => setEditingPendingInstance(current => current ? ({
+                                  ...current,
+                                  rows: current.rows.map(item => item.id === row.id ? { ...item, checked: !item.checked } : item),
+                                }) : current)}
+                                className="accent-[var(--color-secondary)] w-4 h-4"
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex items-center justify-between border border-t-0 border-outline-variant/30 bg-[var(--color-surface)] px-4 py-3 text-sm text-primary/70">
+                    <span>Đã chọn: {selectedPendingCount} tour</span>
+                    <span>Chưa chọn: {unselectedPendingCount} tour</span>
+                  </div>
+                </div>
+
+                <div className="text-xs text-primary/50 bg-[var(--color-surface)] border border-outline-variant/30 p-3">
+                  <strong>Tóm tắt:</strong> Chỉnh khoảng thời gian sinh tour, số khách dự kiến, giá bán và hạn đặt tour ngay trên từng dòng. Bỏ chọn một dòng sẽ giữ dòng đó ở trạng thái mờ đúng như màn tạo yêu cầu bán.
                 </div>
               </div>
-              <div className="border-t border-outline-variant/30 px-6 py-4 flex justify-end gap-3">
+
+              <div className="border-t border-outline-variant/30 px-8 py-4 flex justify-end gap-3">
                 <button onClick={() => setEditingPendingInstance(null)} className="px-4 py-2 text-xs uppercase tracking-widest border border-outline-variant/50 text-primary/60">
                   Hủy bỏ
                 </button>
                 <button
-                  onClick={() => savePendingInstance({
-                    departureDate: editingPendingInstance.rows[0]?.departureDate,
-                    expectedGuests: editingPendingInstance.rows[0]?.expectedGuests,
-                    bookingDeadline: editingPendingInstance.rows[0]?.bookingDeadline,
-                  })}
-                  className="px-4 py-2 text-xs uppercase tracking-widest bg-primary text-white"
+                  onClick={() => {
+                    const selectedRow = editingPendingInstance.rows.find(row => row.checked) ?? editingPendingInstance.rows[0];
+                    savePendingInstance({
+                      departureDate: selectedRow?.departureDate,
+                      expectedGuests: selectedRow?.expectedGuests,
+                      bookingDeadline: selectedRow?.bookingDeadline,
+                      priceAdult: selectedRow?.sellPrice,
+                    });
+                  }}
+                  disabled={selectedPendingCount === 0}
+                  className={`px-4 py-2 text-xs uppercase tracking-widest ${selectedPendingCount > 0 ? 'bg-primary text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
                 >
                   Lưu thay đổi
                 </button>
-              </div>
               </div>
             </div>
           </div>

@@ -5,6 +5,7 @@ import { mockTourInstances, mockTourPrograms } from '@entities/tour-program/data
 import { mockVouchers } from '@entities/voucher/data/vouchers';
 import { buildDailyRevenueRows } from '@shared/lib/bookingReports';
 import { normalizeVoucherLifecycle } from '@entities/voucher/lib/voucherRules';
+import DailyRevenueLineChart from '@shared/ui/DailyRevenueLineChart';
 
 type ManagerReportType = 'approval_summary' | 'tour_performance' | 'voucher_pipeline';
 
@@ -339,7 +340,7 @@ export default function ManagerDashboard() {
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
-          <div className="bg-white border border-[#D0C5AF]/20 p-6">
+          <div className="bg-white border border-[#D0C5AF]/20 p-6 min-w-0">
             <div className="flex items-center gap-2 mb-5">
               <div className="w-1 h-4 bg-[#D4AF37]" />
               <h3 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">
@@ -373,19 +374,10 @@ export default function ManagerDashboard() {
                 Báo cáo doanh thu theo ngày
               </h3>
             </div>
-            <div className="space-y-3">
-              {dailyRevenue.length === 0 ? (
-                <div className="py-8 text-center text-sm text-[#2A2421]/40">Không có doanh thu trong khoảng thời gian đã chọn.</div>
-              ) : dailyRevenue.map((item) => (
-                <div key={item.date} className="border border-[#D0C5AF]/15 bg-[#FAFAF5] p-4 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-[#2A2421]">{formatDate(item.date)}</p>
-                    <p className="text-[11px] text-[#2A2421]/50 mt-1">{item.bookingCount} booking</p>
-                  </div>
-                  <p className="text-xs font-semibold text-[#D4AF37]">{formatCurrency(item.revenue)}đ</p>
-                </div>
-              ))}
-            </div>
+            <DailyRevenueLineChart
+              rows={dailyRevenue}
+              emptyLabel="Không có doanh thu trong khoảng thời gian đã chọn."
+            />
           </div>
         </div>
       </section>

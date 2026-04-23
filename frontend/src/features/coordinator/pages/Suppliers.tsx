@@ -1154,9 +1154,9 @@ function SupplierEditorSections({
                 {(supplierForm.category === 'Khách sạn' && kind === 'main'
                   ? ['Tên dịch vụ', 'Mô tả', 'Đơn vị', 'Số lượng', 'Đơn giá']
                   : supplierForm.category === 'Khách sạn' && kind === 'meal'
-                    ? ['Tên dịch vụ', 'Menu', 'Ghi chú']
+                    ? ['Tên dịch vụ', 'Menu', 'Ghi chú', 'Đơn giá']
                     : supplierForm.category === 'Nhà hàng'
-                      ? ['Tên dịch vụ', 'Mô tả', 'Menu', 'Ghi chú']
+                      ? ['Tên dịch vụ', 'Mô tả', 'Menu', 'Ghi chú', 'Đơn giá']
                       : ['Tên dịch vụ', 'Số chỗ']
                 ).map(header => (
                   <th key={header} className="px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-primary/50">{header}</th>
@@ -1179,6 +1179,7 @@ function SupplierEditorSections({
                       <td className="px-4 py-3"><input value={service.name} onChange={event => updateDraftService(service.id, { name: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
                       <td className="px-4 py-3"><input value={service.menu ?? ''} onChange={event => updateDraftService(service.id, { menu: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
                       <td className="px-4 py-3"><input value={service.note ?? ''} onChange={event => updateDraftService(service.id, { note: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                      <td className="px-4 py-3"><input type="number" value={service.prices.at(-1)?.unitPrice ?? 0} onChange={event => updateLatestPrice(service, Number(event.target.value || 0), kind)} className="w-32 border border-outline-variant/40 px-3 py-2" /></td>
                     </>
                   ) : supplierForm.category === 'Nhà hàng' ? (
                     <>
@@ -1186,6 +1187,7 @@ function SupplierEditorSections({
                       <td className="px-4 py-3"><input value={service.description} onChange={event => updateDraftService(service.id, { description: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
                       <td className="px-4 py-3"><input value={service.menu ?? ''} onChange={event => updateDraftService(service.id, { menu: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
                       <td className="px-4 py-3"><input value={service.note ?? ''} onChange={event => updateDraftService(service.id, { note: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                      <td className="px-4 py-3"><input type="number" value={service.prices.at(-1)?.unitPrice ?? 0} onChange={event => updateLatestPrice(service, Number(event.target.value || 0), kind)} className="w-32 border border-outline-variant/40 px-3 py-2" /></td>
                     </>
                   ) : (
                     <>
@@ -1260,8 +1262,12 @@ function SupplierEditorSections({
                         </>
                       )}
                       <td className="px-4 py-3 text-right">
-                        <button onClick={() => setExpandedRows(previous => ({ ...previous, [expandedKey]: !isExpanded }))} className="text-xs font-bold uppercase tracking-widest text-secondary">
-                          {isExpanded ? 'Thu gọn' : 'Mở rộng'}
+                        <button
+                          onClick={() => setExpandedRows(previous => ({ ...previous, [expandedKey]: !isExpanded }))}
+                          className="text-xs font-bold uppercase tracking-widest text-secondary"
+                          aria-label={`${isExpanded ? 'Thu gọn' : 'Mở rộng'} bảng giá ${service.name}`}
+                        >
+                          {isExpanded ? 'Thu gọn bảng giá' : 'Mở rộng bảng giá'}
                         </button>
                       </td>
                     </tr>

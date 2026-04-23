@@ -190,22 +190,41 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function StatusToggle({ value }: { value: ServiceStatus }) {
+function StatusToggle({
+  value,
+  onToggle,
+  disabled = false,
+}: {
+  value: ServiceStatus;
+  onToggle?: () => void;
+  disabled?: boolean;
+}) {
+  const tone = value === 'Hoạt động'
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+    : 'border-rose-200 bg-rose-50 text-rose-700';
+  const dotTone = value === 'Hoạt động' ? 'bg-emerald-500' : 'bg-rose-500';
+
+  if (!onToggle) {
+    return (
+      <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] ${tone}`}>
+        <span className={`h-2.5 w-2.5 rounded-full ${dotTone}`} />
+        {value}
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] ${
-        value === 'Hoạt động'
-          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-          : 'border-rose-200 bg-rose-50 text-rose-700'
-      }`}
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${tone}`}
+      aria-label={`Chuyển trạng thái dịch vụ sang ${value === 'Hoạt động' ? 'Dừng hoạt động' : 'Hoạt động'}`}
     >
-      <span
-        className={`h-2.5 w-2.5 rounded-full ${
-          value === 'Hoạt động' ? 'bg-emerald-500' : 'bg-rose-500'
-        }`}
-      />
+      <span className={`h-2.5 w-2.5 rounded-full ${dotTone}`} />
       {value}
-    </div>
+      <span className="material-symbols-outlined text-[14px]">sync_alt</span>
+    </button>
   );
 }
 
@@ -594,6 +613,15 @@ export default function ServiceList() {
                   <option>Giá chung</option>
                   <option>Theo độ tuổi</option>
                 </select>
+              </label>
+              <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                <span>Trạng thái</span>
+                <div className="pt-1">
+                  <StatusToggle
+                    value={draft.status}
+                    onToggle={() => updateDraft('status', draft.status === 'Hoạt động' ? 'Dừng hoạt động' : 'Hoạt động')}
+                  />
+                </div>
               </label>
             </div>
 
