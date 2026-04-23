@@ -23,35 +23,28 @@ async function fillPendingPassengerData(page: any) {
 }
 
 test?.describe('Sales Booking Detail Verification', () => {
-  test('Pending booking requires valid adult CCCD and child GKS before passenger data can be saved', async ({ page }) => {
+  test('Pending booking allows saving partial passenger data, but confirm stays locked until passenger documents are valid', async ({ page }) => {
     await loginAsSales(page);
     await page?.goto('/sales/bookings/B003?tab=pending_confirm');
     await page?.waitForLoadState('domcontentloaded');
+
+    const confirmButton = page?.getByRole('button', { name: /Xác nhận đơn đặt/i });
 
     await page?.getByRole('button', { name: /Chỉnh sửa$/ })?.first()?.click();
     const modal = page?.getByRole('dialog');
     const saveButton = modal?.getByRole('button', { name: /Lưu/ });
     const childDocumentInput = modal?.locator('input[placeholder="Số GKS"]');
-    const adultDocumentInput = modal?.locator('input[placeholder="012345678901"]')?.first();
 
-    await expect(saveButton)?.toBeDisabled();
-
+    await expect(saveButton)?.toBeEnabled();
     await childDocumentInput?.fill('@@');
-    await expect(modal?.getByText(/ký tự \/ \. -/i))?.toBeVisible();
-    await expect(saveButton)?.toBeDisabled();
-
-    await childDocumentInput?.fill('GKS-2018-0001');
     await expect(saveButton)?.toBeEnabled();
+    await saveButton?.click();
+    await expect(confirmButton)?.toBeDisabled();
 
-    await adultDocumentInput?.fill('ABC');
-    await expect(modal?.getByText('CCCD/Căn cước phải gồm đúng 12 chữ số.'))?.toBeVisible();
-    await expect(saveButton)?.toBeDisabled();
-
-    await adultDocumentInput?.fill('00109003456');
-    await expect(saveButton)?.toBeDisabled();
-
-    await adultDocumentInput?.fill('001090034567');
-    await expect(saveButton)?.toBeEnabled();
+    await page?.getByRole('button', { name: /Chỉnh sửa$/ })?.first()?.click();
+    await modal?.locator('input[placeholder="Số GKS"]')?.fill('GKS-2018-0001');
+    await modal?.getByRole('button', { name: /Lưu/ })?.click();
+    await expect(confirmButton)?.toBeEnabled();
   });
 
   test('Booking detail is a full page with breadcrumb back to the same list tab', async ({ page }) => {

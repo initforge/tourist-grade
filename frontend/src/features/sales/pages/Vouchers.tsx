@@ -24,7 +24,7 @@ import {
 
 const STORE_KEY = '__travela_sales_vouchers';
 const SEED_VERSION_KEY = '__travela_sales_vouchers_seed_version';
-const SEED_VERSION = '2026-04-23-voucher-rules-v2';
+const SEED_VERSION = '2026-04-23-voucher-rules-v3';
 
 type FormState = {
   id?: string; code: string; type: VoucherType; value: string; startDate: string; endDate: string;

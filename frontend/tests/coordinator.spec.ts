@@ -150,49 +150,36 @@ test?.describe('Coordinator Role — Full Verification', () => {
     await expect(hdvCard)?.toBeVisible({ timeout: 3000 });
   });
 
-  // ── 7. Vouchers: breadcrumb + gửi phê duyệt message?.success ────────────
-  test('7. Vouchers: breadcrumb có + "Gửi phê duyệt" hiện message?.success', async ({ page }) => {
+  // ── 7. Coordinator no longer has voucher section ─────────────────────────
+  test('7. Sidebar coordinator không còn mục Vouchers và route cũ chuyển về dashboard', async ({ page }) => {
     await loginAsCoordinator(page);
+
+    await expect(page?.locator('aside'))?.not?.toContainText('Vouchers');
+
     await page?.goto('/coordinator/vouchers');
-    await page?.waitForTimeout(1000);
-
-    // Breadcrumb: link "Voucher"
-    await expect(page?.locator('a', { hasText: 'Voucher' }))?.toBeVisible({ timeout: 3000 });
-
-    // Tìm nút Gửi phê duyệt trong bảng
-    const sendBtn = page?.locator('button', { hasText: 'Gửi phê duyệt' })?.first();
-    if (await sendBtn?.isVisible({ timeout: 2000 })) {
-      await sendBtn?.click();
-      await page?.waitForTimeout(800);
-      // Ant Design message thành công
-      await expect(page?.locator('.ant-message')?.or(page?.locator('[class*="ant-message"]'))?.first())?.toBeVisible({ timeout: 3000 });
-    }
+    await page?.waitForTimeout(500);
+    await expect(page)?.toHaveURL(/\/coordinator\/dashboard$/);
   });
 
-  // ── 8. Vouchers: detail drawer có 3 nút Duyệt / Yêu cầu chỉnh sửa / Từ chối ──
-  test('8. Vouchers: detail drawer (manager) có đủ 3 nút Duyệt, Yêu cầu chỉnh sửa, Từ chối', async ({ page }) => {
-    // Manager mới thấy nút phê duyệt → login manager
+  // ── 8. Manager voucher approval keeps list layout + reject dialog ─────────
+  test('8. Manager voucher approval có filter trạng thái rút gọn và popup từ chối bắt nhập lý do', async ({ page }) => {
     await loginAsManager(page);
 
-    await page?.goto('/coordinator/vouchers');
+    await page?.goto('/manager/voucher-approval');
     await page?.waitForTimeout(1000);
 
-    // Tìm bản ghi có nút Phê duyệt (manager thấy inline approve button)
-    const approveBtn = page?.locator('button', { hasText: 'Phê duyệt' })?.first();
-    if (await approveBtn?.isVisible({ timeout: 3000 })) {
-      await approveBtn?.click();
-      await page?.waitForTimeout(500);
+    const options = page?.locator('select option');
+    await expect(options)?.toContainText(['Chờ phê duyệt', 'Chưa diễn ra', 'Đang hoạt động', 'Vô hiệu/Hết hạn']);
+    await expect(options?.filter({ hasText: 'Tất cả trạng thái' }))?.toHaveCount(0);
+    await expect(options?.filter({ hasText: 'Nháp' }))?.toHaveCount(0);
+    await expect(options?.filter({ hasText: 'Không được phê duyệt' }))?.toHaveCount(0);
 
-      // Drawer mở → phải có 3 nút
-      await expect(page?.locator('button', { hasText: 'Từ chối' }))?.toBeVisible({ timeout: 3000 });
-      await expect(page?.locator('button', { hasText: 'Yêu cầu chỉnh sửa' }))?.toBeVisible();
-      await expect(page?.locator('button', { hasText: 'Phê duyệt' }))?.toBeVisible();
-
-      // Click Từ chối → popup nhập l? do
-      await page?.locator('button', { hasText: 'Từ chối' })?.click();
-      await page?.waitForTimeout(500);
-      await expect(page?.locator('textarea')?.or(page?.locator('input'))?.first())?.toBeVisible({ timeout: 3000 });
-    }
+    await page?.locator('tbody tr')?.first()?.getByRole('button', { name: 'Từ chối' })?.click();
+    await page?.waitForTimeout(500);
+    const rejectDialog = page?.getByRole('dialog', { name: /Từ chối Voucher/i });
+    await expect(rejectDialog?.getByRole('button', { name: 'Xác nhận' }))?.toBeDisabled();
+    await rejectDialog?.getByPlaceholder(/Lý do không phê duyệt/i)?.fill('Thiếu điều kiện áp dụng rõ ràng');
+    await expect(rejectDialog?.getByRole('button', { name: 'Xác nhận' }))?.toBeEnabled();
   });
 
   // ── 9. TourGenerationRules: header "Quản lý Tour" ───────────────────────

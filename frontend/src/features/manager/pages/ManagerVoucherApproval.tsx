@@ -1,24 +1,45 @@
-import { useState } from 'react';
-import { mockVouchers, VOUCHER_STATUS_LABEL as STATUS_LABEL, VOUCHER_STATUS_STYLE as STATUS_STYLE } from '@entities/voucher/data/vouchers';
+import { useMemo, useState } from 'react';
+import { mockVouchers, VOUCHER_STATUS_LABEL, VOUCHER_STATUS_STYLE } from '@entities/voucher/data/vouchers';
 import type { Voucher, VoucherStatus } from '@entities/voucher/data/vouchers';
 import { mockTourPrograms } from '@entities/tour-program/data/tourProgram';
-import { MANAGER_APPROVAL_WARNING, approvedVoucherStatus, hasManagerApprovalWarning, normalizeVoucherLifecycle } from '@entities/voucher/lib/voucherRules';
+import {
+  MANAGER_APPROVAL_WARNING,
+  approvedVoucherStatus,
+  formatVoucherValue,
+  hasManagerApprovalWarning,
+  normalizeVoucherLifecycle,
+} from '@entities/voucher/lib/voucherRules';
 
-const PENDING_VOUCHERS = mockVouchers
-  ?.map((voucher) => normalizeVoucherLifecycle(voucher))
-  ?.filter(voucher => voucher.status === 'pending_approval')
-  ?.sort((left, right) => left?.startDate?.localeCompare(right?.startDate));
+const MANAGER_FILTERS: VoucherStatus[] = ['pending_approval', 'upcoming', 'active', 'inactive'];
+const MANAGER_VISIBLE_STATUSES = new Set<VoucherStatus>(MANAGER_FILTERS);
+
+const INITIAL_VOUCHERS = mockVouchers
+  .map((voucher) => normalizeVoucherLifecycle(voucher))
+  .filter((voucher) => MANAGER_VISIBLE_STATUSES.has(voucher.status))
+  .sort((left, right) => left.startDate.localeCompare(right.startDate));
 
 function getTourName(id: string) {
-  return mockTourPrograms?.find(tour => tour.id === id)?.name ?? id;
-}
-
-function hasStartWarning(voucher: Voucher) {
-  return hasManagerApprovalWarning(voucher?.startDate);
+  return mockTourPrograms.find((tour) => tour.id === id)?.name ?? id;
 }
 
 function approvedStatusFor(voucher: Voucher): VoucherStatus {
-  return approvedVoucherStatus(voucher?.startDate);
+  return approvedVoucherStatus(voucher.startDate);
+}
+
+function hasStartWarning(voucher: Voucher) {
+  return voucher.status === 'pending_approval' && hasManagerApprovalWarning(voucher.startDate);
+}
+
+function WarningIcon() {
+  return (
+    <span
+      className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 text-amber-700 border border-amber-200"
+      title={MANAGER_APPROVAL_WARNING}
+      aria-label={MANAGER_APPROVAL_WARNING}
+    >
+      <span className="material-symbols-outlined text-[14px]">warning</span>
+    </span>
+  );
 }
 
 function RejectPopup({
@@ -45,7 +66,7 @@ function RejectPopup({
         </p>
         <textarea
           value={reason}
-          onChange={event => setReason(event?.target?.value)}
+          onChange={(event) => setReason(event.target.value)}
           rows={3}
           placeholder="Lý do không phê duyệt..."
           className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none focus:border-[#D4AF37] resize-none mb-4"
@@ -55,10 +76,10 @@ function RejectPopup({
             Hủy bỏ
           </button>
           <button
-            onClick={() => reason?.trim() && onConfirm(reason)}
-            disabled={!reason?.trim()}
+            onClick={() => reason.trim() && onConfirm(reason.trim())}
+            disabled={!reason.trim()}
             className={`flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold transition-colors ${
-              reason?.trim() ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              reason.trim() ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
           >
             Xác nhận
@@ -106,61 +127,75 @@ function ApproveConfirmPopup({
 }
 
 export default function ManagerVoucherApproval() {
-  const [vouchers, setVouchers] = useState<Voucher[]>(PENDING_VOUCHERS);
+  const [vouchers, setVouchers] = useState<Voucher[]>(INITIAL_VOUCHERS);
+  const [status, setStatus] = useState<VoucherStatus>('pending_approval');
+  const [search, setSearch] = useState('');
   const [showRejectPopup, setShowRejectPopup] = useState<string | null>(null);
   const [showApprovePopup, setShowApprovePopup] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
 
-  const filtered = vouchers
-    ?.filter(voucher =>
-      voucher?.code?.toLowerCase()?.includes(searchTerm?.toLowerCase()) ||
-      (voucher?.createdBy?.toLowerCase()?.includes(searchTerm?.toLowerCase()) ?? false) ||
-      voucher?.applicableTours?.some(tourId => getTourName(tourId)?.toLowerCase()?.includes(searchTerm?.toLowerCase()))
-    )
-    ?.sort((left, right) => left?.startDate?.localeCompare(right?.startDate));
+  const filtered = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    return vouchers
+      .filter((voucher) => voucher.status === status)
+      .filter((voucher) => {
+        if (!keyword) return true;
+        return `${voucher.code} ${voucher.description ?? ''} ${voucher.applicableTours.map(getTourName).join(' ')}`
+          .toLowerCase()
+          .includes(keyword);
+      })
+      .sort((left, right) => left.startDate.localeCompare(right.startDate));
+  }, [search, status, vouchers]);
 
   const handleApprove = (id: string) => {
-    setVouchers(prev =>
-      prev
-        ?.map(voucher => voucher.id === id ? { ...voucher, status: approvedStatusFor(voucher) } : voucher)
-        ?.filter(voucher => voucher?.id !== id),
+    setVouchers((prev) =>
+      prev.map((voucher) => (
+        voucher.id === id ? { ...voucher, status: approvedStatusFor(voucher) } : voucher
+      )),
     );
     setShowApprovePopup(null);
   };
 
   const handleReject = (id: string, reason: string) => {
-    void reason;
-    setVouchers(prev => prev?.filter(voucher => voucher?.id !== id));
+    setVouchers((prev) =>
+      prev.map((voucher) => (
+        voucher.id === id ? { ...voucher, status: 'rejected', rejectionReason: reason } : voucher
+      )),
+    );
     setShowRejectPopup(null);
   };
 
   return (
     <div className="w-full bg-[#F3F3F3] min-h-full">
       <div className="p-6 md:p-10">
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="w-1 h-5 bg-[#D4AF37] rounded-sm"></div>
-            <h1 className="font-['Noto_Serif'] text-3xl text-[#2A2421]">Phê Duyệt Voucher</h1>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+          <div className="space-y-1.5">
+            <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold">Khuyến mãi</p>
+            <h1 className="font-['Noto_Serif'] text-3xl text-[#2A2421] leading-tight">Phê duyệt Voucher</h1>
+            <p className="text-xs text-[#2A2421]/50">Theo dõi các voucher bán hàng theo cùng bố cục với màn quản lý voucher, tập trung vào trạng thái quản lý cần xử lý.</p>
           </div>
-          <p className="text-xs text-[#2A2421]/50 ml-4">Danh sách voucher đang chờ phê duyệt từ nhân viên kinh doanh.</p>
         </div>
 
-        <div className="bg-white border border-[#D0C5AF]/20 p-4 mb-6 flex items-center gap-3">
-          <div className="flex items-center border border-[#D0C5AF]/40 focus-within:border-[#D4AF37] transition-colors flex-1">
+        <div className="bg-white border border-[#D0C5AF]/20 p-4 mb-6 flex flex-wrap gap-3">
+          <div className="flex items-center border border-[#D0C5AF]/40 flex-1 min-w-48">
             <span className="material-symbols-outlined text-[#2A2421]/40 text-[18px] pl-3">search</span>
             <input
-              type="text"
-              value={searchTerm}
-              onChange={event => setSearchTerm(event?.target?.value)}
-              placeholder="Tìm theo mã voucher, người tạo, tour áp dụng..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Tìm theo mã voucher, ghi chú, tour áp dụng..."
               className="flex-1 pl-2 pr-4 py-2 text-sm outline-none bg-transparent"
             />
           </div>
-          {searchTerm && (
-            <button onClick={() => setSearchTerm('')} className="text-[#2A2421]/30 hover:text-[#2A2421]/60">
-              <span className="material-symbols-outlined text-[18px]">close</span>
-            </button>
-          )}
+          <select
+            value={status}
+            onChange={(event) => setStatus(event.target.value as VoucherStatus)}
+            className="px-4 py-2 border border-[#D0C5AF]/40 text-sm outline-none bg-white"
+          >
+            {MANAGER_FILTERS.map((item) => (
+              <option key={item} value={item}>
+                {VOUCHER_STATUS_LABEL[item]}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="bg-white border border-[#D0C5AF]/20 shadow-sm overflow-x-auto">
@@ -171,95 +206,74 @@ export default function ManagerVoucherApproval() {
                 <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">Loại</th>
                 <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">Giá trị</th>
                 <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">Thời gian áp dụng</th>
-                <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">Ghi chú</th>
-                <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">Số lượng được dùng</th>
+                <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">Áp dụng</th>
                 <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">Tour áp dụng</th>
-                <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">Người tạo</th>
-                <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">Ngày gửi phê duyệt</th>
                 <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">Trạng thái</th>
-                <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold text-right">Hành động</th>
+                <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#D0C5AF]/15">
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-5 py-16 text-center text-sm text-[#2A2421]/40">
-                    <span className="material-symbols-outlined text-4xl block mb-2 text-[#D0C5AF]">inbox</span>
-                    Không có voucher nào chờ phê duyệt
+                  <td colSpan={8} className="px-5 py-16 text-center text-sm text-[#2A2421]/40">
+                    Không có voucher phù hợp với bộ lọc hiện tại
                   </td>
                 </tr>
               )}
-              {filtered?.map(voucher => (
-                <tr key={voucher?.id} className="hover:bg-[#FAFAF5] transition-colors">
-                  <td className="px-5 py-4 font-medium text-sm font-['Noto_Serif'] text-[#2A2421]">{voucher?.code}</td>
+              {filtered.map((voucher) => (
+                <tr key={voucher.id} className="hover:bg-[#FAFAF5] transition-colors">
+                  <td className="px-5 py-4 font-medium text-sm font-['Noto_Serif'] text-[#2A2421]">{voucher.code}</td>
+                  <td className="px-5 py-4 text-sm text-[#2A2421]/70">{voucher.type === 'percent' ? 'Phần trăm (%)' : 'Tiền mặt'}</td>
+                  <td className="px-5 py-4 text-sm font-bold text-[#D4AF37]">{formatVoucherValue(voucher)}</td>
                   <td className="px-5 py-4 text-sm text-[#2A2421]/70">
-                    {voucher.type === 'percent' ? 'Phần trăm (%)' : 'Tiền mặt'}
+                    <div>{voucher.startDate && voucher.endDate ? `${voucher.startDate} → ${voucher.endDate}` : '—'}</div>
+                    {hasStartWarning(voucher) && <div className="mt-1"><WarningIcon /></div>}
                   </td>
-                  <td className="px-5 py-4 text-sm font-bold text-[#D4AF37]">{voucher?.value}</td>
-                  <td className="px-5 py-4 text-sm text-[#2A2421]/70">
-                    <div>{voucher?.startDate && voucher?.endDate ? `${voucher?.startDate} → ${voucher?.endDate}` : '—'}</div>
-                    {hasStartWarning(voucher) && (
-                      <div className="mt-1">
-                        <span
-                          className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 text-amber-700 border border-amber-200"
-                          title={MANAGER_APPROVAL_WARNING}
-                          aria-label={MANAGER_APPROVAL_WARNING}
-                        >
-                          <span className="material-symbols-outlined text-[14px]">warning</span>
-                        </span>
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-5 py-4 text-xs text-[#2A2421]/60 max-w-44 truncate" title={voucher?.description ?? '—'}>
-                    {voucher?.description ?? '—'}
-                  </td>
-                  <td className="px-5 py-4 text-sm text-[#2A2421]/70">{voucher?.used} / {voucher?.limit}</td>
+                  <td className="px-5 py-4 text-sm text-[#2A2421]/70">{voucher.used} / {voucher.limit}</td>
                   <td className="px-5 py-4">
-                    {voucher?.applicableTours?.length > 0 ? (
+                    {voucher.applicableTours.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
-                        {voucher?.applicableTours?.slice(0, 2)?.map(tourId => (
-                          <span
-                            key={tourId}
-                            className="px-1.5 py-0.5 bg-[#D4AF37]/10 text-[#D4AF37] text-[10px] font-bold rounded max-w-[180px] truncate"
-                            title={getTourName(tourId)}
-                          >
+                        {voucher.applicableTours.slice(0, 2).map((tourId) => (
+                          <span key={tourId} className="px-1.5 py-0.5 bg-[#D4AF37]/10 text-[#D4AF37] text-[10px] font-bold rounded" title={getTourName(tourId)}>
                             {getTourName(tourId)}
                           </span>
                         ))}
-                        {voucher?.applicableTours?.length > 2 && (
+                        {voucher.applicableTours.length > 2 && (
                           <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[10px] font-bold rounded">
-                            +{voucher?.applicableTours?.length - 2}
+                            +{voucher.applicableTours.length - 2}
                           </span>
                         )}
                       </div>
                     ) : (
-                      <span className="text-[11px] text-[#2A2421]/40">Tất cả chương trình</span>
+                      <span className="text-[11px] text-[#2A2421]/40">Tất cả</span>
                     )}
                   </td>
-                  <td className="px-5 py-4 text-sm text-[#2A2421]/70">{voucher?.createdBy ?? '—'}</td>
-                  <td className="px-5 py-4 text-sm text-[#2A2421]/70">{voucher?.createdAt ?? '—'}</td>
                   <td className="px-5 py-4">
-                    <span className={`inline-block px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded ${STATUS_STYLE[voucher?.status]}`}>
-                      {STATUS_LABEL[voucher?.status]}
+                    <span className={`inline-block px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded ${VOUCHER_STATUS_STYLE[voucher.status]}`}>
+                      {VOUCHER_STATUS_LABEL[voucher.status]}
                     </span>
                   </td>
                   <td className="px-5 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => setShowRejectPopup(voucher?.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold border border-red-300 text-red-600 hover:bg-red-50 transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-[14px]">block</span>
-                        Từ chối
-                      </button>
-                      <button
-                        onClick={() => setShowApprovePopup(voucher?.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-[14px]">check</span>
-                        Phê duyệt
-                      </button>
-                    </div>
+                    {voucher.status === 'pending_approval' ? (
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => setShowRejectPopup(voucher.id)}
+                          className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold border border-red-300 text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">block</span>
+                          Từ chối
+                        </button>
+                        <button
+                          onClick={() => setShowApprovePopup(voucher.id)}
+                          className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">check</span>
+                          Phê duyệt
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-[#2A2421]/35">—</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -268,27 +282,27 @@ export default function ManagerVoucherApproval() {
         </div>
 
         <div className="mt-4 flex justify-between items-center">
-          <p className="text-[11px] text-[#2A2421]/40">Hiển thị {filtered?.length} voucher chờ phê duyệt</p>
+          <p className="text-[11px] text-[#2A2421]/40">Hiển thị {filtered.length} voucher theo trạng thái đã chọn</p>
         </div>
       </div>
 
       {showRejectPopup && (() => {
-        const voucher = vouchers?.find(item => item.id === showRejectPopup);
+        const voucher = vouchers.find((item) => item.id === showRejectPopup);
         return voucher ? (
           <RejectPopup
-            voucherCode={voucher?.code}
-            onConfirm={reason => handleReject(voucher?.id, reason)}
+            voucherCode={voucher.code}
+            onConfirm={(reason) => handleReject(voucher.id, reason)}
             onCancel={() => setShowRejectPopup(null)}
           />
         ) : null;
       })()}
 
       {showApprovePopup && (() => {
-        const voucher = vouchers?.find(item => item.id === showApprovePopup);
+        const voucher = vouchers.find((item) => item.id === showApprovePopup);
         return voucher ? (
           <ApproveConfirmPopup
-            voucherCode={voucher?.code}
-            onConfirm={() => handleApprove(voucher?.id)}
+            voucherCode={voucher.code}
+            onConfirm={() => handleApprove(voucher.id)}
             onCancel={() => setShowApprovePopup(null)}
           />
         ) : null;

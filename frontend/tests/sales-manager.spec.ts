@@ -108,15 +108,21 @@ test?.describe('Sales + Manager Verification', () => {
     await expect(page?.locator('text=BK-394821'))?.toBeVisible();
   });
 
-  test('Manager voucher approval stays on the list page and shows applied tour names', async ({ page }) => {
+  test('Manager voucher approval follows the sales voucher layout while keeping the pending warning state', async ({ page }) => {
     await loginAsManager(page);
 
     await expect(page?.getByRole('columnheader', { name: 'Thời gian áp dụng' }))?.toBeVisible();
-    await expect(page?.getByRole('columnheader', { name: 'Ghi chú' }))?.toBeVisible();
-    await expect(page?.getByRole('columnheader', { name: 'Số lượng được dùng' }))?.toBeVisible();
-    await expect(page?.getByRole('columnheader', { name: 'Ngày gửi phê duyệt' }))?.toBeVisible();
-    await expect(page?.getByRole('columnheader', { name: 'Ngày tạo' }))?.toHaveCount(0);
+    await expect(page?.getByRole('columnheader', { name: 'Áp dụng', exact: true }))?.toBeVisible();
     await expect(page?.getByRole('columnheader', { name: 'Tour áp dụng' }))?.toBeVisible();
+    await expect(page?.getByRole('columnheader', { name: 'Ghi chú' }))?.toHaveCount(0);
+    await expect(page?.getByRole('columnheader', { name: 'Ngày gửi phê duyệt' }))?.toHaveCount(0);
+
+    const filterOptions = page?.locator('select option');
+    await expect(filterOptions)?.toContainText(['Chờ phê duyệt', 'Chưa diễn ra', 'Đang hoạt động', 'Vô hiệu/Hết hạn']);
+    await expect(filterOptions?.filter({ hasText: 'Tất cả trạng thái' }))?.toHaveCount(0);
+    await expect(filterOptions?.filter({ hasText: 'Nháp' }))?.toHaveCount(0);
+    await expect(filterOptions?.filter({ hasText: 'Không được phê duyệt' }))?.toHaveCount(0);
+
     const approvalWarning = page?.locator('[title="Voucher sắp đến hạn bắt đầu, cần phải phê duyệt ngay."]')?.first();
     await expect(approvalWarning)?.toBeVisible();
     await expect(page?.getByText('Mùa Thu Kyoto & Osaka'))?.toBeVisible();

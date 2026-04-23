@@ -83,8 +83,9 @@ test.describe('Sales voucher feedback', () => {
     await loginAs(page, 'sales', '/sales/vouchers');
 
     const warningText = 'Voucher sắp đến hạn gửi phê duyệt. Bạn nên gửi ngay để đảm bảo kịp thời gian xét duyệt.';
-    const draftWarnRow = page.locator('tbody tr').filter({ hasText: 'DRAFTWARN' });
+    const draftWarnRow = page.locator('tbody tr').filter({ hasText: 'SENDSOON8' });
 
+    await expect(draftWarnRow).toBeVisible();
     await expect(draftWarnRow.locator(`[title="${warningText}"]`)).toBeVisible();
     await expect(draftWarnRow.getByText(warningText)).toHaveCount(0);
   });

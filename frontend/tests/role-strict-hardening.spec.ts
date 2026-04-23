@@ -109,6 +109,14 @@ test.describe('Strict role hardening audit', () => {
     const issues = installRuntimeAudit(page);
 
     await loginAs(page, 'coordinator');
+    await page.goto('/coordinator/dashboard');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.getByRole('link', { name: /Vouchers/i })).toHaveCount(0);
+
+    await page.goto('/coordinator/vouchers');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page).toHaveURL(/\/coordinator\/dashboard$/);
+
     await page.goto('/coordinator/tours/TI009/estimate');
     await page.waitForLoadState('domcontentloaded');
     await page.getByRole('button', { name: /Dự toán/i }).click();

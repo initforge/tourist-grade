@@ -126,9 +126,6 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
     setDrafts(prev => prev?.map((p, i) => i === idx ? { ...p, [field]: value } : p));
   };
 
-  const documentErrors = drafts?.map(getPassengerDocumentError);
-  const canSave = drafts?.every(hasCompletePassengerData);
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="passenger-edit-title">
       <div className="absolute inset-0 bg-[#2A2421]/50 backdrop-blur-sm" onClick={onClose}></div>
@@ -147,7 +144,7 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
         {/* Body */}
         <div className="overflow-y-auto p-6 flex-1">
           <p className="text-xs text-[#2A2421]/50 mb-4">
-            Vui lòng nhập CCCD/Căn cước 12 chữ số cho người lớn và số giấy khai sinh hợp lệ cho trẻ em hoặc em bé dưới 14 tuổi.
+            Có thể lưu tạm danh sách hành khách khi thông tin còn thiếu. Hệ thống sẽ chỉ kiểm tra đủ thông tin, CCCD/Căn cước và GKS khi xác nhận đơn đặt.
           </p>
           <div className="overflow-x-auto">
           <table className="w-full min-w-[1060px] text-left table-fixed">
@@ -167,8 +164,6 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
             </thead>
             <tbody className="divide-y divide-[#D0C5AF]/10">
               {drafts?.map((p, idx) => {
-                const documentError = documentErrors[idx];
-
                 return (
                 <tr key={idx}>
                   <td className="py-3 pr-3 text-sm text-[#2A2421]/60">{idx + 1}</td>
@@ -208,15 +203,8 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
                       onChange={e => handleChange(idx, 'cccd', e?.target?.value)}
                       placeholder={p.type === 'adult' ? '012345678901' : 'Số GKS'}
                       inputMode={p.type === 'adult' ? 'numeric' : 'text'}
-                      className={`w-full border px-2 py-1 text-sm outline-none font-mono ${
-                        documentError
-                          ? 'border-red-300 bg-red-50 focus:border-red-400'
-                          : 'border-[#D0C5AF]/40 focus:border-[#D4AF37]'
-                      }`}
+                      className="w-full border border-[#D0C5AF]/40 px-2 py-1 text-sm outline-none font-mono focus:border-[#D4AF37]"
                     />
-                    {documentError && (
-                      <p className="mt-1 text-[11px] text-red-600">{documentError}</p>
-                    )}
                   </td>
                   <td className="py-3 pr-3">
                     <NationalitySelect
@@ -250,12 +238,7 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
           </button>
           <button
             onClick={() => onSave(drafts)}
-            disabled={!canSave}
-            className={`flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold flex items-center justify-center gap-2 transition-colors ${
-              canSave
-                ? 'bg-[#D4AF37] text-white hover:bg-[#C49B2F]'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            }`}
+            className="flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold flex items-center justify-center gap-2 transition-colors bg-[#D4AF37] text-white hover:bg-[#C49B2F]"
           >
             <span className="material-symbols-outlined text-[16px]">save</span>
             Lưu

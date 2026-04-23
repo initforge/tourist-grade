@@ -23,6 +23,8 @@ export async function loginAs(
       if (shouldClearBookings) {
         localStorage?.removeItem('__travela_bookings');
       }
+      localStorage?.removeItem('__travela_sales_vouchers');
+      localStorage?.removeItem('__travela_sales_vouchers_seed_version');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window as any)?.__authLogin(selectedRole);
     },

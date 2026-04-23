@@ -46,7 +46,6 @@ import {
   TourProgramWizard as CoordinatorTourProgramWizard,
   TourReceiveDispatch,
   TourSettlement as CoordinatorTourSettlement,
-  Vouchers as CoordinatorVouchers,
 } from '@features/coordinator/pages';
 import {
   SalesBookingDetail,
@@ -116,7 +115,7 @@ export default function AppRouter() {
           <Route path="tours/:id/settle" element={<CoordinatorTourSettlement />} />
           <Route path="services" element={<ServiceList />} />
           <Route path="suppliers" element={<Suppliers />} />
-          <Route path="vouchers" element={<CoordinatorVouchers />} />
+          <Route path="vouchers" element={<Navigate to="/coordinator/dashboard" replace />} />
         </Route>
 
         <Route path="/sales" element={<SalesLayout />}>

@@ -46,14 +46,6 @@ export function CoordinatorLayout() {
               </Link>
             </div>
           </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-[#2A2421]/40 px-4 mb-2">Marketing</p>
-            <div className="space-y-1">
-              <Link to="/coordinator/vouchers" className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-colors ${isActive('/coordinator/vouchers') ? 'bg-[#D4AF37]/10 text-[#D4AF37] font-medium' : 'hover:bg-gray-50'}`}>
-                <span className="material-symbols-outlined text-[20px]">loyalty</span> Vouchers
-              </Link>
-            </div>
-          </div>
         </nav>
         <div className="p-4 border-t border-[#D0C5AF]/40">
           <Link to="/" className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-gray-50 transition-colors text-red-600">
