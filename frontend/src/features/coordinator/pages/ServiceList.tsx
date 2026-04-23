@@ -14,10 +14,11 @@ type Province = 'Đà Nẵng' | 'Hà Nội' | 'Quảng Ninh' | 'Lào Cai' | 'Nin
 
 interface PriceRow {
   id: string;
-  label: string;
   unitPrice: number;
   note: string;
   effectiveDate: string;
+  endDate: string;
+  createdBy: string;
 }
 
 interface ServiceRow {
@@ -50,6 +51,16 @@ interface ServiceDraft {
 }
 
 const provinceOptions: Province[] = ['Đà Nẵng', 'Hà Nội', 'Quảng Ninh', 'Lào Cai', 'Ninh Bình'];
+const lockedCategories = new Set<Category>(['Vận chuyển', 'Lưu trú', 'Hướng dẫn viên']);
+
+const createPrice = (
+  id: string,
+  unitPrice: number,
+  effectiveDate: string,
+  endDate: string,
+  note: string,
+  createdBy = 'Điều phối viên'
+): PriceRow => ({ id, unitPrice, effectiveDate, endDate, note, createdBy });
 
 const initialServices: ServiceRow[] = [
   {
@@ -61,7 +72,7 @@ const initialServices: ServiceRow[] = [
     setup: 'Giá chung',
     status: 'Hoạt động',
     description: 'Dùng cho hạng mục hướng dẫn viên trong dự toán tour.',
-    prices: [{ id: 'SV-HDV-P1', label: 'Giá chuẩn', unitPrice: 400000, note: 'Áp dụng tour nội địa', effectiveDate: '2026-01-01' }],
+    prices: [createPrice('SV-HDV-P1', 400000, '2026-01-01', '2026-12-31', 'Áp dụng tour nội địa')],
   },
   {
     id: 'SV-SGL',
@@ -72,7 +83,7 @@ const initialServices: ServiceRow[] = [
     setup: 'Giá chung',
     status: 'Hoạt động',
     description: 'Dịch vụ lưu trú phòng đơn.',
-    prices: [{ id: 'SV-SGL-P1', label: 'Giá chuẩn', unitPrice: 1200000, note: 'Khách sạn 3 sao', effectiveDate: '2026-01-01' }],
+    prices: [createPrice('SV-SGL-P1', 1200000, '2026-01-01', '2026-12-31', 'Khách sạn 3 sao')],
   },
   {
     id: 'SV-BUS',
@@ -82,22 +93,8 @@ const initialServices: ServiceRow[] = [
     priceMode: 'Báo giá',
     setup: '-',
     status: 'Hoạt động',
-    description: 'Dịch vụ vận chuyển theo xe, không tạo mới từ kho dịch vụ.',
-    prices: [{ id: 'SV-BUS-P1', label: 'Báo giá quý II', unitPrice: 8100000, note: 'Xe 29 chỗ', effectiveDate: '2026-04-01' }],
-  },
-  {
-    id: 'SV-AIR',
-    name: 'Vé máy bay',
-    category: 'Vận chuyển',
-    unit: 'khách',
-    priceMode: 'Báo giá',
-    setup: 'Theo độ tuổi',
-    status: 'Hoạt động',
-    description: 'Dịch vụ vé máy bay đoàn.',
-    prices: [
-      { id: 'SV-AIR-P1', label: 'Người lớn', unitPrice: 4400000, note: 'Khứ hồi', effectiveDate: '2026-04-01' },
-      { id: 'SV-AIR-P2', label: 'Trẻ em', unitPrice: 4200000, note: 'Khứ hồi', effectiveDate: '2026-04-01' },
-    ],
+    description: 'Dịch vụ vận chuyển theo xe.',
+    prices: [createPrice('SV-BUS-P1', 8100000, '2026-04-01', '2026-09-30', 'Xe 29 chỗ')],
   },
   {
     id: 'SV-TKT',
@@ -110,8 +107,8 @@ const initialServices: ServiceRow[] = [
     description: 'Áp dụng cho các chương trình tham quan tại Đà Nẵng.',
     province: 'Đà Nẵng',
     prices: [
-      { id: 'SV-TKT-P1', label: 'Người lớn', unitPrice: 250000, note: 'Giá cổng', effectiveDate: '2026-01-01' },
-      { id: 'SV-TKT-P2', label: 'Trẻ em', unitPrice: 180000, note: 'Cao từ 1m - 1m4', effectiveDate: '2026-01-01' },
+      createPrice('SV-TKT-P1', 250000, '2026-01-01', '2026-06-30', 'Người lớn', 'Trưởng phòng điều phối'),
+      createPrice('SV-TKT-P2', 180000, '2026-01-01', '2026-06-30', 'Trẻ em', 'Trưởng phòng điều phối'),
     ],
   },
   {
@@ -125,7 +122,10 @@ const initialServices: ServiceRow[] = [
     description: 'Áp dụng trực tiếp vào chi phí khác.',
     formulaCount: 'Giá trị mặc định',
     formulaQuantity: 'Theo người',
-    prices: [{ id: 'SV-INS-P1', label: 'Giá chuẩn', unitPrice: 40000, note: 'Bảo hiểm nội địa', effectiveDate: '2026-01-01' }],
+    prices: [
+      createPrice('SV-INS-P1', 40000, '2026-01-01', '2026-12-31', 'Bảo hiểm nội địa'),
+      createPrice('SV-INS-P2', 50000, '2026-07-01', '2026-12-31', 'Điều chỉnh mùa cao điểm', 'Admin hệ thống'),
+    ],
   },
 ];
 
@@ -190,6 +190,72 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
+function StatusToggle({ value }: { value: ServiceStatus }) {
+  return (
+    <div
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] ${
+        value === 'Hoạt động'
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+          : 'border-rose-200 bg-rose-50 text-rose-700'
+      }`}
+    >
+      <span
+        className={`h-2.5 w-2.5 rounded-full ${
+          value === 'Hoạt động' ? 'bg-emerald-500' : 'bg-rose-500'
+        }`}
+      />
+      {value}
+    </div>
+  );
+}
+
+function PriceTable({
+  rows,
+  showAction = false,
+  onEdit,
+}: {
+  rows: PriceRow[];
+  showAction?: boolean;
+  onEdit?: (priceId: string) => void;
+}) {
+  return (
+    <div className="overflow-hidden border border-stone-200">
+      <div className="border-b border-stone-200 bg-stone-50 px-5 py-3">
+        <p className="text-xs font-bold uppercase tracking-[0.24em] text-stone-500">Bảng giá</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-white">
+            <tr className="border-b border-stone-200">
+              {['Đơn giá', 'Ngày hiệu lực', 'Ngày hết hiệu lực', 'Ghi chú', 'Người tạo', ...(showAction ? ['Thao tác'] : [])].map(header => (
+                <th key={header} className="px-5 py-3 text-[10px] font-bold uppercase tracking-[0.24em] text-stone-500">{header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(price => (
+              <tr key={price.id} className="border-b border-stone-100">
+                <td className="px-5 py-4">{formatCurrency(price.unitPrice)}</td>
+                <td className="px-5 py-4">{price.effectiveDate}</td>
+                <td className="px-5 py-4">{price.endDate}</td>
+                <td className="px-5 py-4">{price.note}</td>
+                <td className="px-5 py-4">{price.createdBy}</td>
+                {showAction && (
+                  <td className="px-5 py-4">
+                    <button onClick={() => onEdit?.(price.id)} className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#2A2421]">
+                      Chỉnh sửa
+                    </button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function ServiceList() {
   const role = useAuthStore(state => state?.user?.role || 'guest');
   const [serviceRows, setServiceRows] = useState<ServiceRow[]>(initialServices);
@@ -201,36 +267,19 @@ export default function ServiceList() {
   const [draft, setDraft] = useState<ServiceDraft>(emptyDraft('Vé tham quan'));
   const [nextCategory, setNextCategory] = useState<AddCategory>('Vé tham quan');
 
-  const selectedService = useMemo(
-    () => serviceRows.find(service => service.id === selectedServiceId) ?? null,
-    [selectedServiceId, serviceRows],
-  );
-  const editingService = useMemo(
-    () => serviceRows.find(service => service.id === editingServiceId) ?? null,
-    [editingServiceId, serviceRows],
-  );
-  const activePriceService = useMemo(
-    () => serviceRows.find(service => service.id === priceEditor?.serviceId) ?? null,
-    [priceEditor, serviceRows],
-  );
-  const activePriceRow = useMemo(
-    () => activePriceService?.prices.find(price => price.id === priceEditor?.priceId),
-    [activePriceService, priceEditor],
-  );
+  const selectedService = useMemo(() => serviceRows.find(service => service.id === selectedServiceId) ?? null, [selectedServiceId, serviceRows]);
+  const editingService = useMemo(() => serviceRows.find(service => service.id === editingServiceId) ?? null, [editingServiceId, serviceRows]);
+  const activePriceService = useMemo(() => serviceRows.find(service => service.id === priceEditor?.serviceId) ?? null, [priceEditor, serviceRows]);
+  const activePriceRow = useMemo(() => activePriceService?.prices.find(price => price.id === priceEditor?.priceId), [activePriceService, priceEditor]);
+
   const filteredServiceRows = useMemo(() => {
-    const keyword = searchQuery?.trim()?.toLowerCase();
+    const keyword = searchQuery.trim().toLowerCase();
     if (!keyword) return serviceRows;
-    return serviceRows?.filter(service =>
-      [
-        service?.id,
-        service?.name,
-        service?.category,
-        service?.unit,
-        service?.priceMode,
-        service?.setup,
-        service?.status,
-        service?.province,
-      ]?.join(' ')?.toLowerCase()?.includes(keyword),
+    return serviceRows.filter(service =>
+      [service.id, service.name, service.category, service.unit, service.priceMode, service.setup, service.status]
+        .join(' ')
+        .toLowerCase()
+        .includes(keyword)
     );
   }, [searchQuery, serviceRows]);
 
@@ -242,51 +291,6 @@ export default function ServiceList() {
     setNextCategory('Vé tham quan');
     setDraft(emptyDraft('Vé tham quan'));
     setIsCreateOpen(true);
-  };
-
-  const saveDraft = () => {
-    if (editingServiceId) {
-      setServiceRows(previous =>
-        previous.map(service => (
-          service.id === editingServiceId
-            ? {
-              ...service,
-              name: draft.name || service.name,
-              category: draft.category,
-              unit: draft.unit,
-              priceMode: draft.priceMode,
-              setup: draft.setup,
-              status: draft.status,
-              description: draft.description,
-              province: draft.category === 'Vé tham quan' ? draft.province : undefined,
-              formulaCount: draft.category === 'Các dịch vụ khác' ? draft.formulaCount : undefined,
-              formulaQuantity: draft.category === 'Các dịch vụ khác' ? draft.formulaQuantity : undefined,
-            }
-            : service
-        )),
-      );
-      setEditingServiceId(null);
-      return;
-    }
-
-    const nextId = `SV-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-    const nextService: ServiceRow = {
-      id: nextId,
-      name: draft.name || (draft.category === 'Vé tham quan' ? 'Vé tham quan mới' : 'Dịch vụ khác mới'),
-      category: draft.category,
-      unit: draft.unit,
-      priceMode: draft.priceMode,
-      setup: draft.setup,
-      status: draft.status,
-      description: draft.description || 'Chưa có mô tả.',
-      province: draft.category === 'Vé tham quan' ? draft.province : undefined,
-      formulaCount: draft.category === 'Các dịch vụ khác' ? draft.formulaCount : undefined,
-      formulaQuantity: draft.category === 'Các dịch vụ khác' ? draft.formulaQuantity : undefined,
-      prices: [],
-    };
-    setServiceRows(previous => [nextService, ...previous]);
-    setSelectedServiceId(nextId);
-    setIsCreateOpen(false);
   };
 
   const openEditModal = (service: ServiceRow) => {
@@ -303,8 +307,52 @@ export default function ServiceList() {
       formulaCount: service.formulaCount ?? 'Không có',
       formulaQuantity: service.formulaQuantity ?? 'Không có',
     });
-    setEditingServiceId(service.id);
     setSelectedServiceId(null);
+    setEditingServiceId(service.id);
+  };
+
+  const saveDraft = () => {
+    if (editingServiceId) {
+      setServiceRows(previous => previous.map(service => (
+        service.id === editingServiceId
+          ? {
+              ...service,
+              name: draft.name || service.name,
+              unit: draft.unit,
+              priceMode: draft.priceMode,
+              setup: draft.setup,
+              status: draft.status,
+              description: draft.description,
+              province: draft.category === 'Vé tham quan' ? draft.province : undefined,
+              formulaCount: draft.category === 'Các dịch vụ khác' ? draft.formulaCount : undefined,
+              formulaQuantity: draft.category === 'Các dịch vụ khác' ? draft.formulaQuantity : undefined,
+            }
+          : service
+      )));
+      setEditingServiceId(null);
+      return;
+    }
+
+    const nextId = `SV-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    setServiceRows(previous => [
+      {
+        id: nextId,
+        name: draft.name || (draft.category === 'Vé tham quan' ? 'Vé tham quan mới' : 'Dịch vụ khác mới'),
+        category: draft.category,
+        unit: draft.unit,
+        priceMode: draft.priceMode,
+        setup: draft.setup,
+        status: draft.status,
+        description: draft.description || 'Chưa có mô tả.',
+        province: draft.category === 'Vé tham quan' ? draft.province : undefined,
+        formulaCount: draft.category === 'Các dịch vụ khác' ? draft.formulaCount : undefined,
+        formulaQuantity: draft.category === 'Các dịch vụ khác' ? draft.formulaQuantity : undefined,
+        prices: [],
+      },
+      ...previous,
+    ]);
+    setIsCreateOpen(false);
+    setSelectedServiceId(nextId);
   };
 
   const removeService = (serviceId: string) => {
@@ -315,16 +363,13 @@ export default function ServiceList() {
 
   const savePriceRow = (priceDraft: PriceRow) => {
     if (!activePriceService) return;
-
-    setServiceRows(previous =>
-      previous.map(service => {
-        if (service.id !== activePriceService.id) return service;
-        const nextPrices = activePriceRow
-          ? service.prices.map(price => (price.id === activePriceRow.id ? { ...priceDraft, id: activePriceRow.id } : price))
-          : [...service.prices, { ...priceDraft, id: `PRICE-${Date.now()}` }];
-        return { ...service, prices: nextPrices };
-      }),
-    );
+    setServiceRows(previous => previous.map(service => {
+      if (service.id !== activePriceService.id) return service;
+      const prices = activePriceRow
+        ? service.prices.map(price => (price.id === activePriceRow.id ? { ...priceDraft, id: activePriceRow.id } : price))
+        : [...service.prices, { ...priceDraft, id: `PRICE-${Date.now()}` }];
+      return { ...service, prices };
+    }));
     setPriceEditor(null);
   };
 
@@ -344,8 +389,7 @@ export default function ServiceList() {
             <span className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#D4AF37]">Quản lý dịch vụ</span>
             <h1 className="font-serif text-4xl text-[#2A2421]">Danh mục dịch vụ</h1>
             <p className="mt-3 max-w-3xl text-sm text-[#2A2421]/55">
-              Kho dịch vụ chỉ tạo mới cho Vé tham quan và Các dịch vụ khác. Vận chuyển vẫn được quản lý như dịch vụ hệ thống có sẵn,
-              không phát sinh thêm từ màn này.
+              Nhóm lưu trú, hướng dẫn viên và vận chuyển chỉ hiển thị thông tin chuẩn hóa. Vé tham quan và các dịch vụ khác giữ bảng giá để điều phối cập nhật trực tiếp.
             </p>
           </div>
           {role === 'coordinator' && (
@@ -361,7 +405,7 @@ export default function ServiceList() {
         <PageSearchInput
           value={searchQuery}
           onChange={setSearchQuery}
-          placeholder="Tìm theo mã dịch vụ, tên dịch vụ, phân loại, tỉnh thành..."
+          placeholder="Tìm theo mã dịch vụ, tên dịch vụ, phân loại..."
           className="mb-6"
         />
 
@@ -392,24 +436,14 @@ export default function ServiceList() {
                   <td className="px-6 py-5 text-xs font-medium text-stone-600">{service.unit}</td>
                   <td className="px-6 py-5 text-xs text-stone-600">{service.priceMode}</td>
                   <td className="px-6 py-5 text-xs text-stone-600">{service.setup}</td>
-                  <td className="px-6 py-5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">{service.status}</td>
+                  <td className="px-6 py-5"><StatusToggle value={service.status} /></td>
                   <td className="px-6 py-5">
-                    <button
-                      onClick={() => setSelectedServiceId(service.id)}
-                      className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#2A2421]"
-                    >
+                    <button onClick={() => setSelectedServiceId(service.id)} className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#2A2421]">
                       Xem
                     </button>
                   </td>
                 </tr>
               ))}
-              {filteredServiceRows.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-6 py-14 text-center text-sm text-stone-400">
-                    Không có dịch vụ phù hợp với từ khóa tìm kiếm
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
@@ -428,7 +462,6 @@ export default function ServiceList() {
                   setDraft(emptyDraft(value));
                 }}
                 className="w-full border border-stone-200 px-4 py-3 text-sm outline-none"
-                aria-label="Phân loại"
               >
                 <option>Vé tham quan</option>
                 <option>Các dịch vụ khác</option>
@@ -438,12 +471,7 @@ export default function ServiceList() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <label className="space-y-2 text-sm font-medium text-[#2A2421]">
                 <span>Tên dịch vụ</span>
-                <input
-                  value={draft.name}
-                  onChange={event => updateDraft('name', event.target.value)}
-                  className="w-full border border-stone-200 px-4 py-3 text-sm outline-none"
-                  placeholder="Nhập tên dịch vụ"
-                />
+                <input value={draft.name} onChange={event => updateDraft('name', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
               </label>
               <label className="space-y-2 text-sm font-medium text-[#2A2421]">
                 <span>Đơn vị</span>
@@ -453,26 +481,20 @@ export default function ServiceList() {
 
             <label className="block space-y-2 text-sm font-medium text-[#2A2421]">
               <span>Mô tả</span>
-              <textarea
-                value={draft.description}
-                onChange={event => updateDraft('description', event.target.value)}
-                rows={3}
-                className="w-full resize-none border border-stone-200 px-4 py-3 text-sm outline-none"
-                placeholder="Mô tả ngắn cho dịch vụ"
-              />
+              <textarea value={draft.description} onChange={event => updateDraft('description', event.target.value)} rows={3} className="w-full resize-none border border-stone-200 px-4 py-3 text-sm outline-none" />
             </label>
 
             {nextCategory === 'Vé tham quan' ? (
               <div className="grid grid-cols-1 gap-4 rounded-sm border border-stone-200 p-4 md:grid-cols-2">
                 <label className="space-y-2 text-sm font-medium text-[#2A2421]">
                   <span>Tỉnh thành</span>
-                  <select value={draft.province} onChange={event => updateDraft('province', event.target.value as Province)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" aria-label="Tỉnh thành">
+                  <select value={draft.province} onChange={event => updateDraft('province', event.target.value as Province)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none">
                     {provinceOptions.map(option => <option key={option}>{option}</option>)}
                   </select>
                 </label>
                 <label className="space-y-2 text-sm font-medium text-[#2A2421]">
                   <span>Thiết lập giá</span>
-                  <select value={draft.setup} onChange={event => updateDraft('setup', event.target.value as PriceSetup)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" aria-label="Thiết lập giá">
+                  <select value={draft.setup} onChange={event => updateDraft('setup', event.target.value as PriceSetup)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none">
                     <option>Giá chung</option>
                     <option>Theo độ tuổi</option>
                   </select>
@@ -482,19 +504,11 @@ export default function ServiceList() {
               <div className="grid grid-cols-1 gap-4 rounded-sm border border-stone-200 p-4 md:grid-cols-2">
                 <label className="space-y-2 text-sm font-medium text-[#2A2421]">
                   <span>Công thức tính số lần</span>
-                  <select value={draft.formulaCount} onChange={event => updateDraft('formulaCount', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" aria-label="Công thức tính số lần">
-                    <option>Không có</option>
-                    <option>Giá trị mặc định</option>
-                    <option>Theo ngày</option>
-                  </select>
+                  <input value={draft.formulaCount} onChange={event => updateDraft('formulaCount', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
                 </label>
                 <label className="space-y-2 text-sm font-medium text-[#2A2421]">
                   <span>Công thức tính số lượng</span>
-                  <select value={draft.formulaQuantity} onChange={event => updateDraft('formulaQuantity', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" aria-label="Công thức tính số lượng">
-                    <option>Không có</option>
-                    <option>Giá trị mặc định</option>
-                    <option>Theo người</option>
-                  </select>
+                  <input value={draft.formulaQuantity} onChange={event => updateDraft('formulaQuantity', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
                 </label>
               </div>
             )}
@@ -512,79 +526,50 @@ export default function ServiceList() {
       )}
 
       {selectedService && (
-        <Modal title={`Chi tiết ${selectedService.name}`} subtitle="Màn xem chi tiết chỉ có Sửa và Xóa." onClose={() => setSelectedServiceId(null)} wide>
+        <Modal
+          title={`Chi tiết ${selectedService.name}`}
+          subtitle={lockedCategories.has(selectedService.category) ? 'Nhóm dịch vụ hệ thống chỉ hiển thị thông tin chuẩn hóa.' : 'Nhóm dịch vụ điều phối có thể cập nhật bảng giá.'}
+          onClose={() => setSelectedServiceId(null)}
+          wide
+        >
           <div className="space-y-6">
-            <div className="flex flex-wrap justify-end gap-3">
-              <button
-                onClick={() => openEditModal(selectedService)}
-                className="border border-[#2A2421] px-5 py-3 text-[10px] font-bold uppercase tracking-[0.24em] text-[#2A2421]"
-              >
-                Sửa
-              </button>
-              <button
-                onClick={() => removeService(selectedService.id)}
-                className="border border-rose-200 px-5 py-3 text-[10px] font-bold uppercase tracking-[0.24em] text-rose-700"
-              >
-                Xóa
-              </button>
-            </div>
+            {!lockedCategories.has(selectedService.category) && (
+              <div className="flex flex-wrap justify-end gap-3">
+                <button onClick={() => openEditModal(selectedService)} className="border border-[#2A2421] px-5 py-3 text-[10px] font-bold uppercase tracking-[0.24em] text-[#2A2421]">
+                  Sửa
+                </button>
+                <button onClick={() => removeService(selectedService.id)} className="border border-rose-200 px-5 py-3 text-[10px] font-bold uppercase tracking-[0.24em] text-rose-700">
+                  Xóa
+                </button>
+              </div>
+            )}
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <Field label="Mã dịch vụ" value={selectedService.id} />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Field label="Phân loại" value={selectedService.category} />
-              <Field label="Trạng thái" value={selectedService.status} />
               <Field label="Đơn vị" value={selectedService.unit} />
               <Field label="Hình thức giá" value={selectedService.priceMode} />
               <Field label="Thiết lập giá" value={selectedService.setup} />
-              <Field label="Tỉnh thành" value={selectedService.province ?? '-'} />
-              <Field label="Công thức số lần" value={selectedService.formulaCount ?? '-'} />
-              <Field label="Công thức số lượng" value={selectedService.formulaQuantity ?? '-'} />
+              <Field label="Trạng thái" value={<StatusToggle value={selectedService.status} />} />
+              {!lockedCategories.has(selectedService.category) && <Field label="Mã dịch vụ" value={selectedService.id} />}
             </div>
 
-            <Field label="Mô tả" value={selectedService.description} />
-
-            <div className="overflow-hidden border border-stone-200">
-              <div className="border-b border-stone-200 bg-stone-50 px-5 py-3">
-                <p className="text-xs font-bold uppercase tracking-[0.24em] text-stone-500">Bảng giá hiện có</p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-white">
-                    <tr className="border-b border-stone-200">
-                      {['Mức giá', 'Đơn giá', 'Ngày hiệu lực', 'Ghi chú'].map(header => (
-                        <th key={header} className="px-5 py-3 text-[10px] font-bold uppercase tracking-[0.24em] text-stone-500">{header}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedService.prices.map(price => (
-                      <tr key={price.id} className="border-b border-stone-100">
-                        <td className="px-5 py-4 font-medium text-[#2A2421]">{price.label}</td>
-                        <td className="px-5 py-4">{formatCurrency(price.unitPrice)}</td>
-                        <td className="px-5 py-4">{price.effectiveDate}</td>
-                        <td className="px-5 py-4">{price.note}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            {!lockedCategories.has(selectedService.category) && (
+              <>
+                <Field label="Mô tả" value={selectedService.description} />
+                <PriceTable rows={selectedService.prices} />
+              </>
+            )}
           </div>
         </Modal>
       )}
 
       {editingService && (
-        <Modal title={`Sửa dịch vụ - ${editingService.name}`} subtitle="Màn sửa có Thêm bảng giá và chỉnh sửa từng dòng giá." onClose={() => setEditingServiceId(null)} wide>
+        <Modal title={`Sửa dịch vụ - ${editingService.name}`} subtitle="Nhóm dịch vụ điều phối cho phép thêm mới bảng giá." onClose={() => setEditingServiceId(null)} wide>
           <div className="space-y-6">
             <div className="flex flex-wrap justify-end gap-3">
-              {(editingService.category === 'Vé tham quan' || editingService.category === 'Các dịch vụ khác') && (
-                <button
-                  onClick={() => setPriceEditor({ serviceId: editingService.id })}
-                  className="border border-[#D4AF37] px-5 py-3 text-[10px] font-bold uppercase tracking-[0.24em] text-[#D4AF37]"
-                >
-                  Thêm bảng giá
-                </button>
-              )}
+              <button onClick={() => setPriceEditor({ serviceId: editingService.id })} className="border border-[#D4AF37] px-5 py-3 text-[10px] font-bold uppercase tracking-[0.24em] text-[#D4AF37]">
+                Thêm mới bảng giá
+              </button>
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -603,43 +588,13 @@ export default function ServiceList() {
                   <option>Giá niêm yết</option>
                 </select>
               </label>
-              {editingService.category !== 'Vận chuyển' && (
-                <label className="space-y-2 text-sm font-medium text-[#2A2421]">
-                  <span>Thiết lập giá</span>
-                  <select value={draft.setup} onChange={event => updateDraft('setup', event.target.value as PriceSetup)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none bg-white">
-                    <option>Giá chung</option>
-                    <option>Theo độ tuổi</option>
-                  </select>
-                </label>
-              )}
-              {editingService.category === 'Vé tham quan' && (
-                <label className="space-y-2 text-sm font-medium text-[#2A2421]">
-                  <span>Tỉnh thành</span>
-                  <select value={draft.province} onChange={event => updateDraft('province', event.target.value as Province)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none bg-white" aria-label="Tỉnh thành">
-                    {provinceOptions.map(option => <option key={option}>{option}</option>)}
-                  </select>
-                </label>
-              )}
-              {editingService.category === 'Các dịch vụ khác' && (
-                <>
-                  <label className="space-y-2 text-sm font-medium text-[#2A2421]">
-                    <span>Công thức tính số lần</span>
-                    <select value={draft.formulaCount} onChange={event => updateDraft('formulaCount', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none bg-white" aria-label="Công thức tính số lần">
-                      <option>Không có</option>
-                      <option>Giá trị mặc định</option>
-                      <option>Theo ngày</option>
-                    </select>
-                  </label>
-                  <label className="space-y-2 text-sm font-medium text-[#2A2421]">
-                    <span>Công thức tính số lượng</span>
-                    <select value={draft.formulaQuantity} onChange={event => updateDraft('formulaQuantity', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none bg-white" aria-label="Công thức tính số lượng">
-                      <option>Không có</option>
-                      <option>Giá trị mặc định</option>
-                      <option>Theo người</option>
-                    </select>
-                  </label>
-                </>
-              )}
+              <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                <span>Thiết lập giá</span>
+                <select value={draft.setup} onChange={event => updateDraft('setup', event.target.value as PriceSetup)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none bg-white">
+                  <option>Giá chung</option>
+                  <option>Theo độ tuổi</option>
+                </select>
+              </label>
             </div>
 
             <label className="block space-y-2 text-sm font-medium text-[#2A2421]">
@@ -647,37 +602,7 @@ export default function ServiceList() {
               <textarea value={draft.description} onChange={event => updateDraft('description', event.target.value)} rows={3} className="w-full resize-none border border-stone-200 px-4 py-3 text-sm outline-none" />
             </label>
 
-            <div className="overflow-hidden border border-stone-200">
-              <div className="border-b border-stone-200 bg-stone-50 px-5 py-3">
-                <p className="text-xs font-bold uppercase tracking-[0.24em] text-stone-500">Danh sách bảng giá</p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-white">
-                    <tr className="border-b border-stone-200">
-                      {['Mức giá', 'Đơn giá', 'Ngày hiệu lực', 'Ghi chú', 'Thao tác'].map(header => (
-                        <th key={header} className="px-5 py-3 text-[10px] font-bold uppercase tracking-[0.24em] text-stone-500">{header}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {editingService.prices.map(price => (
-                      <tr key={price.id} className="border-b border-stone-100">
-                        <td className="px-5 py-4 font-medium text-[#2A2421]">{price.label}</td>
-                        <td className="px-5 py-4">{formatCurrency(price.unitPrice)}</td>
-                        <td className="px-5 py-4">{price.effectiveDate}</td>
-                        <td className="px-5 py-4">{price.note}</td>
-                        <td className="px-5 py-4">
-                          <button onClick={() => setPriceEditor({ serviceId: editingService.id, priceId: price.id })} className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#2A2421]">
-                            Chỉnh sửa
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <PriceTable rows={editingService.prices} showAction onEdit={priceId => setPriceEditor({ serviceId: editingService.id, priceId })} />
 
             <div className="flex gap-4 border-t border-stone-200 pt-6">
               <button onClick={() => setEditingServiceId(null)} className="flex-1 border border-[#2A2421] py-4 text-[10px] font-bold uppercase tracking-[0.24em] text-[#2A2421]">
@@ -714,22 +639,23 @@ function PriceEditorModal({
   onClose: () => void;
   onSave: (draft: PriceRow) => void;
 }) {
-  const [label, setLabel] = useState(price?.label ?? (service.setup === 'Theo độ tuổi' ? 'Người lớn' : 'Giá chuẩn'));
   const [unitPrice, setUnitPrice] = useState(String(price?.unitPrice ?? ''));
   const [effectiveDate, setEffectiveDate] = useState(price?.effectiveDate ?? '2026-04-20');
+  const [endDate, setEndDate] = useState(price?.endDate ?? '2026-12-31');
   const [note, setNote] = useState(price?.note ?? '');
+  const [createdBy, setCreatedBy] = useState(price?.createdBy ?? 'Điều phối viên');
 
   return (
-    <Modal title={price ? 'Chỉnh sửa bảng giá' : 'Thêm bảng giá'} subtitle={service.name} onClose={onClose}>
+    <Modal title={price ? 'Chỉnh sửa bảng giá' : 'Thêm mới bảng giá'} subtitle={service.name} onClose={onClose}>
       <div className="space-y-5">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <label className="space-y-2 text-sm font-medium text-[#2A2421]">
-            <span>Mức giá</span>
-            <input value={label} onChange={event => setLabel(event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
-          </label>
-          <label className="space-y-2 text-sm font-medium text-[#2A2421]">
             <span>Đơn giá</span>
             <input value={unitPrice} onChange={event => setUnitPrice(event.target.value)} type="number" className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+          </label>
+          <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+            <span>Người tạo</span>
+            <input value={createdBy} onChange={event => setCreatedBy(event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
           </label>
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -738,16 +664,27 @@ function PriceEditorModal({
             <input value={effectiveDate} onChange={event => setEffectiveDate(event.target.value)} type="date" className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
           </label>
           <label className="space-y-2 text-sm font-medium text-[#2A2421]">
-            <span>Ghi chú</span>
-            <input value={note} onChange={event => setNote(event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+            <span>Ngày hết hiệu lực</span>
+            <input value={endDate} onChange={event => setEndDate(event.target.value)} type="date" className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
           </label>
         </div>
+        <label className="space-y-2 text-sm font-medium text-[#2A2421] block">
+          <span>Ghi chú</span>
+          <input value={note} onChange={event => setNote(event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+        </label>
         <div className="flex gap-4 border-t border-stone-200 pt-6">
           <button onClick={onClose} className="flex-1 border border-[#2A2421] py-4 text-[10px] font-bold uppercase tracking-[0.24em] text-[#2A2421]">
             Hủy bỏ
           </button>
           <button
-            onClick={() => onSave({ id: price?.id ?? '', label, unitPrice: Number(unitPrice || 0), note, effectiveDate })}
+            onClick={() => onSave({
+              id: price?.id ?? '',
+              unitPrice: Number(unitPrice || 0),
+              effectiveDate,
+              endDate,
+              note,
+              createdBy,
+            })}
             className="flex-1 bg-[#2A2421] py-4 text-[10px] font-bold uppercase tracking-[0.24em] text-white"
           >
             Lưu bảng giá

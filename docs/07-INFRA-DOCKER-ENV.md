@@ -1,5 +1,7 @@
 # 07. Infra, Docker, Env
 
+Tài liệu này mô tả môi trường chuẩn để chạy repo trên `localhost`.
+
 ## 7.1 Services local
 
 `docker-compose.yml` hiện định nghĩa:
@@ -47,7 +49,7 @@ Biến chính:
 - `frontend/nginx.conf`
 - `.dockerignore`
 
-## 7.6 Lệnh dự kiến
+## 7.6 Cách chạy chuẩn
 
 ### Chạy full local stack
 
@@ -55,7 +57,27 @@ Biến chính:
 docker compose up --build
 ```
 
-### Chạy frontend riêng
+### Chạy nền
+
+```bash
+docker compose up -d --build
+```
+
+### Dừng stack
+
+```bash
+docker compose down
+```
+
+### Xem logs
+
+```bash
+docker compose logs -f
+```
+
+## 7.7 Chạy tách service khi cần
+
+### Frontend riêng
 
 ```bash
 cd frontend
@@ -63,7 +85,7 @@ npm install
 npm run dev
 ```
 
-### Chạy backend riêng
+### Backend riêng
 
 ```bash
 cd backend
@@ -79,37 +101,29 @@ npm run prisma:generate
 npm run prisma:migrate
 ```
 
-## 7.7 Điều cần làm ngay khi bắt đầu implement backend
-
-1. Cài dependency backend.
-2. Generate Prisma client.
-3. Tạo migration đầu tiên.
-4. Implement `/health` + `/auth/login`.
-5. Nối frontend auth.
-
-## 7.8 Mục tiêu Docker sau khi chuyển khỏi mock
-
-Stack mục tiêu:
-
-- `frontend`: build static từ cùng codebase hiện tại
-- `api`: serve REST API + healthcheck
-- `db`: PostgreSQL
-- tùy chọn thêm `seed` job riêng cho local/staging
-
-Điều cần có thêm:
-
-- `api` healthcheck rõ ràng
-- command migrate riêng trước khi boot app
-- command seed riêng, không trộn vào startup production
-- biến env staging/production tách khỏi local
-
-## 7.9 Kế hoạch test hạ tầng sau migration
+## 7.8 Checklist local sau khi boot stack
 
 Tối thiểu cần verify:
 
 1. `docker compose up --build` chạy được full stack local.
-2. `api` kết nối DB và trả `/health`.
-3. frontend đọc được `VITE_API_BASE_URL`.
-4. migrate chạy được trên DB trống.
-5. seed QA chạy được trên DB staging giả lập.
-6. teardown/rebuild không làm hỏng state volume khi dev.
+2. Frontend mở được ở `http://localhost:8080`.
+3. API trả được `http://localhost:4000/health` nếu route đã có.
+4. Frontend đọc đúng `VITE_API_BASE_URL=http://localhost:4000/api/v1`.
+5. Postgres lên được và container `db` ở trạng thái healthy.
+
+## 7.9 Reset dữ liệu local
+
+Khi cần reset sạch toàn bộ local stack:
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
+Chỉ dùng lệnh này khi chấp nhận xóa volume Postgres local.
+
+## 7.10 Quy ước hạ tầng hiện tại
+
+- Local Docker là môi trường vận hành mặc định của repo.
+- Nếu có staging/production về sau thì phải tách docs riêng hoặc ghi rõ là tham chiếu tương lai.
+- Seed không được trộn vào startup mặc định nếu sau này cần state local ổn định hơn.

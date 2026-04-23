@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Breadcrumb } from 'antd';
 import { Link } from 'react-router-dom';
@@ -6,7 +6,7 @@ import { useAuthStore } from '@shared/store/useAuthStore';
 
 type SupplierCategory = 'Khách sạn' | 'Nhà hàng' | 'Vận chuyển' | 'Vé tham quan' | 'Các dịch vụ khác';
 type SupplierStatus = 'Hoạt động' | 'Dừng hoạt động';
-type TransportType = 'Xe' | 'Máy bay' | 'Thuyền' | 'Cano';
+type TransportType = 'Xe' | 'Máy bay';
 type LanguageOption = 'Tiếng Anh' | 'Tiếng Trung' | 'Tiếng Nhật' | 'Tiếng Hàn';
 
 interface SupplierPrice {
@@ -24,6 +24,7 @@ interface SupplierServiceLine {
   description: string;
   unit: string;
   quantity: number;
+  capacity?: number;
   transportType?: TransportType;
   priceMode?: 'Báo giá' | 'Niêm yết';
   menu?: string;
@@ -122,11 +123,12 @@ function createServiceDraft(category: SupplierFormState['category'], transportTy
     return {
       id: `draft-transport-${index}`,
       transportType,
-      name: transportType === 'Xe' ? 'Xe tham quan' : transportType === 'Máy bay' ? 'Vé máy bay đoàn' : `${transportType} tham quan`,
+      name: transportType === 'Xe' ? 'Xe 16 chỗ' : 'Vé máy bay đoàn',
       description: transportType === 'Xe' ? 'Đồng hành suốt hành trình' : 'Dịch vụ vận chuyển theo lượt',
-      unit: transportType === 'Xe' ? 'Xe' : 'Người',
+      unit: transportType === 'Xe' ? 'Xe' : 'Khách',
       quantity: 1,
-      priceMode: transportType === 'Xe' || transportType === 'Máy bay' ? 'Báo giá' : 'Niêm yết',
+      capacity: transportType === 'Xe' ? 16 : undefined,
+      priceMode: 'Báo giá',
       prices: [createPrice(`draft-price-${index}`, transportType === 'Xe' ? 8100000 : 320000)],
     };
   }
@@ -234,8 +236,8 @@ const initialSuppliers: SupplierRow[] = [
     establishedYear: '2014',
     description: 'Nhà xe chuyên tour ghép và tour riêng, có đội xe 16-45 chỗ.',
     services: [
-      { id: 'SUP002-S1', transportType: 'Xe', name: 'Xe tham quan', description: 'Đồng hành suốt hành trình', unit: 'Xe', quantity: 1, priceMode: 'Báo giá', prices: [createPrice('P2', 8100000)] },
-      { id: 'SUP002-S2', transportType: 'Thuyền', name: 'Thuyền tre Hội An', description: 'Mô tả ...', unit: 'Người', quantity: 1, priceMode: 'Niêm yết', prices: [createPrice('P3', 320000), createPrice('P4', 350000, 'Mùa cao điểm')] },
+      { id: 'SUP002-S1', transportType: 'Xe', name: 'Xe 16 chỗ', description: 'Đồng hành suốt hành trình', unit: 'Xe', quantity: 1, capacity: 16, priceMode: 'Báo giá', prices: [createPrice('P2', 8100000)] },
+      { id: 'SUP002-S2', transportType: 'Xe', name: 'Xe 25 chỗ', description: 'Phương án dự phòng', unit: 'Xe', quantity: 1, capacity: 25, priceMode: 'Báo giá', prices: [createPrice('P3', 9600000), createPrice('P4', 10200000, 'Mùa cao điểm')] },
     ],
     mealServices: [],
   },
@@ -524,6 +526,25 @@ export default function AdminSuppliers() {
   const updateSupplierForm = <K extends keyof SupplierFormState>(key: K, value: SupplierFormState[K]) => {
     setSupplierForm(previous => {
       if (key !== 'category') {
+        if (key === 'transportType') {
+          const nextTransportType = value as TransportType;
+          return {
+            ...previous,
+            transportType: nextTransportType,
+            services: nextTransportType === 'Máy bay'
+              ? []
+              : previous.services.length > 0
+                ? previous.services.map((service, index) => ({
+                    ...service,
+                    transportType: 'Xe',
+                    name: service.name || `Xe ${16 + index * 9} chỗ`,
+                    capacity: service.capacity ?? 16 + index * 9,
+                    unit: 'Xe',
+                    priceMode: 'Báo giá',
+                  }))
+                : [createServiceDraft(previous.category, 'Xe', 0)],
+          };
+        }
         return { ...previous, [key]: value };
       }
 
@@ -533,7 +554,9 @@ export default function AdminSuppliers() {
         ...nextBase,
         category: nextCategory,
         service: createSupplierSummary(nextCategory),
-        services: [createServiceDraft(nextCategory, nextBase.transportType, 0)],
+        services: nextCategory === 'Vận chuyển' && nextBase.transportType === 'Máy bay'
+          ? []
+          : [createServiceDraft(nextCategory, nextBase.transportType, 0)],
         mealServices: [],
       };
     });
@@ -554,6 +577,9 @@ export default function AdminSuppliers() {
 
   const addDraftService = (kind: 'main' | 'meal' = 'main') => {
     setSupplierForm(previous => {
+      if (previous.category === 'Vận chuyển' && previous.transportType === 'Máy bay' && kind === 'main') {
+        return previous;
+      }
       const targetKey = kind === 'main' ? 'services' : 'mealServices';
       const nextIndex = previous[targetKey].length;
       const nextService = createServiceDraft(previous.category, previous.transportType, nextIndex, kind);
@@ -589,7 +615,7 @@ export default function AdminSuppliers() {
       operatingArea: supplier.operatingArea,
       status: supplier.status,
       service: supplier.service,
-      transportType: supplier.services[0]?.transportType ?? 'Xe',
+      transportType: supplier.category === 'Vận chuyển' && supplier.services.length === 0 ? 'Máy bay' : supplier.services[0]?.transportType ?? 'Xe',
       includeMealService: supplier.mealServices.length > 0,
       services: supplier.services.map(service => ({ ...service, prices: service.prices.map(price => ({ ...price })) })),
       mealServices: supplier.mealServices.map(service => ({ ...service, prices: service.prices.map(price => ({ ...price })) })),
@@ -929,23 +955,11 @@ export default function AdminSuppliers() {
       {supplierEditorId && (
         <Modal
           title={supplierEditorId === 'new' ? 'Thêm nhà cung cấp' : `Sửa nhà cung cấp - ${editingSupplier?.name ?? ''}`}
-          subtitle={supplierEditorId === 'new' ? 'Màn sửa có Thêm dịch vụ và Thêm bảng giá.' : 'Màn sửa có Thêm dịch vụ, Thêm bảng giá và chỉnh sửa từng bảng giá ở cuối dòng.'}
+          subtitle={supplierEditorId === 'new' ? 'Thêm mới chỉ khai báo bảng dịch vụ. Bảng giá sẽ được bổ sung ở bước chỉnh sửa.' : 'Bảng dịch vụ hiển thị dạng bảng, bảng giá nằm trong từng phần mở rộng.'}
           onClose={resetSupplierEditor}
           wide
         >
           <div className="space-y-8">
-            <div className="flex flex-wrap justify-end gap-3">
-              <button onClick={() => addDraftService('main')} className="border border-secondary px-5 py-3 text-xs font-bold uppercase tracking-widest text-secondary">
-                Thêm dịch vụ
-              </button>
-              <button
-                onClick={() => setQuotePopup({ supplierId: supplierEditorId === 'new' ? 'new' : String(supplierEditorId), kind: 'add' })}
-                className="border border-secondary px-5 py-3 text-xs font-bold uppercase tracking-widest text-secondary"
-              >
-                Thêm bảng giá
-              </button>
-            </div>
-
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <label className="space-y-2 text-sm font-medium text-primary">
                 <span>Phân loại</span>
@@ -1002,8 +1016,6 @@ export default function AdminSuppliers() {
                 <select value={supplierForm.transportType} onChange={event => updateSupplierForm('transportType', event.target.value as TransportType)} className="w-full border border-outline-variant/50 px-4 py-3 bg-white" aria-label="Loại phương tiện">
                   <option>Xe</option>
                   <option>Máy bay</option>
-                  <option>Thuyền</option>
-                  <option>Cano</option>
                 </select>
               </label>
             )}
@@ -1024,10 +1036,12 @@ export default function AdminSuppliers() {
             )}
 
             <SupplierEditorSections
+              mode={supplierEditorId === 'new' ? 'create' : 'edit'}
               supplierForm={supplierForm}
+              addDraftService={addDraftService}
               updateDraftService={updateDraftService}
-              onEditPrice={(serviceId, mealService) => {
-                const supplierId = supplierEditorId === 'new' ? 'new' : String(supplierEditorId);
+              onAddPrice={(serviceId, mealService) => {
+                const supplierId = String(supplierEditorId);
                 setQuotePopup({ supplierId, kind: 'edit', serviceId, mealService });
               }}
             />
@@ -1083,55 +1097,9 @@ export default function AdminSuppliers() {
       {quotePopup && (
         <QuotePopupModal
           quotePopup={quotePopup}
-          supplier={quotePopup.supplierId === 'new'
-            ? {
-              id: 'new',
-              name: supplierForm.name || 'Nhà cung cấp mới',
-              phone: supplierForm.phone,
-              email: supplierForm.email,
-              category: supplierForm.category,
-              service: supplierForm.service,
-              operatingArea: supplierForm.operatingArea,
-              status: supplierForm.status,
-              address: supplierForm.address,
-              establishedYear: supplierForm.establishedYear,
-              description: supplierForm.description,
-              services: supplierForm.services,
-              mealServices: supplierForm.includeMealService ? supplierForm.mealServices : [],
-            }
-            : quoteSupplier}
+          supplier={quoteSupplier}
           onClose={() => setQuotePopup(null)}
-          onApply={(priceMap, reason, fromDate, toDate) => {
-            if (quotePopup.supplierId === 'new') {
-              const updateLines = (lines: SupplierServiceLine[], mealService = false) => lines.map(service => {
-                const key = `${mealService ? 'meal' : 'main'}:${service.id}`;
-                const nextValue = priceMap[key];
-                if (!nextValue) return service;
-                return {
-                  ...service,
-                  prices: [
-                    ...service.prices,
-                    {
-                      id: `${service.id}-${Date.now()}`,
-                      fromDate,
-                      toDate,
-                      unitPrice: nextValue,
-                      note: reason || 'Cập nhật báo giá',
-                      createdBy: 'Tên điều phối',
-                    },
-                  ],
-                };
-              });
-              setSupplierForm(previous => ({
-                ...previous,
-                services: updateLines(previous.services),
-                mealServices: updateLines(previous.mealServices, true),
-              }));
-              setQuotePopup(null);
-              return;
-            }
-            applyQuoteChanges(priceMap, reason, fromDate, toDate);
-          }}
+          onApply={applyQuoteChanges}
         />
       )}
     </div>
@@ -1139,74 +1107,198 @@ export default function AdminSuppliers() {
 }
 
 function SupplierEditorSections({
+  mode,
   supplierForm,
+  addDraftService,
   updateDraftService,
-  onEditPrice,
+  onAddPrice,
 }: {
+  mode: 'create' | 'edit';
   supplierForm: SupplierFormState;
+  addDraftService: (kind?: 'main' | 'meal') => void;
   updateDraftService: (serviceId: string, changes: Partial<SupplierServiceLine>, kind?: 'main' | 'meal') => void;
-  onEditPrice: (serviceId: string, mealService: boolean) => void;
+  onAddPrice: (serviceId: string, mealService: boolean) => void;
 }) {
-  const renderServiceEditor = (title: string, services: SupplierServiceLine[], kind: 'main' | 'meal' = 'main') => (
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+
+  const updateLatestPrice = (service: SupplierServiceLine, value: number, kind: 'main' | 'meal') => {
+    const prices = service.prices.length > 0
+      ? service.prices.map((price, index) => index === service.prices.length - 1 ? { ...price, unitPrice: value } : price)
+      : [createPrice(`${service.id}-draft`, value)];
+    updateDraftService(service.id, { prices }, kind);
+  };
+
+  const renderHeader = (title: string, kind: 'main' | 'meal') => (
+    <div className="flex items-center justify-between">
+      <h3 className="font-serif text-xl text-primary">{title}</h3>
+      {!(supplierForm.category === 'Vận chuyển' && supplierForm.transportType === 'Máy bay' && kind === 'main') && (
+        <button onClick={() => addDraftService(kind)} className="border border-secondary px-4 py-2 text-xs font-bold uppercase tracking-widest text-secondary">
+          Thêm dịch vụ
+        </button>
+      )}
+    </div>
+  );
+
+  const renderCreateTable = (title: string, services: SupplierServiceLine[], kind: 'main' | 'meal' = 'main') => (
     <div className="space-y-4 border border-outline-variant/20 p-4">
-      <div className="flex items-center justify-between">
-        <h3 className="font-serif text-xl text-primary">{title}</h3>
-        <span className="text-xs text-primary/40">{services.length} dịch vụ</span>
-      </div>
-      {services.map((service, index) => (
-        <div key={service.id} className="space-y-4 border border-outline-variant/25 bg-surface-container-low/30 p-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <label className="space-y-2 text-sm font-medium text-primary">
-              <span>Tên dịch vụ {index + 1}</span>
-              <input value={service.name} onChange={event => updateDraftService(service.id, { name: event.target.value }, kind)} className="w-full border border-outline-variant/50 bg-white px-4 py-3" />
-            </label>
-            <label className="space-y-2 text-sm font-medium text-primary">
-              <span>Mô tả</span>
-              <input value={service.description} onChange={event => updateDraftService(service.id, { description: event.target.value }, kind)} className="w-full border border-outline-variant/50 bg-white px-4 py-3" />
-            </label>
-            {supplierForm.category === 'Vận chuyển' && kind === 'main' && (
-              <>
-                <label className="space-y-2 text-sm font-medium text-primary">
-                  <span>Loại phương tiện</span>
-                  <select value={service.transportType} onChange={event => updateDraftService(service.id, { transportType: event.target.value as TransportType }, kind)} className="w-full border border-outline-variant/50 bg-white px-4 py-3">
-                    <option>Xe</option>
-                    <option>Máy bay</option>
-                    <option>Thuyền</option>
-                    <option>Cano</option>
-                  </select>
-                </label>
-                <label className="space-y-2 text-sm font-medium text-primary">
-                  <span>Hình thức giá</span>
-                  <select value={service.priceMode} onChange={event => updateDraftService(service.id, { priceMode: event.target.value as SupplierServiceLine['priceMode'] }, kind)} className="w-full border border-outline-variant/50 bg-white px-4 py-3">
-                    <option>Báo giá</option>
-                    <option>Niêm yết</option>
-                  </select>
-                </label>
-              </>
-            )}
-            {(supplierForm.category === 'Nhà hàng' || kind === 'meal') && (
-              <>
-                <label className="space-y-2 text-sm font-medium text-primary">
-                  <span>Menu</span>
-                  <input value={service.menu ?? ''} onChange={event => updateDraftService(service.id, { menu: event.target.value }, kind)} className="w-full border border-outline-variant/50 bg-white px-4 py-3" />
-                </label>
-                <label className="space-y-2 text-sm font-medium text-primary">
-                  <span>Ghi chú</span>
-                  <input value={service.note ?? ''} onChange={event => updateDraftService(service.id, { note: event.target.value }, kind)} className="w-full border border-outline-variant/50 bg-white px-4 py-3" />
-                </label>
-              </>
-            )}
-          </div>
-          <ServicePriceTable rows={service.prices} showEditAction onEdit={() => onEditPrice(service.id, kind === 'meal')} />
+      {renderHeader(title, kind)}
+      {supplierForm.category === 'Vận chuyển' && supplierForm.transportType === 'Máy bay' && kind === 'main' ? (
+        <div className="border border-dashed border-outline-variant/40 p-5 text-sm text-primary/50">
+          Loại vận chuyển máy bay không có bảng dịch vụ riêng ở bước thêm mới.
         </div>
-      ))}
+      ) : (
+        <div className="overflow-x-auto border border-outline-variant/20">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-surface-container-low">
+              <tr>
+                {(supplierForm.category === 'Khách sạn' && kind === 'main'
+                  ? ['Tên dịch vụ', 'Mô tả', 'Đơn vị', 'Số lượng', 'Đơn giá']
+                  : supplierForm.category === 'Khách sạn' && kind === 'meal'
+                    ? ['Tên dịch vụ', 'Menu', 'Ghi chú']
+                    : supplierForm.category === 'Nhà hàng'
+                      ? ['Tên dịch vụ', 'Mô tả', 'Menu', 'Ghi chú']
+                      : ['Tên dịch vụ', 'Số chỗ']
+                ).map(header => (
+                  <th key={header} className="px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-primary/50">{header}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {services.map(service => (
+                <tr key={service.id} className="border-t border-outline-variant/10">
+                  {supplierForm.category === 'Khách sạn' && kind === 'main' ? (
+                    <>
+                      <td className="px-4 py-3"><input value={service.name} onChange={event => updateDraftService(service.id, { name: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                      <td className="px-4 py-3"><input value={service.description} onChange={event => updateDraftService(service.id, { description: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                      <td className="px-4 py-3"><input value={service.unit} onChange={event => updateDraftService(service.id, { unit: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                      <td className="px-4 py-3"><input type="number" value={service.quantity} onChange={event => updateDraftService(service.id, { quantity: Number(event.target.value || 0) }, kind)} className="w-24 border border-outline-variant/40 px-3 py-2" /></td>
+                      <td className="px-4 py-3"><input type="number" value={service.prices.at(-1)?.unitPrice ?? 0} onChange={event => updateLatestPrice(service, Number(event.target.value || 0), kind)} className="w-32 border border-outline-variant/40 px-3 py-2" /></td>
+                    </>
+                  ) : supplierForm.category === 'Khách sạn' && kind === 'meal' ? (
+                    <>
+                      <td className="px-4 py-3"><input value={service.name} onChange={event => updateDraftService(service.id, { name: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                      <td className="px-4 py-3"><input value={service.menu ?? ''} onChange={event => updateDraftService(service.id, { menu: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                      <td className="px-4 py-3"><input value={service.note ?? ''} onChange={event => updateDraftService(service.id, { note: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                    </>
+                  ) : supplierForm.category === 'Nhà hàng' ? (
+                    <>
+                      <td className="px-4 py-3"><input value={service.name} onChange={event => updateDraftService(service.id, { name: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                      <td className="px-4 py-3"><input value={service.description} onChange={event => updateDraftService(service.id, { description: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                      <td className="px-4 py-3"><input value={service.menu ?? ''} onChange={event => updateDraftService(service.id, { menu: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                      <td className="px-4 py-3"><input value={service.note ?? ''} onChange={event => updateDraftService(service.id, { note: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-4 py-3"><input value={service.name} onChange={event => updateDraftService(service.id, { name: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                      <td className="px-4 py-3"><input type="number" value={service.capacity ?? 16} onChange={event => updateDraftService(service.id, { capacity: Number(event.target.value || 0), name: `Xe ${Number(event.target.value || 0)} chỗ` }, kind)} className="w-24 border border-outline-variant/40 px-3 py-2" /></td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderEditTable = (title: string, services: SupplierServiceLine[], kind: 'main' | 'meal' = 'main') => (
+    <div className="space-y-4 border border-outline-variant/20 p-4">
+      {renderHeader(title, kind)}
+      {supplierForm.category === 'Vận chuyển' && supplierForm.transportType === 'Máy bay' && kind === 'main' ? (
+        <div className="border border-dashed border-outline-variant/40 p-5 text-sm text-primary/50">
+          Loại vận chuyển máy bay không có bảng dịch vụ riêng.
+        </div>
+      ) : (
+        <div className="overflow-x-auto border border-outline-variant/20">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-surface-container-low">
+              <tr>
+                {(supplierForm.category === 'Khách sạn' && kind === 'main'
+                  ? ['Tên dịch vụ', 'Mô tả', 'Đơn vị', 'Số lượng', '']
+                  : supplierForm.category === 'Khách sạn' && kind === 'meal'
+                    ? ['Tên dịch vụ', 'Menu', 'Ghi chú', '']
+                    : supplierForm.category === 'Nhà hàng'
+                      ? ['Tên dịch vụ', 'Mô tả', 'Menu', 'Ghi chú', '']
+                      : ['Tên dịch vụ', 'Số chỗ', '']
+                ).map(header => (
+                  <th key={header} className="px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-primary/50">{header}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {services.map(service => {
+                const expandedKey = `${kind}:${service.id}`;
+                const isExpanded = Boolean(expandedRows[expandedKey]);
+                return (
+                  <Fragment key={service.id}>
+                    <tr className="border-t border-outline-variant/10">
+                      {supplierForm.category === 'Khách sạn' && kind === 'main' ? (
+                        <>
+                          <td className="px-4 py-3"><input value={service.name} onChange={event => updateDraftService(service.id, { name: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                          <td className="px-4 py-3"><input value={service.description} onChange={event => updateDraftService(service.id, { description: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                          <td className="px-4 py-3"><input value={service.unit} onChange={event => updateDraftService(service.id, { unit: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                          <td className="px-4 py-3"><input type="number" value={service.quantity} onChange={event => updateDraftService(service.id, { quantity: Number(event.target.value || 0) }, kind)} className="w-24 border border-outline-variant/40 px-3 py-2" /></td>
+                        </>
+                      ) : supplierForm.category === 'Khách sạn' && kind === 'meal' ? (
+                        <>
+                          <td className="px-4 py-3"><input value={service.name} onChange={event => updateDraftService(service.id, { name: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                          <td className="px-4 py-3"><input value={service.menu ?? ''} onChange={event => updateDraftService(service.id, { menu: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                          <td className="px-4 py-3"><input value={service.note ?? ''} onChange={event => updateDraftService(service.id, { note: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                        </>
+                      ) : supplierForm.category === 'Nhà hàng' ? (
+                        <>
+                          <td className="px-4 py-3"><input value={service.name} onChange={event => updateDraftService(service.id, { name: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                          <td className="px-4 py-3"><input value={service.description} onChange={event => updateDraftService(service.id, { description: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                          <td className="px-4 py-3"><input value={service.menu ?? ''} onChange={event => updateDraftService(service.id, { menu: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                          <td className="px-4 py-3"><input value={service.note ?? ''} onChange={event => updateDraftService(service.id, { note: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-4 py-3"><input value={service.name} onChange={event => updateDraftService(service.id, { name: event.target.value }, kind)} className="w-full border border-outline-variant/40 px-3 py-2" /></td>
+                          <td className="px-4 py-3"><input type="number" value={service.capacity ?? 16} onChange={event => updateDraftService(service.id, { capacity: Number(event.target.value || 0), name: `Xe ${Number(event.target.value || 0)} chỗ` }, kind)} className="w-24 border border-outline-variant/40 px-3 py-2" /></td>
+                        </>
+                      )}
+                      <td className="px-4 py-3 text-right">
+                        <button onClick={() => setExpandedRows(previous => ({ ...previous, [expandedKey]: !isExpanded }))} className="text-xs font-bold uppercase tracking-widest text-secondary">
+                          {isExpanded ? 'Thu gọn' : 'Mở rộng'}
+                        </button>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr className="border-t border-outline-variant/10 bg-surface-container-low/20">
+                        <td colSpan={supplierForm.category === 'Khách sạn' && kind === 'main' ? 5 : supplierForm.category === 'Nhà hàng' || kind === 'meal' ? 5 : 3} className="px-4 py-4">
+                          <div className="space-y-3">
+                            <div className="flex justify-end">
+                              <button onClick={() => onAddPrice(service.id, kind === 'meal')} className="border border-secondary px-4 py-2 text-xs font-bold uppercase tracking-widest text-secondary">
+                                Thêm bảng giá
+                              </button>
+                            </div>
+                            <ServicePriceTable rows={service.prices} />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 
   return (
     <div className="space-y-5">
-      {renderServiceEditor(supplierForm.category === 'Khách sạn' ? 'Dịch vụ lưu trú' : 'Dịch vụ chính', supplierForm.services)}
-      {supplierForm.category === 'Khách sạn' && supplierForm.includeMealService && renderServiceEditor('Dịch vụ ăn kèm', supplierForm.mealServices, 'meal')}
+      {mode === 'create'
+        ? renderCreateTable(supplierForm.category === 'Khách sạn' ? 'Dịch vụ lưu trú' : 'Bảng dịch vụ', supplierForm.services)
+        : renderEditTable(supplierForm.category === 'Khách sạn' ? 'Dịch vụ lưu trú' : 'Bảng dịch vụ', supplierForm.services)}
+      {supplierForm.category === 'Khách sạn' && supplierForm.includeMealService && (
+        mode === 'create'
+          ? renderCreateTable('Dịch vụ ăn kèm', supplierForm.mealServices, 'meal')
+          : renderEditTable('Dịch vụ ăn kèm', supplierForm.mealServices, 'meal')
+      )}
     </div>
   );
 }

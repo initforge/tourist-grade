@@ -24,7 +24,7 @@ import {
 
 const STORE_KEY = '__travela_sales_vouchers';
 const SEED_VERSION_KEY = '__travela_sales_vouchers_seed_version';
-const SEED_VERSION = '2026-04-20-voucher-rules';
+const SEED_VERSION = '2026-04-23-voucher-rules-v2';
 
 type FormState = {
   id?: string; code: string; type: VoucherType; value: string; startDate: string; endDate: string;
@@ -111,9 +111,21 @@ function validateFields(form: FormState) {
 
 function validate(form: FormState, action: 'save' | 'send') {
   const errors = validateFields(form);
-  if (form.startDate && action === 'save' && !canSave(form.startDate, form.createdAt)) errors.startDate = 'Ngày bắt đầu phải cách ngày tạo ít nhất 10 ngày';
+  if (form.startDate && action === 'save' && !canSave(form.startDate)) errors.startDate = 'Ngày bắt đầu phải cách ngày hiện tại ít nhất 10 ngày';
   if (form.startDate && action === 'send' && !canSend(form.startDate)) errors.startDate = 'Voucher phải được gửi phê duyệt trước ngày bắt đầu ít nhất 7 ngày';
   return errors;
+}
+
+function WarningIcon({ title }: { title: string }) {
+  return (
+    <span
+      className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 text-amber-700 border border-amber-200"
+      title={title}
+      aria-label={title}
+    >
+      <span className="material-symbols-outlined text-[14px]">warning</span>
+    </span>
+  );
 }
 
 function FormDrawer({ form, setForm, onClose, onSave, onSend }: { form: FormState; setForm: (form: FormState) => void; onClose: () => void; onSave: () => void; onSend: () => void; }) {
@@ -122,7 +134,7 @@ function FormDrawer({ form, setForm, onClose, onSave, onSend }: { form: FormStat
   const updateType = (type: VoucherType) => setForm({ ...form, type, value: digitsOnly(form.value) });
   const toggleTour = (id: string) => update('applicableTours', form.applicableTours.includes(id) ? form.applicableTours.filter((item) => item !== id) : [...form.applicableTours, id]);
   const hasFieldErrors = Object.keys(validateFields(form)).length > 0;
-  const saveAllowed = !hasFieldErrors && canSave(form.startDate, form.createdAt);
+  const saveAllowed = !hasFieldErrors && canSave(form.startDate);
   const sendAllowed = !hasFieldErrors && canSend(form.startDate);
   const submitSave = () => { const next = validate(form, 'save'); setErrors(next); if (!Object.keys(next).length) onSave(); };
   const submitSend = () => { const next = validate(form, 'send'); setErrors(next); if (!Object.keys(next).length) onSend(); };
@@ -251,7 +263,7 @@ function ListPage({ vouchers, onCreate, onEdit, onDelete, onSend }: { vouchers: 
                     <td className="px-5 py-4 text-sm font-bold text-[#D4AF37]">{formatVoucherValue(v)}</td>
                     <td className="px-5 py-4 text-sm text-[#2A2421]/70">
                       <div>{v.startDate && v.endDate ? `${v.startDate} → ${v.endDate}` : '-'}</div>
-                      {v.status === 'draft' && warnDraft(v.startDate) && <div className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold" title={SALES_DRAFT_WARNING}><span className="material-symbols-outlined text-[12px]">warning</span>Sắp đến hạn gửi duyệt</div>}
+                      {v.status === 'draft' && warnDraft(v.startDate) && <div className="mt-1"><WarningIcon title={SALES_DRAFT_WARNING} /></div>}
                     </td>
                     <td className="px-5 py-4 text-sm text-[#2A2421]/70">{v.used} / {v.limit}</td>
                     <td className="px-5 py-4">{v.applicableTours.length > 0 ? <div className="flex flex-wrap gap-1">{v.applicableTours.slice(0,2).map((tourId) => <span key={tourId} className="px-1.5 py-0.5 bg-[#D4AF37]/10 text-[#D4AF37] text-[10px] font-bold rounded">{tourName(tourId)}</span>)}</div> : <span className="text-[11px] text-[#2A2421]/40">Tất cả</span>}</td>
@@ -306,7 +318,7 @@ function DetailPage({ voucher, onEdit, onDelete, onSend }: { voucher: Voucher; o
           {voucher.status === 'rejected' && voucher.rejectionReason && <div className="mb-6 p-3 border border-red-200 bg-red-50 text-sm text-red-700">Lý do: {voucher.rejectionReason}</div>}
           <div className="flex items-center justify-between mb-6">
             <span className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded ${VOUCHER_STATUS_STYLE[voucher.status]}`}>{VOUCHER_STATUS_LABEL[voucher.status]}</span>
-            {voucher.status === 'draft' && warnDraft(voucher.startDate) && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold" title={SALES_DRAFT_WARNING}><span className="material-symbols-outlined text-[12px]">warning</span>Sắp đến hạn gửi duyệt</span>}
+            {voucher.status === 'draft' && warnDraft(voucher.startDate) && <WarningIcon title={SALES_DRAFT_WARNING} />}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {[

@@ -31,16 +31,26 @@ test?.describe('Sales Booking Detail Verification', () => {
     await page?.getByRole('button', { name: /Chỉnh sửa$/ })?.first()?.click();
     const modal = page?.getByRole('dialog');
     const saveButton = modal?.getByRole('button', { name: /Lưu/ });
+    const childDocumentInput = modal?.locator('input[placeholder="Số GKS"]');
+    const adultDocumentInput = modal?.locator('input[placeholder="012345678901"]')?.first();
 
     await expect(saveButton)?.toBeDisabled();
 
-    await modal?.locator('input[placeholder="Số GKS"]')?.fill('GKS-2018-0001');
+    await childDocumentInput?.fill('@@');
+    await expect(modal?.getByText(/ký tự \/ \. -/i))?.toBeVisible();
+    await expect(saveButton)?.toBeDisabled();
+
+    await childDocumentInput?.fill('GKS-2018-0001');
     await expect(saveButton)?.toBeEnabled();
 
-    await modal?.locator('input[placeholder="012345678901"]')?.first()?.fill('ABC');
+    await adultDocumentInput?.fill('ABC');
+    await expect(modal?.getByText('CCCD/Căn cước phải gồm đúng 12 chữ số.'))?.toBeVisible();
     await expect(saveButton)?.toBeDisabled();
 
-    await modal?.locator('input[placeholder="012345678901"]')?.first()?.fill('001090034567');
+    await adultDocumentInput?.fill('00109003456');
+    await expect(saveButton)?.toBeDisabled();
+
+    await adultDocumentInput?.fill('001090034567');
     await expect(saveButton)?.toBeEnabled();
   });
 
@@ -200,6 +210,11 @@ test?.describe('Sales Booking Detail Verification', () => {
     await saveButton?.click();
 
     await expect(page?.getByText(/Đã gửi email thông báo cho khách/i))?.toBeVisible();
+    await expect(page?.getByText(/Đã chỉnh sửa bởi/i))?.toBeVisible();
+
+    await page?.reload();
+    await page?.waitForLoadState('domcontentloaded');
+    await expect(page?.getByAltText(/Bill hoàn tiền/i))?.toBeVisible();
     await expect(page?.getByText(/Đã chỉnh sửa bởi/i))?.toBeVisible();
   });
 });

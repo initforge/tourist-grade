@@ -12,9 +12,16 @@ export interface TourProgram {
   transport: 'xe' | 'maybay';
   arrivalPoint?: string;
   tourType: 'mua_le' | 'quanh_nam';
+  routeDescription?: string;
   holiday?: string;
+  selectedDates?: string[];
+  weekdays?: string[];
+  yearRoundStartDate?: string;
+  yearRoundEndDate?: string;
+  coverageMonths?: number;
   bookingDeadline: number;
   status: 'draft' | 'active' | 'inactive';
+  inactiveReason?: string;
   itinerary: ProgramItineraryDay[];
   pricingConfig: PricingConfig;
   createdBy: string;
@@ -58,6 +65,38 @@ export const TOUR_INSTANCE_STATUS_LABEL: Record<TourInstanceStatus, string> = {
   cho_quyet_toan: 'Chờ quyết toán',
   hoan_thanh: 'Hoàn thành',
 };
+
+const TOUR_PROGRAM_STORAGE_KEY = '__travela_tour_programs';
+
+export function loadTourPrograms(): TourProgram[] {
+  if (typeof localStorage === 'undefined') {
+    return mockTourPrograms;
+  }
+
+  try {
+    const raw = localStorage?.getItem(TOUR_PROGRAM_STORAGE_KEY);
+    if (!raw) {
+      return mockTourPrograms;
+    }
+
+    const parsed = JSON.parse(raw) as TourProgram[];
+    return Array.isArray(parsed) ? parsed : mockTourPrograms;
+  } catch {
+    return mockTourPrograms;
+  }
+}
+
+export function saveTourPrograms(programs: TourProgram[]) {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+
+  localStorage?.setItem(TOUR_PROGRAM_STORAGE_KEY, JSON.stringify(programs));
+}
+
+export function resetTourPrograms() {
+  saveTourPrograms(mockTourPrograms);
+}
 
 export const TOUR_INSTANCE_STATUS_STYLE: Record<TourInstanceStatus, string> = {
   cho_duyet_ban: 'bg-amber-100 text-amber-700 border-amber-300',
@@ -307,6 +346,11 @@ export const mockTourPrograms: TourProgram[] = [
     duration: { days: 3, nights: 2 },
     transport: 'xe',
     tourType: 'quanh_nam',
+    routeDescription: 'Du thuyền nghỉ dưỡng cao cấp tại Hạ Long, phù hợp mở bán quanh năm cho nhóm khách gia đình và khách doanh nghiệp.',
+    weekdays: ['t4', 't6', 'cn'],
+    yearRoundStartDate: '2026-04-01',
+    yearRoundEndDate: '2026-09-30',
+    coverageMonths: 3,
     bookingDeadline: 7,
     status: 'active',
     itinerary: [
@@ -337,7 +381,9 @@ export const mockTourPrograms: TourProgram[] = [
     transport: 'maybay',
     arrivalPoint: 'Osaka',
     tourType: 'mua_le',
+    routeDescription: 'Hành trình mùa lá đỏ Nhật Bản kết hợp Osaka, Kyoto và Nara với trải nghiệm văn hóa và ẩm thực đặc trưng.',
     holiday: 'Mùa thu Nhật Bản',
+    selectedDates: ['2026-10-15', '2026-10-18', '2026-10-22'],
     bookingDeadline: 21,
     status: 'active',
     itinerary: [
@@ -370,6 +416,11 @@ export const mockTourPrograms: TourProgram[] = [
     duration: { days: 3, nights: 2 },
     transport: 'xe',
     tourType: 'quanh_nam',
+    routeDescription: 'Tour Hạ Long 3 ngày 2 đêm đang ở trạng thái nháp để điều chỉnh trước khi gửi duyệt.',
+    weekdays: ['t2', 't4', 't6'],
+    yearRoundStartDate: '2026-06-01',
+    yearRoundEndDate: '2026-08-31',
+    coverageMonths: 4,
     bookingDeadline: 7,
     status: 'draft',
     itinerary: [
@@ -399,8 +450,14 @@ export const mockTourPrograms: TourProgram[] = [
     duration: { days: 2, nights: 1 },
     transport: 'xe',
     tourType: 'quanh_nam',
+    routeDescription: 'Chương trình Sapa đã ngừng hoạt động để rà soát lại đối tác và chính sách giá.',
+    weekdays: ['t5', 't7'],
+    yearRoundStartDate: '2026-05-01',
+    yearRoundEndDate: '2026-07-31',
+    coverageMonths: 2,
     bookingDeadline: 10,
-    status: 'draft',
+    status: 'inactive',
+    inactiveReason: 'Tạm dừng để cập nhật lại giá phòng và đối tác vận chuyển',
     itinerary: [
       { day: 1, title: 'Hà Nội - Sapa', description: 'Xe Limousine đ?n khách từ Hà Nội, khởi hành sáng sớm?. Đến Sapa, thăm bản Cót Cót, cầu Máy và thức Bạc?.', meals: ['lunch', 'dinner'] },
       { day: 2, title: 'Sapa - Hà Nội', description: 'Buổi sáng trekking Fansipan (hoặc ngắm cảnh núi từ cáp treo), thăm chợ Sapa, trở về Hà Nội buổi tối?.', meals: ['breakfast', 'lunch'] },

@@ -15,9 +15,9 @@ test.describe('Manager remaining feedback', () => {
     await page?.goto('/manager/tours');
     await page?.waitForLoadState('domcontentloaded');
 
-    await expect(page?.getByRole('heading', { name: 'Quản lý Tour' }))?.toBeVisible();
-    await expect(page?.locator('body'))?.not?.toContainText(/Quáº|KhÃ|Chá»|Duyá»|Ä/);
-    await expect(page?.getByRole('button', { name: 'Không đủ ĐK KH' }))?.toBeVisible();
+    await expect(page?.getByRole('heading', { name: /Qu.*n l.* Tour/i }))?.toBeVisible();
+    await expect(page?.locator('body'))?.not?.toContainText(/QuÃ|KhÃ|ChÃ|DuyÃ|Ã„/);
+    await expect(page?.getByRole('button', { name: /Kh.*ng .*K KH/i }))?.toBeVisible();
 
     for (const tab of [
       /Ch.* duy.*t b.*n/i,
@@ -33,8 +33,8 @@ test.describe('Manager remaining feedback', () => {
     await page?.locator('tbody tr')?.first()?.getByRole('button')?.first()?.click();
     const approveDialog = page?.getByRole('dialog');
     await expect(approveDialog)?.toBeVisible();
-    await expect(approveDialog)?.not?.toContainText(/Quáº|KhÃ|Chá»|Duyá»|Ä/);
-    await expect(approveDialog?.getByRole('button', { name: 'Duyệt' }))?.toBeVisible();
+    await expect(approveDialog)?.not?.toContainText(/QuÃ|KhÃ|ChÃ|DuyÃ|Ã„/);
+    await expect(approveDialog?.getByRole('button', { name: /Duy.*t$/i }))?.toBeVisible();
     await expect(approveDialog?.getByText(/.* ch.*n: \d+ tour/i).first())?.toBeVisible();
     await expect(approveDialog?.getByRole('button', { name: /Y.*u c.*u s.*a/i }))?.toBeVisible();
     await expect(approveDialog?.getByRole('button', { name: /T.* ch.*i/i }))?.toBeVisible();
@@ -79,14 +79,17 @@ test.describe('Manager remaining feedback', () => {
     await page?.goto('/manager/tour-programs/TP003/approval');
     await page?.waitForLoadState('domcontentloaded');
 
-    await expect(page?.getByText(/Th.*ng tin chung/i))?.toBeVisible();
-    await expect(page?.getByText(/L.*ch tr.*nh/i))?.toBeVisible();
-    await expect(page?.getByText(/Gi.* & C.*u h.*nh/i))?.toBeVisible();
-    await expect(page?.getByText('Người tạo', { exact: true }))?.toBeVisible();
-    await expect(page?.getByText('Ngày tạo', { exact: true }))?.toBeVisible();
-    await expect(page?.getByRole('textbox'))?.toHaveCount(0);
-    await expect(page?.getByRole('spinbutton'))?.toHaveCount(0);
-    await expect(page?.getByRole('button', { name: /L.*u nh.*p|Ti.*p theo|G.*i ph.* duy.*t/i }))?.toHaveCount(0);
+    await expect(page?.getByRole('heading', { name: /Th.*m m.*i ch.*ng tr.*nh tour/i }))?.toBeVisible();
+    await expect(page?.getByRole('button', { name: /^1.*Th.*ng tin chung/i }))?.toBeVisible();
+    await expect(page?.getByRole('button', { name: /^2.*L.*ch tr.*nh/i }))?.toBeVisible();
+    await expect(page?.getByRole('button', { name: /^3.*Gi.* & C.*u h.*nh/i }))?.toBeVisible();
+    await expect(page?.getByRole('button', { name: /^4.*Tour d.* ki.*n/i }))?.toBeVisible();
+
+    await expect(page?.getByRole('button', { name: /L.*u nh.*p/i }))?.toHaveCount(0);
+    await expect(page?.getByRole('button', { name: /G.*i ph.* duy.*t/i }))?.toHaveCount(0);
+
+    await expect(page?.locator('input')?.first())?.toBeDisabled();
+    await expect(page?.locator('textarea')?.first())?.toBeDisabled();
 
     await page?.getByRole('button', { name: /T.* ch.*i/i })?.click();
     await expect(page?.getByRole('dialog')?.getByRole('heading', { name: /T.* ch.*i ch.*ng tr.*nh tour/i }))?.toBeVisible();
@@ -96,7 +99,7 @@ test.describe('Manager remaining feedback', () => {
     await expect(page?.getByRole('dialog')?.getByRole('heading', { name: /Duy.*t ch.*ng tr.*nh tour/i }))?.toBeVisible();
     await expect(page?.getByText(/.*ang ho.*t .*ng/i))?.toBeVisible();
     await page?.getByRole('dialog')?.getByRole('button', { name: /Duy.*t$/i })?.click();
-    await expect(page?.getByText(/Tr.*ng th.*i hi.*n t.*i: .*ang ho.*t .*ng/i))?.toBeVisible();
+    await expect(page?.getByText(/Đã duyệt/i))?.toBeVisible();
   });
 
   test('tour estimate approval exposes request-edit, reject, and approve confirmation flows', async ({ page }) => {

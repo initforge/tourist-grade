@@ -25,6 +25,7 @@ export default function TourSettlement() {
   const location = useLocation();
   const navigate = useNavigate();
   const basePrefix = location?.pathname?.startsWith('/manager') ? '/manager' : '/coordinator';
+  const isReadOnly = Boolean(location.state?.readOnly);
 
   const instance = mockTourInstances?.find(i => i.id === id);
 
@@ -136,7 +137,7 @@ export default function TourSettlement() {
           <h1 className="font-serif text-3xl text-[var(--color-primary)]">Báo Cáo Quyết Toán Tour</h1>
           <p className="text-sm text-[var(--color-primary)]/50 mt-1">{instance?.programName} - {instance?.departureDate}</p>
         </div>
-        <div className="flex gap-4">
+        {!isReadOnly && <div className="flex gap-4">
           <button onClick={() => message.success('Đã lưu nháp quyết toán')} className="px-6 py-2 border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-black/5 text-sm uppercase tracking-widest transition-colors font-medium">
             Lưu Nháp
           </button>
@@ -146,7 +147,7 @@ export default function TourSettlement() {
           }} className="px-6 py-2 bg-[var(--color-primary)] text-white hover:bg-black text-sm uppercase tracking-widest transition-colors font-medium shadow-md">
             Hoàn Tất Quyết Toán
           </button>
-        </div>
+        </div>}
       </div>
 
       <div className="flex gap-8 mb-8 border-b border-[#D0C5AF]/40">
@@ -209,6 +210,7 @@ export default function TourSettlement() {
                               <div className="flex items-center justify-center gap-2">
                                 <button
                                   onClick={() => adjustActual(row?.rowId, -1)}
+                                  disabled={isReadOnly}
                                   className="w-6 h-6 flex items-center justify-center rounded border border-[#D0C5AF]/40 text-[var(--color-primary)]/50 hover:bg-[#D4AF37]/10 hover:border-[#D4AF37] hover:text-[#D4AF37] transition-colors text-sm font-bold leading-none"
                                 >
                                   -
@@ -218,11 +220,13 @@ export default function TourSettlement() {
                                   value={row?.actual}
                                   min={0}
                                   step={500000}
+                                  disabled={isReadOnly}
                                   onChange={event => updateActual(row?.rowId, parseInt(event?.target?.value, 10) || 0)}
                                   className="w-36 border border-[#D0C5AF]/40 bg-white px-2 py-1 text-center font-bold text-[var(--color-primary)] text-sm outline-none focus:border-[#D4AF37]"
                                 />
                                 <button
                                   onClick={() => adjustActual(row?.rowId, 1)}
+                                  disabled={isReadOnly}
                                   className="w-6 h-6 flex items-center justify-center rounded border border-[#D0C5AF]/40 text-[var(--color-primary)]/50 hover:bg-[#D4AF37]/10 hover:border-[#D4AF37] hover:text-[#D4AF37] transition-colors text-sm font-bold leading-none"
                                 >
                                   +
@@ -233,9 +237,10 @@ export default function TourSettlement() {
                               {diff > 0 ? '+' : ''}{formatCurrency(diff)?.replace(' đ', '')}
                             </td>
                             <td className="px-6 py-3">
-                              <input
-                                value={row?.note}
-                                onChange={event => setRows(previous => previous?.map(item => item.rowId === row.rowId ? { ...item, note: event?.target?.value } : item))}
+                                <input
+                                  value={row?.note}
+                                  readOnly={isReadOnly}
+                                  onChange={event => setRows(previous => previous?.map(item => item.rowId === row.rowId ? { ...item, note: event?.target?.value } : item))}
                                 className="w-full bg-transparent border-none outline-none text-sm text-[var(--color-primary)]/60"
                                 aria-label={`Ghi chú ${row?.serviceName}`}
                               />

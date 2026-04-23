@@ -1,6 +1,16 @@
 import { expect, test } from '@playwright/test';
 import { loginAs } from './support/app';
 
+function isoOffset(days: number) {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 test.describe('Sales voucher feedback', () => {
   test('voucher list shows time range, applied tour names, and detail is a full page', async ({ page }) => {
     await loginAs(page, 'sales', '/sales/vouchers');
@@ -58,8 +68,8 @@ test.describe('Sales voucher feedback', () => {
     await form.locator('input').nth(0).fill('WEEK7');
     await form.locator('input').nth(1).fill('10');
     await form.locator('input').nth(2).fill('20');
-    await form.locator('input[type="date"]').nth(0).fill('2026-04-27');
-    await form.locator('input[type="date"]').nth(1).fill('2026-05-10');
+    await form.locator('input[type="date"]').nth(0).fill(isoOffset(7));
+    await form.locator('input[type="date"]').nth(1).fill(isoOffset(20));
 
     await expect(form.getByText('Nhập cách ít nhất 10 ngày để lưu, nhập cách ít nhất 7 ngày để gửi phê duyệt.')).toBeVisible();
     await expect(form.getByRole('button', { name: 'Lưu' })).toBeDisabled();
@@ -67,6 +77,16 @@ test.describe('Sales voucher feedback', () => {
 
     await form.getByRole('button', { name: 'Gửi Phê Duyệt' }).click();
     await expect(page.locator('.ant-modal-confirm-title').filter({ hasText: 'Gửi phê duyệt voucher' })).toBeVisible();
+  });
+
+  test('draft vouchers near the send-approval deadline only show a warning icon with a tooltip', async ({ page }) => {
+    await loginAs(page, 'sales', '/sales/vouchers');
+
+    const warningText = 'Voucher sắp đến hạn gửi phê duyệt. Bạn nên gửi ngay để đảm bảo kịp thời gian xét duyệt.';
+    const draftWarnRow = page.locator('tbody tr').filter({ hasText: 'DRAFTWARN' });
+
+    await expect(draftWarnRow.locator(`[title="${warningText}"]`)).toBeVisible();
+    await expect(draftWarnRow.getByText(warningText)).toHaveCount(0);
   });
 
   test('rejected voucher detail only exposes edit/delete, then edit form allows send approval', async ({ page }) => {

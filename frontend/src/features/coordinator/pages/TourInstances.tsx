@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Breadcrumb } from 'antd';
 import { message } from 'antd';
 import {
@@ -43,7 +43,9 @@ const COL_CANCELLED = ['Mã tour', 'Tên chương trình', 'Ngày KH', 'Số KH 
 
 export default function AdminTourPrograms() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabKey>('cho_nhan_dieu_hanh');
+  const location = useLocation();
+  const initialTab = location.state?.tab as TabKey | undefined;
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab && TABS.some(tab => tab.key === initialTab) ? initialTab : 'cho_nhan_dieu_hanh');
   const [searchQuery, setSearchQuery] = useState('');
   const [showDispatchModal, setShowDispatchModal] = useState(false);
   const [dispatchTarget, setDispatchTarget] = useState<TourInstance | null>(null);
@@ -193,7 +195,7 @@ export default function AdminTourPrograms() {
     );
     if (tab === 'hoan_thanh') return (
       <button
-        onClick={() => navigate(`/coordinator/tour-programs/${inst?.id}`)}
+        onClick={() => navigate(`/coordinator/tours/${inst?.id}/settle`, { state: { readOnly: true } })}
         className="px-4 py-1.5 border border-outline-variant/50 text-primary/60 text-[10px] uppercase tracking-wider hover:bg-surface transition-colors"
       >
         Chi tiết

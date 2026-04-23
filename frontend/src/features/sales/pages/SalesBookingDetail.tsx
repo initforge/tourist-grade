@@ -77,17 +77,28 @@ function parseRoomCountsDraft(draft: RoomCountsDraft): RoomCounts {
   };
 }
 
-function isValidPassengerDocument(passenger: Passenger) {
+function getPassengerDocumentError(passenger: Passenger) {
   const documentValue = passenger?.cccd?.trim() ?? '';
+
   if (!documentValue) {
-    return false;
+    return passenger.type === 'adult'
+      ? 'Vui lòng nhập số CCCD/Căn cước.'
+      : 'Vui lòng nhập số giấy khai sinh.';
   }
 
   if (passenger.type === 'adult') {
-    return /^\d{12}$/.test(documentValue);
+    return /^\d{12}$/.test(documentValue)
+      ? null
+      : 'CCCD/Căn cước phải gồm đúng 12 chữ số.';
   }
 
-  return true;
+  return /^[A-Z0-9][A-Z0-9./-]{5,31}$/i.test(documentValue)
+    ? null
+    : 'Số GKS chỉ được gồm chữ, số và ký tự / . -, tối thiểu 6 ký tự.';
+}
+
+function isValidPassengerDocument(passenger: Passenger) {
+  return getPassengerDocumentError(passenger) === null;
 }
 
 function hasCompletePassengerData(passenger: Passenger) {
@@ -115,6 +126,7 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
     setDrafts(prev => prev?.map((p, i) => i === idx ? { ...p, [field]: value } : p));
   };
 
+  const documentErrors = drafts?.map(getPassengerDocumentError);
   const canSave = drafts?.every(hasCompletePassengerData);
 
   return (
@@ -135,7 +147,7 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
         {/* Body */}
         <div className="overflow-y-auto p-6 flex-1">
           <p className="text-xs text-[#2A2421]/50 mb-4">
-            Vui lòng nhập CCCD cho người lớn và số giấy khai sinh cho trẻ em hoặc em bé dưới 14 tuổi.
+            Vui lòng nhập CCCD/Căn cước 12 chữ số cho người lớn và số giấy khai sinh hợp lệ cho trẻ em hoặc em bé dưới 14 tuổi.
           </p>
           <div className="overflow-x-auto">
           <table className="w-full min-w-[1060px] text-left table-fixed">
@@ -154,7 +166,10 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
               </tr>
             </thead>
             <tbody className="divide-y divide-[#D0C5AF]/10">
-              {drafts?.map((p, idx) => (
+              {drafts?.map((p, idx) => {
+                const documentError = documentErrors[idx];
+
+                return (
                 <tr key={idx}>
                   <td className="py-3 pr-3 text-sm text-[#2A2421]/60">{idx + 1}</td>
                   <td className="py-3 pr-3">
@@ -192,8 +207,16 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
                       value={p?.cccd ?? ''}
                       onChange={e => handleChange(idx, 'cccd', e?.target?.value)}
                       placeholder={p.type === 'adult' ? '012345678901' : 'Số GKS'}
-                      className="w-full border border-[#D0C5AF]/40 px-2 py-1 text-sm focus:border-[#D4AF37] outline-none font-mono"
+                      inputMode={p.type === 'adult' ? 'numeric' : 'text'}
+                      className={`w-full border px-2 py-1 text-sm outline-none font-mono ${
+                        documentError
+                          ? 'border-red-300 bg-red-50 focus:border-red-400'
+                          : 'border-[#D0C5AF]/40 focus:border-[#D4AF37]'
+                      }`}
                     />
+                    {documentError && (
+                      <p className="mt-1 text-[11px] text-red-600">{documentError}</p>
+                    )}
                   </td>
                   <td className="py-3 pr-3">
                     <NationalitySelect
@@ -210,7 +233,8 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
                     <td className="py-3 text-sm text-[#2A2421]/30 text-right">—</td>
                   )}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
           </div>
@@ -312,6 +336,21 @@ export default function SalesBookingDetail() {
     };
   }, [billPreview]);
 
+  const resetBillDraft = (savedBillUrl?: string | null) => {
+    setBillPreview(currentPreview => {
+      if (currentPreview?.startsWith('blob:')) {
+        URL?.revokeObjectURL(currentPreview);
+      }
+      return savedBillUrl ?? null;
+    });
+    setBillFile(null);
+  };
+
+  const closeRefundPopup = () => {
+    resetBillDraft(booking?.refundBillUrl ?? null);
+    setShowRefundPopup(false);
+  };
+
   const persistBooking = (updater: (current: Booking) => Booking) => {
     setBooking(prev => {
       const next = updater(prev);
@@ -347,24 +386,40 @@ export default function SalesBookingDetail() {
     setBillPreview(null);
   };
   const handleCancelBillEdit = () => {
-    if (billFile && billPreview?.startsWith('blob:')) URL?.revokeObjectURL(billPreview);
-    setBillPreview(booking?.refundBillUrl ?? null);
-    setBillFile(null);
+    resetBillDraft(booking?.refundBillUrl ?? null);
     setIsEditingBill(false);
   };
-  const handleConfirmRefund = () => {
+  const readFileAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ''));
+      reader.onerror = () => reject(reader.error ?? new Error('Không thể đọc file bill.'));
+      reader.readAsDataURL(file);
+    });
+
+  const resolveBillValueForPersistence = async () => {
+    if (billFile) {
+      return readFileAsDataUrl(billFile);
+    }
+
+    return billPreview;
+  };
+
+  const handleConfirmRefund = async () => {
     if (!billPreview) return;
+    const persistedBillUrl = await resolveBillValueForPersistence();
+    if (!persistedBillUrl) return;
+
     const now = new Date()?.toISOString();
     const userName = currentUser?.name ?? 'NV Kinh doanh';
     persistBooking(prev => ({
       ...prev,
       refundStatus: 'refunded' as const,
-      refundBillUrl: billPreview,
+      refundBillUrl: persistedBillUrl,
       refundedBy: userName,
       refundedAt: now,
     }));
-    setBillFile(null);
-    setBillPreview(null);
+    resetBillDraft(persistedBillUrl);
     setShowRefundPopup(false);
     setShowEmailToast(true);
     setTimeout(() => setShowEmailToast(false), 4000);
@@ -467,7 +522,7 @@ export default function SalesBookingDetail() {
       {/* ── POPUP: Hoàn tiền ── */}
       {showRefundPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="refund-payment-title">
-          <div className="absolute inset-0 bg-[#2A2421]/50 backdrop-blur-sm" onClick={() => setShowRefundPopup(false)}></div>
+          <div className="absolute inset-0 bg-[#2A2421]/50 backdrop-blur-sm" onClick={closeRefundPopup}></div>
           <div className="relative bg-white w-full max-w-md mx-4 shadow-2xl border border-[#D0C5AF]/30">
             <div className="p-6 border-b border-[#D0C5AF]/20">
               <div className="flex items-center justify-between">
@@ -475,7 +530,7 @@ export default function SalesBookingDetail() {
                   <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold">Hoàn tiền</p>
                   <h3 id="refund-payment-title" className="font-['Noto_Serif'] text-xl text-[#2A2421]">Hoàn tiền đơn hàng</h3>
                 </div>
-                <button onClick={() => setShowRefundPopup(false)} className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full">
+                <button onClick={closeRefundPopup} className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full">
                   <span className="material-symbols-outlined text-[#2A2421]/60">close</span>
                 </button>
               </div>
@@ -522,7 +577,7 @@ export default function SalesBookingDetail() {
               </div>
             </div>
             <div className="p-6 border-t border-[#D0C5AF]/20 flex gap-3">
-              <button onClick={() => setShowRefundPopup(false)} className="flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest border border-[#2A2421]/20 hover:bg-gray-50 transition-colors">
+              <button onClick={closeRefundPopup} className="flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest border border-[#2A2421]/20 hover:bg-gray-50 transition-colors">
                 Hủy bỏ
               </button>
               <button
@@ -810,7 +865,15 @@ export default function SalesBookingDetail() {
                         <span className="text-xs text-emerald-600">Click để tải ảnh bill mới</span>
                         <input type="file" accept="image/*" onChange={e => {
                           const file = e?.target?.files?.[0];
-                          if (file) { setBillFile(file); setBillPreview(URL?.createObjectURL(file)); }
+                          if (file) {
+                            setBillPreview(currentPreview => {
+                              if (currentPreview?.startsWith('blob:')) {
+                                URL?.revokeObjectURL(currentPreview);
+                              }
+                              return URL?.createObjectURL(file);
+                            });
+                            setBillFile(file);
+                          }
                         }} className="hidden" />
                       </label>
                     )}
@@ -822,15 +885,18 @@ export default function SalesBookingDetail() {
                         Hủy bỏ
                       </button>
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           if (!billPreview || !billFile) return;
+                          const persistedBillUrl = await resolveBillValueForPersistence();
+                          if (!persistedBillUrl) return;
                           const now = new Date()?.toISOString();
                           persistBooking(prev => ({
                             ...prev,
-                            refundBillUrl: billPreview,
+                            refundBillUrl: persistedBillUrl,
                             refundBillEditedBy: currentUser?.name ?? 'NV Kinh doanh',
                             refundBillEditedAt: now,
                           }));
+                          resetBillDraft(persistedBillUrl);
                           setIsEditingBill(false);
                           setShowEmailToast(true);
                           setTimeout(() => setShowEmailToast(false), 4000);

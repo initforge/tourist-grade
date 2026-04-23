@@ -199,12 +199,14 @@ export default function ManagerVoucherApproval() {
                   <td className="px-5 py-4 text-sm text-[#2A2421]/70">
                     <div>{voucher?.startDate && voucher?.endDate ? `${voucher?.startDate} → ${voucher?.endDate}` : '—'}</div>
                     {hasStartWarning(voucher) && (
-                      <div
-                        className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold"
-                        title={MANAGER_APPROVAL_WARNING}
-                      >
-                        <span className="material-symbols-outlined text-[12px]">warning</span>
-                        Sắp đến ngày bắt đầu
+                      <div className="mt-1">
+                        <span
+                          className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 text-amber-700 border border-amber-200"
+                          title={MANAGER_APPROVAL_WARNING}
+                          aria-label={MANAGER_APPROVAL_WARNING}
+                        >
+                          <span className="material-symbols-outlined text-[14px]">warning</span>
+                        </span>
                       </div>
                     )}
                   </td>

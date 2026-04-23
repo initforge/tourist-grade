@@ -1,12 +1,12 @@
 # 00. Docs Index
 
-Đây là bộ tài liệu nguồn đọc chính của repo trong giai đoạn chuyển tiếp từ frontend demo sang full stack production-ready.
+Đây là bộ tài liệu nguồn đọc chính của repo trong giai đoạn chuyển tiếp từ frontend demo sang full stack chạy local bằng Docker.
 
 ## Trạng thái hiện tại
 
+- Môi trường chuẩn để chạy repo là `localhost` qua `docker compose`.
 - Frontend vẫn còn một phần mock/seed để phục vụ demo và kiểm thử UI.
-- Backend đã có scaffold để thay thế dần mock bằng API thật theo từng module.
-- Backend đã có scaffold `Express + Prisma + PostgreSQL`, chưa implement business logic.
+- Backend đã có scaffold `Express + Prisma + PostgreSQL`, chưa implement đủ business logic.
 - Docker đã có local stack cho `frontend + api + postgres`.
 
 ## Thứ tự nên đọc
@@ -33,14 +33,15 @@
 - Backend app/router: `backend/src/app.ts`, `backend/src/routes/v1.ts`
 - Database schema draft: `backend/prisma/schema.prisma`
 - Docker local stack: `docker-compose.yml`
-- Setup / release runbook: `docs/10-SETUP-TO-PRODUCTION.md`
+- Local runbook: `docs/07-INFRA-DOCKER-ENV.md`, `docs/10-SETUP-TO-PRODUCTION.md`
 - Codebase audit snapshot: `docs/12-CODEBASE-AUDIT.md`
 - Migration playbook: `docs/13-MIGRATION-PLAYBOOK.md`
 
 ## Quy ước làm tiếp
 
+- Tất cả hướng dẫn vận hành mặc định bám `localhost`.
 - Không mở rộng thêm mock frontend cho các module mới nếu có thể seed từ backend.
-- Mọi dữ liệu production phải đi qua API.
+- Dữ liệu thật phải đi qua API; mock frontend chỉ là lớp chuyển tiếp cho local demo.
 - Nếu cần dữ liệu demo cho QA, ưu tiên seed DB riêng ở backend thay vì hard-code vào page/component.
 - Mọi thay đổi domain/API phải cập nhật docs `03`, `05`, `06`, `09`.
 - Trước khi cắt mock của một module, phải cập nhật thêm `12` và `13`.

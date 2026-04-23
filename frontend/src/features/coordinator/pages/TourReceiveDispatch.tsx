@@ -147,7 +147,10 @@ export default function TourReceiveDispatch() {
           {/* Receive button — only show if not yet received */}
           {!isReceived && (
             <button
-              onClick={() => setIsReceived(true)}
+              onClick={() => {
+                setIsReceived(true);
+                navigate('/coordinator/tours', { state: { tab: 'cho_du_toan' } });
+              }}
               className="px-8 py-3.5 bg-purple-600 text-white font-sans uppercase tracking-widest text-[11px] font-bold hover:bg-purple-700 transition-colors shadow-md"
             >
               Nhận điều hành

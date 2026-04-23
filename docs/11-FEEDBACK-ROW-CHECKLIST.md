@@ -1,32 +1,28 @@
 # Feedback Verify
 
-Ngày cập nhật: `2026-04-14`
+Ngày cập nhật: `2026-04-23`
 
 File này là source of truth duy nhất cho việc verify feedback khách hàng.
 
 Nguồn:
 - Google Sheet feedback khách, tab `Lỗi`
 - Export nguồn đã lưu local: [feedback-source.xlsx](/P:/tourist-grade/docs/attachment-audit/feedback-source.xlsx)
-- Production: `https://tourist-grade.pages.dev`
-- Cloudflare production deploy đã verify: `95d40e2e` (`https://95d40e2e.tourist-grade.pages.dev`)
-- Domain production đã verify: `https://tourist-grade.pages.dev`
-- GitHub push vẫn bị chặn trong shell hiện tại, nhưng production đã được deploy trực tiếp qua Cloudflare Pages API từ artifact `frontend/dist` mới build.
 - Attachment local: [attachment-audit](/P:/tourist-grade/docs/attachment-audit)
+- Môi trường chuẩn để verify: `localhost` qua `docker compose`
 
-Verify production cuối:
+Lệnh verify local chuẩn:
 
 ```powershell
-$env:PLAYWRIGHT_BASE_URL='https://tourist-grade.pages.dev'
-cmd /c npx playwright test --config=playwright.config.ts --reporter=line
+docker compose up -d --build
+$env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:8080'
+cd frontend
+npm run test:e2e
 ```
 
-Kết quả:
-- Lần automated trước đó trên production `572219a`: `72/72 pass`, nhưng không còn dùng làm verdict cuối vì sau đó phát hiện gap thủ công.
-- Automated Playwright CLI trong shell hiện tại vẫn bị `spawn EPERM`, kể cả `--workers=1`; không dùng được để chốt.
-- Build production mới: `cmd /c npx vite build --configLoader native` pass.
-- Cloudflare Pages deploy trực tiếp: `95d40e2e`, stage `deploy/success`, environment `production`.
-- Browser MCP production scan sau deploy: `23/23` route/role trọng yếu pass, không còn marker `Quáº/KhÃ/Chá»/Duyá»/T?N/Thàng/Chuy?n/đ?nh`.
-- Browser MCP interaction sau deploy: manager `/manager/tours` tab `Không đủ ĐK KH`, popup `Duyệt tour chờ bán`, public checkout, booking lookup, coordinator supplier tabs đều pass.
+Kết quả chốt hiện hành:
+- Verdict mặc định phải bám local stack, không bám `pages.dev`.
+- Các nhắc tới `production`, `Cloudflare Pages` hoặc `pages.dev` ở một số row chỉ còn giá trị tham chiếu lịch sử.
+- Khi feedback thay đổi, cập nhật lại file này thay vì tạo docs verify mới.
 
 Nguyên tắc đọc row:
 - Mỗi row được kết luận theo spec hợp nhất của `Lỗi + UPDATE + UPDATE LỖI`.
@@ -50,7 +46,7 @@ Export `feedback-source.xlsx` đã được parse trực tiếp từ tab `Lỗi`
 | B | `Lỗi` | Feedback gốc của row. |
 | C | `UPDATE` | Bổ sung hoặc override feedback gốc. |
 | D | `UPDATE LỖI` | Lỗi phát sinh hoặc yêu cầu mới sau update; có thể siết hoặc sửa nghĩa cột B/C. |
-| E | `Tình trạng` | Chỉ là trạng thái tham khảo, không dùng thay verdict production. |
+| E | `Tình trạng` | Chỉ là trạng thái tham khảo, không dùng thay verdict cuối. |
 | F | `Lỗi sau sửa` | Ghi chú phát sinh sau sửa nếu có. |
 
 Thống kê nguồn:
@@ -84,7 +80,7 @@ Role mapping:
 | 7 | Sales | `-` | `/sales/bookings` | [SalesBookings.tsx](/P:/tourist-grade/frontend/src/features/sales/pages/SalesBookings.tsx:1) | [sales-bookings-tools.spec.ts](/P:/tourist-grade/frontend/tests/sales-bookings-tools.spec.ts:16), [sales-bookings-tools.spec.ts](/P:/tourist-grade/frontend/tests/sales-bookings-tools.spec.ts:84) | `Đáp ứng` | Bỏ tab `Tất cả`, payment label `50%/100%`, filter con, hover title, bỏ export cũ; tab `Đã hủy` chỉ còn `Chưa hoàn` và `Hoàn thành`, không còn cột `Trạng thái đơn`. |
 | 8 | Sales | `-` | `/sales/bookings` -> `/sales/bookings/:id` | [SalesBookings.tsx](/P:/tourist-grade/frontend/src/features/sales/pages/SalesBookings.tsx:1), [SalesBookingDetail.tsx](/P:/tourist-grade/frontend/src/features/sales/pages/SalesBookingDetail.tsx:1) | [sales-manager.spec.ts](/P:/tourist-grade/frontend/tests/sales-manager.spec.ts:52) | `Đáp ứng` | Xác nhận chuyển về detail. |
 | 9 | Sales | `-` | `/sales/bookings` | [SalesBookings.tsx](/P:/tourist-grade/frontend/src/features/sales/pages/SalesBookings.tsx:1) | [sales-bookings-tools.spec.ts](/P:/tourist-grade/frontend/tests/sales-bookings-tools.spec.ts:70) | `Đáp ứng` | Có phân trang và range summary. |
-| 10 | Sales | [row-10-C10.jpg](/P:/tourist-grade/docs/attachment-audit/row-10-C10.jpg) | `/sales/bookings/B003?tab=pending_confirm`, `/sales/bookings/B002?tab=cancelled`, `/sales/bookings/B006?tab=cancelled` | [SalesBookingDetail.tsx](/P:/tourist-grade/frontend/src/features/sales/pages/SalesBookingDetail.tsx:1) | [sales-booking-detail.spec.ts](/P:/tourist-grade/frontend/tests/sales-booking-detail.spec.ts:27), [sales-booking-detail.spec.ts](/P:/tourist-grade/frontend/tests/sales-booking-detail.spec.ts:107), [sales-booking-detail.spec.ts](/P:/tourist-grade/frontend/tests/sales-booking-detail.spec.ts:139) | `Đáp ứng` | Attachment chỉ ra lỗi note lặp; production đã sửa và bám thêm validation mới. |
+| 10 | Sales | [row-10-C10.jpg](/P:/tourist-grade/docs/attachment-audit/row-10-C10.jpg) | `/sales/bookings/B003?tab=pending_confirm`, `/sales/bookings/B002?tab=cancelled`, `/sales/bookings/B006?tab=cancelled` | [SalesBookingDetail.tsx](/P:/tourist-grade/frontend/src/features/sales/pages/SalesBookingDetail.tsx:1) | [sales-booking-detail.spec.ts](/P:/tourist-grade/frontend/tests/sales-booking-detail.spec.ts:25), [sales-booking-detail.spec.ts](/P:/tourist-grade/frontend/tests/sales-booking-detail.spec.ts:147), [sales-booking-detail.spec.ts](/P:/tourist-grade/frontend/tests/sales-booking-detail.spec.ts:170) | `Đáp ứng` | Siết validate CCCD đúng 12 chữ số, GKS có format hợp lệ, và hủy chỉnh sửa bill luôn khôi phục ảnh/log cũ; bill mới vẫn giữ được sau reload. |
 | 11 | Sales | `-` | `/sales/vouchers`, `/sales/vouchers/:id` | [Vouchers.tsx](/P:/tourist-grade/frontend/src/features/sales/pages/Vouchers.tsx:1) | [sales-vouchers.spec.ts](/P:/tourist-grade/frontend/tests/sales-vouchers.spec.ts:5), [sales-vouchers.spec.ts](/P:/tourist-grade/frontend/tests/sales-vouchers.spec.ts:52) | `Đáp ứng` | Voucher list/detail/form bám state và action mới. |
 | 12 | Manager | `-` | `/manager/voucher-approval` | [ManagerVoucherApproval.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/ManagerVoucherApproval.tsx:1) | [sales-manager.spec.ts](/P:/tourist-grade/frontend/tests/sales-manager.spec.ts:109), [sales-manager.spec.ts](/P:/tourist-grade/frontend/tests/sales-manager.spec.ts:133) | `Đáp ứng` | List-only, có `Tour áp dụng`, `Ghi chú`, `Số lượng được dùng`, reject cần lý do. |
 | 13 | Sales / Coordinator / Manager | `-` | `/sales/dashboard`, `/coordinator/dashboard`, `/manager/dashboard` | [SalesDashboard.tsx](/P:/tourist-grade/frontend/src/features/sales/pages/SalesDashboard.tsx:1), [CoordinatorDashboard.tsx](/P:/tourist-grade/frontend/src/features/coordinator/pages/CoordinatorDashboard.tsx:1), [ManagerDashboard.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/ManagerDashboard.tsx:1) | [sales-dashboard.spec.ts](/P:/tourist-grade/frontend/tests/sales-dashboard.spec.ts:5), [dashboard-feedback.spec.ts](/P:/tourist-grade/frontend/tests/dashboard-feedback.spec.ts:5), [dashboard-feedback.spec.ts](/P:/tourist-grade/frontend/tests/dashboard-feedback.spec.ts:26) | `Đáp ứng` | Cả 3 dashboard đều tách work/report đúng spec. |
@@ -92,9 +88,9 @@ Role mapping:
 | 15 | Sales | `-` | `/sales/bookings/B003?tab=pending_confirm` | [SalesBookingDetail.tsx](/P:/tourist-grade/frontend/src/features/sales/pages/SalesBookingDetail.tsx:1) | [sales-booking-detail.spec.ts](/P:/tourist-grade/frontend/tests/sales-booking-detail.spec.ts:49) | `Đáp ứng` | Full-page + breadcrumb. |
 | 16 | Sales | `-` | `/sales/bookings/B003?tab=pending_confirm` | [SalesBookingDetail.tsx](/P:/tourist-grade/frontend/src/features/sales/pages/SalesBookingDetail.tsx:1) | [sales-booking-detail.spec.ts](/P:/tourist-grade/frontend/tests/sales-booking-detail.spec.ts:95) | `Đáp ứng` | Download DSHK dạng Excel. |
 | 17 | Sales | `-` | `/sales/bookings/B005?tab=cancelled`, `/sales/bookings/B006?tab=cancelled` | [SalesBookingDetail.tsx](/P:/tourist-grade/frontend/src/features/sales/pages/SalesBookingDetail.tsx:1) | [sales-booking-detail.spec.ts](/P:/tourist-grade/frontend/tests/sales-booking-detail.spec.ts:139), [sales-booking-detail.spec.ts](/P:/tourist-grade/frontend/tests/sales-booking-detail.spec.ts:163) | `Đáp ứng` | Refund bill flow đúng theo state. |
-| 18 | Public | [row-18-C18.png](/P:/tourist-grade/docs/attachment-audit/row-18-C18.png), `B18` stale | `/tours/kham-pha-vinh-ha-long-du-thuyen-5-sao` | [TourDetail.tsx](/P:/tourist-grade/frontend/src/features/public/pages/TourDetail.tsx:1) | [customer-flow.spec.ts](/P:/tourist-grade/frontend/tests/customer-flow.spec.ts:22) | `Đáp ứng` | Mock cũ không còn dùng được, attachment ảnh vẫn đối chiếu được với production. |
+| 18 | Public | [row-18-C18.png](/P:/tourist-grade/docs/attachment-audit/row-18-C18.png), `B18` stale | `/tours/kham-pha-vinh-ha-long-du-thuyen-5-sao` | [TourDetail.tsx](/P:/tourist-grade/frontend/src/features/public/pages/TourDetail.tsx:1) | [customer-flow.spec.ts](/P:/tourist-grade/frontend/tests/customer-flow.spec.ts:22) | `Đáp ứng` | Mock cũ không còn dùng được; attachment ảnh vẫn đối chiếu được với màn local hiện hành. |
 | 19 | Customer / Guest | `-` | cùng route tour detail | [TourDetail.tsx](/P:/tourist-grade/frontend/src/features/public/pages/TourDetail.tsx:1), [Wishlist.tsx](/P:/tourist-grade/frontend/src/features/customer/pages/Wishlist.tsx:1) | [customer-flow.spec.ts](/P:/tourist-grade/frontend/tests/customer-flow.spec.ts:48) | `Đáp ứng` | Wishlist guest/customer đúng. |
-| 20 | Public / Customer | [row-20-B20.png](/P:/tourist-grade/docs/attachment-audit/row-20-B20.png) | `/tours/.../book` | [BookingCheckout.tsx](/P:/tourist-grade/frontend/src/features/public/pages/BookingCheckout.tsx:1) | [customer-flow.spec.ts](/P:/tourist-grade/frontend/tests/customer-flow.spec.ts:59) | `Đáp ứng` | Flow 3 bước khớp attachment và production. |
+| 20 | Public / Customer | [row-20-B20.png](/P:/tourist-grade/docs/attachment-audit/row-20-B20.png) | `/tours/.../book` | [BookingCheckout.tsx](/P:/tourist-grade/frontend/src/features/public/pages/BookingCheckout.tsx:1) | [customer-flow.spec.ts](/P:/tourist-grade/frontend/tests/customer-flow.spec.ts:59) | `Đáp ứng` | Flow 3 bước khớp attachment và màn local hiện hành. |
 | 21 | Public / Customer | `-` | `/customer/bookings/B001` | [CancelBooking.tsx](/P:/tourist-grade/frontend/src/features/customer/pages/CancelBooking.tsx:1), [CancelBookingModal.tsx](/P:/tourist-grade/frontend/src/shared/ui/CancelBookingModal.tsx:1) | [customer-flow.spec.ts](/P:/tourist-grade/frontend/tests/customer-flow.spec.ts:100) | `Đáp ứng` | Popup hủy đúng nhãn submit. |
 | 22 | Public / Customer | mock `B22` còn sống | `/booking/lookup` | [OrderLookup.tsx](/P:/tourist-grade/frontend/src/features/public/pages/OrderLookup.tsx:1) | [customer-flow.spec.ts](/P:/tourist-grade/frontend/tests/customer-flow.spec.ts:114) | `Đáp ứng` | Layout 2 cột, action theo status, popup không tràn. |
 | 23 | Admin | `-` | `/admin/users` | [AdminUsers.tsx](/P:/tourist-grade/frontend/src/features/admin/pages/AdminUsers.tsx:1) | [admin-users.spec.ts](/P:/tourist-grade/frontend/tests/admin-users.spec.ts:15) | `Đáp ứng` | Tách staff/customer và customer history đúng. |
@@ -115,11 +111,11 @@ Role mapping:
 | 38 | Coordinator | `-` | `/coordinator/services` | [ServiceList.tsx](/P:/tourist-grade/frontend/src/features/coordinator/pages/ServiceList.tsx:1) | [coordinator.spec.ts](/P:/tourist-grade/frontend/tests/coordinator.spec.ts:295), [coordinator-remaining.spec.ts](/P:/tourist-grade/frontend/tests/coordinator-remaining.spec.ts:176) | `Đáp ứng` | Không có attachment nhưng UI/test cover đủ. |
 | 39 | Coordinator | [row-39-B39.jpg](/P:/tourist-grade/docs/attachment-audit/row-39-B39.jpg) | `/coordinator/suppliers` | [Suppliers.tsx](/P:/tourist-grade/frontend/src/features/coordinator/pages/Suppliers.tsx:1) | [coordinator.spec.ts](/P:/tourist-grade/frontend/tests/coordinator.spec.ts:276), [coordinator-remaining.spec.ts](/P:/tourist-grade/frontend/tests/coordinator-remaining.spec.ts:176) | `Đáp ứng` | Supplier split đã mở trực tiếp attachment. |
 | 40 | Coordinator | [row-40-B40.jpg](/P:/tourist-grade/docs/attachment-audit/row-40-B40.jpg) | estimate/settlement edit price popup | [TourEstimate.tsx](/P:/tourist-grade/frontend/src/features/coordinator/pages/TourEstimate.tsx:1), [TourSettlement.tsx](/P:/tourist-grade/frontend/src/features/coordinator/pages/TourSettlement.tsx:1) | [feedback-hardening.spec.ts](/P:/tourist-grade/frontend/tests/feedback-hardening.spec.ts:182) | `Đáp ứng` | Popup edit giá đã bám attachment. |
-| 41 | Manager | `-` | `/manager/tours` | [ActiveTours.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/ActiveTours.tsx:1) | [manager-remaining.spec.ts](/P:/tourist-grade/frontend/tests/manager-remaining.spec.ts:13), [feedback-hardening.spec.ts](/P:/tourist-grade/frontend/tests/feedback-hardening.spec.ts:238), browser MCP production `95d40e2e` | `Đáp ứng` | Re-check production sau deploy `95d40e2e`: tab `Không đủ ĐK KH`, action `Hủy tour/Tiếp tục triển khai/Gia hạn`, popup `Duyệt tour chờ bán` đều đúng và không còn mojibake. |
+| 41 | Manager | `-` | `/manager/tours` | [ActiveTours.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/ActiveTours.tsx:1) | [manager-remaining.spec.ts](/P:/tourist-grade/frontend/tests/manager-remaining.spec.ts:13), [feedback-hardening.spec.ts](/P:/tourist-grade/frontend/tests/feedback-hardening.spec.ts:238), historical ref `95d40e2e` | `Đáp ứng` | Tab `Không đủ ĐK KH`, action `Hủy tour/Tiếp tục triển khai/Gia hạn`, popup `Duyệt tour chờ bán` đúng trên trace hiện hành; `95d40e2e` chỉ còn là mốc lịch sử. |
 | 42 | Manager | `-` | `/manager/tour-programs/TP003/approval` | [AdminTourProgramApproval.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/AdminTourProgramApproval.tsx:1) | [manager-remaining.spec.ts](/P:/tourist-grade/frontend/tests/manager-remaining.spec.ts:70) | `Đáp ứng` | Read-only đủ 3 phần. |
 | 43 | Manager | `-` | `/manager/tours/TI003/estimate-approval` | [ManagerTourEstimateApproval.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/ManagerTourEstimateApproval.tsx:1) | [manager-remaining.spec.ts](/P:/tourist-grade/frontend/tests/manager-remaining.spec.ts:93) | `Đáp ứng` | Có request-edit/reject/approve. |
 | 44 | Manager | `-` | `/manager/tour-programs` | [TourPrograms.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/TourPrograms.tsx:1) | [manager-remaining.spec.ts](/P:/tourist-grade/frontend/tests/manager-remaining.spec.ts:111) | `Đáp ứng` | Nhãn/cột đúng feedback mới. |
-| 45 | Manager | [row-45-B45.jpg](/P:/tourist-grade/docs/attachment-audit/row-45-B45.jpg) | `/manager/tours` | [ActiveTours.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/ActiveTours.tsx:1) | [manager-remaining.spec.ts](/P:/tourist-grade/frontend/tests/manager-remaining.spec.ts:13), [feedback-hardening.spec.ts](/P:/tourist-grade/frontend/tests/feedback-hardening.spec.ts:238), browser MCP production `95d40e2e` | `Đáp ứng` | Popup review đối chiếu attachment row 45; production `95d40e2e` đã verify lại popup `Duyệt tour chờ bán`, `Duyệt`, `Yêu cầu sửa`, `Từ chối` và không còn mojibake. |
+| 45 | Manager | [row-45-B45.jpg](/P:/tourist-grade/docs/attachment-audit/row-45-B45.jpg) | `/manager/tours` | [ActiveTours.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/ActiveTours.tsx:1) | [manager-remaining.spec.ts](/P:/tourist-grade/frontend/tests/manager-remaining.spec.ts:13), [feedback-hardening.spec.ts](/P:/tourist-grade/frontend/tests/feedback-hardening.spec.ts:238), historical ref `95d40e2e` | `Đáp ứng` | Popup review bám attachment row 45; trace hiện hành đủ cho `Duyệt tour chờ bán`, `Duyệt`, `Yêu cầu sửa`, `Từ chối`, còn `95d40e2e` chỉ là mốc lịch sử. |
 | 46 | Manager | `B46` stale | `/manager/cancel-policies` | [ManagerCancelPolicy.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/ManagerCancelPolicy.tsx:1) | [manager-remaining.spec.ts](/P:/tourist-grade/frontend/tests/manager-remaining.spec.ts:111) | `Đáp ứng theo spec mới` | Mock cũ stale; row bị update sang `chính sách cố định`. |
 | 47 | Manager | `-` | `/manager/special-days` | [SpecialDays.tsx](/P:/tourist-grade/frontend/src/features/manager/pages/SpecialDays.tsx:1) | [manager-remaining.spec.ts](/P:/tourist-grade/frontend/tests/manager-remaining.spec.ts:111) | `Đáp ứng` | Module ngày đặc biệt đúng cột yêu cầu. |
 
@@ -127,7 +123,7 @@ Role mapping:
 
 - Đây là file verify duy nhất cần giữ để trace feedback khách.
 - Tất cả role đều đã được trace theo từng row riêng, không gộp chung thành một kết luận mơ hồ.
-- Các row có attachment đã được mở trực tiếp; các row không có attachment vẫn có trace rõ `production -> code -> test`.
-- Production `95d40e2e` đã fix gap row `41/45` ở manager tours theo re-check browser MCP mới nhất.
-- Trong quá trình verify chặt hơn, đã phát hiện thêm một số lỗi text public/catalog kiểu `Thàng`, `T?N`, `Chuy?n`, `đ?nh`; đã sửa, build và deploy lại trước khi chốt.
+- Các row có attachment đã được mở trực tiếp; các row không có attachment vẫn có trace rõ `route -> code -> test`.
+- Mốc `95d40e2e` chỉ còn giữ làm tham chiếu lịch sử cho một số row manager tours.
+- Trong quá trình verify chặt hơn, đã phát hiện thêm một số lỗi text public/catalog kiểu `Thàng`, `T?N`, `Chuy?n`, `đ?nh`; đã sửa và build lại trước khi chốt.
 - GitHub push vẫn cần chạy lại khi network shell tới `github.com:443` thông, vì hiện tại shell vẫn không kết nối được GitHub.

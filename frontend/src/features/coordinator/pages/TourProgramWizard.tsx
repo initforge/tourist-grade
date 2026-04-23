@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   VIETNAM_PROVINCES,
@@ -7,6 +7,7 @@ import {
   MEAL_LABELS,
   mockHolidays,
 } from '@entities/tour-program/data/tourProgram';
+import type { TourProgram } from '@entities/tour-program/data/tourProgram';
 import TourProgramPricingTables from '@features/coordinator/components/TourProgramPricingTables';
 
 type Transport = 'xe' | 'maybay';
@@ -14,6 +15,13 @@ type TourType = 'mua_le' | 'quanh_nam';
 type DayMeals = ('breakfast' | 'lunch' | 'dinner')[];
 type WizardStep = 1 | 2 | 3 | 4;
 type EditablePriceKey = 'adult' | 'child' | 'infant' | 'singleSupplement';
+
+type WizardProps = {
+  initialProgram?: TourProgram;
+  readOnly?: boolean;
+  headerTitle?: string;
+  headerActions?: ReactNode;
+};
 
 interface DayForm {
   day: number;
@@ -153,10 +161,61 @@ function getDayType(tourType: TourType, holidayName: string, dateKey: string) {
   return day === 0 || day === 6 ? 'Cuối tuần' : 'Ngày thường';
 }
 
-export default function AdminTourProgramWizard() {
+function formFromProgram(program: TourProgram): FormState {
+  const days = Math.max(1, program?.duration?.days ?? 3);
+  const nights = Math.max(0, program?.duration?.nights ?? 2);
+  const itinerary = (program?.itinerary?.length ? program.itinerary : initialItinerary(days)).map((day, index) => ({
+    day: day?.day ?? index + 1,
+    title: day?.title ?? '',
+    meals: (day?.meals ?? []) as DayMeals,
+    description: day?.description ?? '',
+    accommodationPoint: '',
+  }));
+
+  return {
+    name: program?.name ?? '',
+    days,
+    nights,
+    departurePoint: program?.departurePoint ?? '',
+    sightseeingSpots: [...(program?.sightseeingSpots ?? [])],
+    routeDescription: program?.routeDescription ?? '',
+    bookingDeadline: program?.bookingDeadline ?? 7,
+    transport: program?.transport ?? 'xe',
+    arrivalPoint: program?.arrivalPoint ?? '',
+    tourType: program?.tourType ?? 'quanh_nam',
+    holiday: program?.holiday ?? '',
+    selectedDates: [...(program?.selectedDates ?? [])],
+    weekdays: [...(program?.weekdays ?? [])],
+    yearRoundStartDate: program?.yearRoundStartDate ?? '',
+    yearRoundEndDate: program?.yearRoundEndDate ?? '',
+    coverageMonths: program?.coverageMonths ?? 3,
+    itinerary,
+  };
+}
+
+function pricingFromProgram(program: TourProgram): PricingConfigState {
+  const otherCostFactorPercent = program?.pricingConfig?.otherCostFactor != null
+    ? Math.round(program.pricingConfig.otherCostFactor * 100)
+    : 15;
+
+  return {
+    expectedGuests: Math.max(1, program?.pricingConfig?.minParticipants ?? 25),
+    profitMargin: program?.pricingConfig?.profitMargin ?? 15,
+    taxRate: program?.pricingConfig?.taxRate ?? 10,
+    otherCostFactor: otherCostFactorPercent,
+    guideUnitPrice: 400000,
+  };
+}
+
+export default function AdminTourProgramWizard({
+  initialProgram,
+  readOnly = false,
+  headerTitle = 'Thêm mới chương trình tour',
+  headerActions,
+}: WizardProps) {
   const navigate = useNavigate();
   const [step, setStep] = useState<WizardStep>(1);
-  const [form, setForm] = useState<FormState>({
+  const [form, setForm] = useState<FormState>(() => initialProgram ? formFromProgram(initialProgram) : ({
     name: '',
     days: 3,
     nights: 2,
@@ -174,18 +233,21 @@ export default function AdminTourProgramWizard() {
     yearRoundEndDate: '',
     coverageMonths: 3,
     itinerary: initialItinerary(3),
-  });
+  }));
   const [holidayMonthAnchor, setHolidayMonthAnchor] = useState(() => {
-    const today = new Date();
-    return toDateKey(startOfMonth(today));
+    if (initialProgram?.holiday) {
+      const holiday = mockHolidays?.find(item => item.name === initialProgram.holiday);
+      if (holiday) return toDateKey(startOfMonth(new Date(holiday.date)));
+    }
+    return toDateKey(startOfMonth(new Date()));
   });
-  const [pricingConfig, setPricingConfig] = useState<PricingConfigState>({
+  const [pricingConfig, setPricingConfig] = useState<PricingConfigState>(() => initialProgram ? pricingFromProgram(initialProgram) : ({
     expectedGuests: 25,
     profitMargin: 15,
     taxRate: 10,
     otherCostFactor: 15,
     guideUnitPrice: 400000,
-  });
+  }));
   const [manualPricing, setManualPricing] = useState<Record<EditablePriceKey, boolean>>({
     adult: false,
     child: false,
@@ -201,6 +263,7 @@ export default function AdminTourProgramWizard() {
   const [previewEdits, setPreviewEdits] = useState<Record<string, Partial<PreviewRow>>>({});
 
   const updateForm = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+    if (readOnly) return;
     setForm(prev => {
       const next = { ...prev, [key]: value };
       if (key === 'days' && typeof value === 'number') {
@@ -215,10 +278,12 @@ export default function AdminTourProgramWizard() {
   };
 
   const updatePricingConfig = <K extends keyof PricingConfigState>(key: K, value: PricingConfigState[K]) => {
+    if (readOnly) return;
     setPricingConfig(prev => ({ ...prev, [key]: value }));
   };
 
   const updateDay = (idx: number, patch: Partial<DayForm>) => {
+    if (readOnly) return;
     setForm(prev => ({
       ...prev,
       itinerary: prev?.itinerary?.map((d, i) => i === idx ? { ...d, ...patch } : d),
@@ -226,6 +291,7 @@ export default function AdminTourProgramWizard() {
   };
 
   const toggleMeal = (idx: number, meal: DayForm['meals'][0]) => {
+    if (readOnly) return;
     setForm(prev => ({
       ...prev,
       itinerary: prev?.itinerary?.map((d, i) => {
@@ -239,10 +305,12 @@ export default function AdminTourProgramWizard() {
   };
 
   const handleSaveDraft = () => {
+    if (readOnly) return;
     navigate('/coordinator/tour-programs');
   };
 
   const handleSubmitForApproval = () => {
+    if (readOnly) return;
     navigate('/coordinator/tour-programs');
   };
 
@@ -338,6 +406,7 @@ export default function AdminTourProgramWizard() {
   const unselectedPreviewCount = previewRows?.length - selectedPreviewCount;
 
   const setPreviewRow = (id: string, patch: Partial<PreviewRow>) => {
+    if (readOnly) return;
     setPreviewEdits(rows => ({
       ...rows,
       [id]: {
@@ -348,6 +417,7 @@ export default function AdminTourProgramWizard() {
   };
 
   const toggleManualPrice = (key: EditablePriceKey) => {
+    if (readOnly) return;
     setManualPricing(prev => {
       if (prev[key]) {
         return { ...prev, [key]: false };
@@ -363,7 +433,7 @@ export default function AdminTourProgramWizard() {
 
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="font-serif text-3xl text-primary">Thêm mới chương trình tour</h1>
+            <h1 className="font-serif text-3xl text-primary">{headerTitle}</h1>
             <p className="text-xs text-primary/50 mt-1">Bước {step} / 4 - {
               step === 1 ? 'Thông tin chung' :
               step === 2 ? 'Lịch trình' :
@@ -372,18 +442,22 @@ export default function AdminTourProgramWizard() {
             }</p>
           </div>
           <div className="flex gap-3">
-            <button
-              onClick={handleSaveDraft}
-              className="px-6 py-2.5 border border-outline-variant/50 text-primary font-sans uppercase tracking-wider text-[11px] hover:bg-surface transition-colors"
-            >
-              Lưu nháp
-            </button>
-            <button
-              onClick={handleSubmitForApproval}
-              className="px-6 py-2.5 bg-emerald-600 text-white font-sans uppercase tracking-wider text-[11px] hover:bg-emerald-700 transition-colors"
-            >
-              Gửi phê duyệt
-            </button>
+            {headerActions ?? (!readOnly && (
+              <>
+                <button
+                  onClick={handleSaveDraft}
+                  className="px-6 py-2.5 border border-outline-variant/50 text-primary font-sans uppercase tracking-wider text-[11px] hover:bg-surface transition-colors"
+                >
+                  Lưu nháp
+                </button>
+                <button
+                  onClick={handleSubmitForApproval}
+                  className="px-6 py-2.5 bg-emerald-600 text-white font-sans uppercase tracking-wider text-[11px] hover:bg-emerald-700 transition-colors"
+                >
+                  Gửi phê duyệt
+                </button>
+              </>
+            ))}
           </div>
         </div>
 
@@ -413,7 +487,7 @@ export default function AdminTourProgramWizard() {
         </div>
 
         {step === 1 && (
-          <div className="space-y-10">
+          <fieldset disabled={readOnly} className="space-y-10 border-0 p-0 m-0">
             <section className="bg-white border border-outline-variant/30 p-8">
               <h2 className="font-headline text-lg text-primary mb-6 flex items-center gap-3">
                 <span className="material-symbols-outlined text-secondary">schedule</span>
@@ -865,11 +939,11 @@ export default function AdminTourProgramWizard() {
                 Tiếp theo: Lịch trình
               </button>
             </div>
-          </div>
+          </fieldset>
         )}
 
         {step === 2 && (
-          <div className="space-y-8">
+          <fieldset disabled={readOnly} className="space-y-8 border-0 p-0 m-0">
             <div className="bg-white border border-outline-variant/30 divide-y divide-outline-variant/20">
               {form?.itinerary?.map((day, idx) => (
                 <div key={day?.day} className="p-8">
@@ -969,11 +1043,11 @@ export default function AdminTourProgramWizard() {
                 Tiếp theo: Giá & Cấu hình
               </button>
             </div>
-          </div>
+          </fieldset>
         )}
 
         {step === 3 && (
-          <div className="space-y-8">
+          <fieldset disabled={readOnly} className="space-y-8 border-0 p-0 m-0">
             <section className="bg-white border border-outline-variant/30 p-6">
               <h2 className="font-headline text-lg text-primary mb-1 flex items-center gap-3">
                 <span className="material-symbols-outlined text-secondary">payments</span>
@@ -1071,11 +1145,11 @@ export default function AdminTourProgramWizard() {
                 Tiếp theo: Tour dự kiến
               </button>
             </div>
-          </div>
+          </fieldset>
         )}
 
         {step === 4 && (
-          <div className="space-y-6">
+          <fieldset disabled={readOnly} className="space-y-6 border-0 p-0 m-0">
             <section className="bg-white border border-outline-variant/30 p-6">
               <h2 className="font-headline text-lg text-primary mb-1 flex items-center gap-3">
                 <span className="material-symbols-outlined text-secondary">event_available</span>
@@ -1230,7 +1304,7 @@ export default function AdminTourProgramWizard() {
                 Gửi duyệt
               </button>
             </div>
-          </div>
+          </fieldset>
         )}
       </main>
     </div>

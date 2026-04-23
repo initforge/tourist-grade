@@ -28,6 +28,19 @@ type GenerateModalState = {
   rows: PreviewRow[];
 };
 
+type PendingApprovalEditState = {
+  requestId: string;
+  programId: string;
+  programName: string;
+  departurePoint: string;
+  sightseeingSpots: string[];
+  type: 'mua_le' | 'quanh_nam';
+  durationLabel: string;
+  startDate: string;
+  endDate: string;
+  rows: PreviewRow[];
+};
+
 const DEPLOYED_STATUSES = new Set(['san_sang_trien_khai', 'dang_trien_khai', 'cho_quyet_toan', 'hoan_thanh']);
 const OPEN_SELLING_STATUSES = new Set(['dang_mo_ban', 'cho_duyet_ban']);
 
@@ -91,6 +104,44 @@ function buildPreviewRows(programId: string): PreviewRow[] {
   });
 }
 
+function buildPendingApprovalEditState(instance: TourInstance): PendingApprovalEditState {
+  const program = mockTourPrograms?.find(item => item.id === instance.programId);
+  const durationDays = Math.max(1, program?.duration?.days ?? 1);
+  const endDate = new Date(instance.departureDate);
+  endDate.setDate(endDate.getDate() + durationDays - 1);
+  const sellPrice = Math.max(instance.priceAdult, program?.pricingConfig?.sellPriceAdult ?? 0);
+  const costPerAdult = Math.round(sellPrice * 0.68);
+  const profitPercent = sellPrice > 0 ? Number((((sellPrice - costPerAdult) / sellPrice) * 100).toFixed(1)) : 0;
+
+  return {
+    requestId: instance.id,
+    programId: instance.programId,
+    programName: instance.programName,
+    departurePoint: instance.departurePoint,
+    sightseeingSpots: instance.sightseeingSpots,
+    type: program?.tourType ?? 'quanh_nam',
+    durationLabel: program ? `${program.duration.days} ngày ${program.duration.nights} đêm` : '-',
+    startDate: instance.departureDate,
+    endDate: toDateInput(endDate.toISOString()),
+    rows: [
+      {
+        id: instance.id,
+        departureDate: instance.departureDate,
+        endDate: toDateInput(endDate.toISOString()),
+        dayType: program?.tourType === 'mua_le' ? 'Ngày lễ' : 'Quanh năm',
+        expectedGuests: Math.max(instance.expectedGuests, 1),
+        costPerAdult,
+        sellPrice,
+        profitPercent,
+        bookingDeadline: instance.bookingDeadline,
+        conflictLabel: 'Yêu cầu bán hiện tại',
+        conflictDetails: [],
+        checked: true,
+      },
+    ],
+  };
+}
+
 export default function TourGenerationRules() {
   const [subTab, setSubTab] = useState<SubTab>('quy_tac');
   const [searchQuery, setSearchQuery] = useState('');
@@ -99,7 +150,7 @@ export default function TourGenerationRules() {
   const [pendingApprovalItems, setPendingApprovalItems] = useState<TourInstance[]>(
     () => mockTourInstances?.filter(instance => instance.status === 'cho_duyet_ban'),
   );
-  const [editingPendingInstance, setEditingPendingInstance] = useState<TourInstance | null>(null);
+  const [editingPendingInstance, setEditingPendingInstance] = useState<PendingApprovalEditState | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TourInstance | null>(null);
 
   const activePrograms = useMemo(() => {
@@ -175,7 +226,7 @@ export default function TourGenerationRules() {
   const savePendingInstance = (patch: Partial<TourInstance>) => {
     if (!editingPendingInstance) return;
     setPendingApprovalItems(prev => prev.map(instance => (
-      instance.id === editingPendingInstance.id ? { ...instance, ...patch } : instance
+      instance.id === editingPendingInstance.requestId ? { ...instance, ...patch } : instance
     )));
     setEditingPendingInstance(null);
   };
@@ -343,7 +394,7 @@ export default function TourGenerationRules() {
                               <button onClick={() => setViewModal(instance)} className="px-3 py-1.5 border border-outline-variant/50 text-primary/60 text-[10px] uppercase tracking-wider hover:bg-surface transition-colors">
                                 Xem
                               </button>
-                              <button onClick={() => setEditingPendingInstance(instance)} className="px-3 py-1.5 bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-blue-700 transition-colors">
+                              <button onClick={() => setEditingPendingInstance(buildPendingApprovalEditState(instance))} className="px-3 py-1.5 bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-blue-700 transition-colors">
                                 Sửa
                               </button>
                               <button onClick={() => setDeleteTarget(instance)} className="px-3 py-1.5 border border-red-300 text-red-500 text-[10px] font-bold uppercase tracking-wider hover:bg-red-50 transition-colors">
@@ -428,18 +479,37 @@ export default function TourGenerationRules() {
         {editingPendingInstance && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-primary/40 backdrop-blur-sm" onClick={() => setEditingPendingInstance(null)} />
-            <div role="dialog" aria-modal="true" aria-labelledby="edit-pending-title" className="relative w-full max-w-lg bg-white shadow-2xl">
+            <div role="dialog" aria-modal="true" aria-labelledby="edit-pending-title" className="relative w-full max-w-6xl bg-white shadow-2xl max-h-[88vh] overflow-y-auto">
               <div className="border-b border-outline-variant/30 px-6 py-5">
                 <h3 id="edit-pending-title" className="font-serif text-xl text-primary">Sửa yêu cầu chờ duyệt bán</h3>
                 <p className="text-xs text-primary/50 mt-1">{editingPendingInstance.programName}</p>
               </div>
-              <div className="p-6 grid gap-4">
+              <div className="p-6 space-y-6">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {[
+                    { label: 'Tên chương trình', value: editingPendingInstance.programName },
+                    { label: 'Loại tour', value: editingPendingInstance.type === 'mua_le' ? 'Mùa lễ' : 'Quanh năm' },
+                    { label: 'Điểm khởi hành', value: editingPendingInstance.departurePoint },
+                    { label: 'Điểm tham quan', value: editingPendingInstance.sightseeingSpots.join(', ') },
+                    { label: 'Thời lượng tour', value: editingPendingInstance.durationLabel },
+                  ].map(item => (
+                    <div key={item.label} className="bg-[var(--color-surface)] p-3">
+                      <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label mb-1">{item.label}</p>
+                      <p className="text-sm font-medium text-primary">{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <label className="text-sm text-primary/70">
                   <span className="block text-[10px] uppercase tracking-widest text-primary/50 mb-1">Ngày khởi hành gần nhất</span>
                   <input
                     type="date"
-                    value={editingPendingInstance.departureDate}
-                    onChange={e => setEditingPendingInstance(prev => prev ? { ...prev, departureDate: e.target.value } : prev)}
+                    value={editingPendingInstance.rows[0]?.departureDate ?? ''}
+                    onChange={e => setEditingPendingInstance(prev => prev ? ({
+                      ...prev,
+                      rows: prev.rows.map((row, index) => index === 0 ? { ...row, departureDate: e.target.value } : row),
+                    }) : prev)}
                     className="w-full border border-outline-variant/50 px-4 py-2.5 outline-none"
                   />
                 </label>
@@ -448,11 +518,45 @@ export default function TourGenerationRules() {
                   <input
                     type="number"
                     min={1}
-                    value={editingPendingInstance.expectedGuests ?? 1}
-                    onChange={e => setEditingPendingInstance(prev => prev ? { ...prev, expectedGuests: parseInt(e.target.value, 10) || 1 } : prev)}
+                    value={editingPendingInstance.rows[0]?.expectedGuests ?? 1}
+                    onChange={e => setEditingPendingInstance(prev => prev ? ({
+                      ...prev,
+                      rows: prev.rows.map((row, index) => index === 0 ? { ...row, expectedGuests: parseInt(e.target.value, 10) || 1 } : row),
+                    }) : prev)}
                     className="w-full border border-outline-variant/50 px-4 py-2.5 outline-none"
                   />
                 </label>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-primary mb-3">Preview danh sách tour</p>
+                <div className="overflow-x-auto border border-outline-variant/30">
+                  <table className="w-full min-w-[980px]">
+                    <thead>
+                      <tr className="bg-[var(--color-surface)] border-b border-outline-variant/30">
+                        {['Mã tour', 'Ngày khởi hành', 'Ngày kết thúc', 'Loại ngày', 'Số khách dự kiến', 'Giá vốn', 'Giá bán', 'Lợi nhuận', 'Hạn đặt tour'].map(header => (
+                          <th key={header} className="text-left text-[10px] uppercase tracking-widest text-primary/50 font-medium px-4 py-3 whitespace-nowrap">
+                            {header}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {editingPendingInstance.rows.map(row => (
+                        <tr key={row.id} className="border-b border-outline-variant/20 last:border-0">
+                          <td className="px-4 py-3 font-mono text-xs">{row.id}</td>
+                          <td className="px-4 py-3 text-sm whitespace-nowrap">{formatDate(row.departureDate)}</td>
+                          <td className="px-4 py-3 text-sm whitespace-nowrap">{formatDate(row.endDate)}</td>
+                          <td className="px-4 py-3 text-sm">{row.dayType}</td>
+                          <td className="px-4 py-3 text-sm">{row.expectedGuests}</td>
+                          <td className="px-4 py-3 text-sm">{row.costPerAdult.toLocaleString('vi-VN')}đ</td>
+                          <td className="px-4 py-3 text-sm">{row.sellPrice.toLocaleString('vi-VN')}đ</td>
+                          <td className="px-4 py-3 text-sm">{row.profitPercent}%</td>
+                          <td className="px-4 py-3 text-sm">{formatDate(row.bookingDeadline)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
               <div className="border-t border-outline-variant/30 px-6 py-4 flex justify-end gap-3">
                 <button onClick={() => setEditingPendingInstance(null)} className="px-4 py-2 text-xs uppercase tracking-widest border border-outline-variant/50 text-primary/60">
@@ -460,13 +564,15 @@ export default function TourGenerationRules() {
                 </button>
                 <button
                   onClick={() => savePendingInstance({
-                    departureDate: editingPendingInstance.departureDate,
-                    expectedGuests: editingPendingInstance.expectedGuests,
+                    departureDate: editingPendingInstance.rows[0]?.departureDate,
+                    expectedGuests: editingPendingInstance.rows[0]?.expectedGuests,
+                    bookingDeadline: editingPendingInstance.rows[0]?.bookingDeadline,
                   })}
                   className="px-4 py-2 text-xs uppercase tracking-widest bg-primary text-white"
                 >
                   Lưu thay đổi
                 </button>
+              </div>
               </div>
             </div>
           </div>

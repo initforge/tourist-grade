@@ -22,8 +22,8 @@ export function voucherDaysUntil(startDate?: string, baseDate = voucherTodayIso(
   return Math.ceil((start.getTime() - base.getTime()) / 86400000);
 }
 
-export function canSaveVoucher(startDate?: string, createdAt = voucherTodayIso()) {
-  return voucherDaysUntil(startDate, createdAt) >= 10;
+export function canSaveVoucher(startDate?: string, today = voucherTodayIso()) {
+  return voucherDaysUntil(startDate, today) >= 10;
 }
 
 export function canSendVoucherApproval(startDate?: string, today = voucherTodayIso()) {

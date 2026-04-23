@@ -27,6 +27,16 @@ export interface Voucher {
   createdAt?: string;
 }
 
+function isoOffset(days: number) {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // Canonical mock data
 export const mockVouchers: Voucher[] = [
   {
@@ -88,14 +98,14 @@ export const mockVouchers: Voucher[] = [
     code: 'APPROVENOW',
     type: 'percent',
     value: '12%',
-    startDate: '2026-04-21',
-    endDate: '2026-05-31',
+    startDate: isoOffset(1),
+    endDate: isoOffset(40),
     used: 0,
     limit: 80,
     applicableTours: ['TP003'],
     status: 'pending_approval',
     createdBy: 'Nguyễn Văn Sales',
-    createdAt: '2026-04-18',
+    createdAt: isoOffset(-5),
     description: 'Dữ liệu mẫu kiểm tra cảnh báo phê duyệt còn 1-2 ngày',
   },
   {
@@ -103,14 +113,14 @@ export const mockVouchers: Voucher[] = [
     code: 'DRAFTWARN',
     type: 'fixed',
     value: '200,000 đ',
-    startDate: '2026-04-27',
-    endDate: '2026-05-15',
+    startDate: isoOffset(7),
+    endDate: isoOffset(25),
     used: 0,
     limit: 60,
     applicableTours: [],
     status: 'draft',
     createdBy: 'Nguyễn Văn Sales',
-    createdAt: '2026-04-20',
+    createdAt: isoOffset(0),
     description: 'Dữ liệu mẫu kiểm tra cảnh báo nháp sắp hết hạn gửi duyệt',
   },
   {

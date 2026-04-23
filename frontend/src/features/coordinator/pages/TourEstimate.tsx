@@ -453,7 +453,7 @@ export default function TourEstimate() {
                                       {expandedItems[itemKey] ? 'Thu gọn' : 'Mở rộng'}
                                     </button>
                                   )}
-                                  {appliedRow && (
+                                  {appliedRow && !hasMoreRows && (
                                     <button
                                       onClick={() => setPricePopup({ rowId: appliedRow?.rowId, itemName: appliedRow?.itemName, supplierName: appliedRow?.supplierName, systemPrice: appliedRow?.unitPrice })}
                                       className="text-[var(--color-secondary)] hover:text-[var(--color-primary)]"

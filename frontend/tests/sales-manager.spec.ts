@@ -117,9 +117,8 @@ test?.describe('Sales + Manager Verification', () => {
     await expect(page?.getByRole('columnheader', { name: 'Ngày gửi phê duyệt' }))?.toBeVisible();
     await expect(page?.getByRole('columnheader', { name: 'Ngày tạo' }))?.toHaveCount(0);
     await expect(page?.getByRole('columnheader', { name: 'Tour áp dụng' }))?.toBeVisible();
-    const approvalWarning = page?.getByText('Sắp đến ngày bắt đầu')?.first();
+    const approvalWarning = page?.locator('[title="Voucher sắp đến hạn bắt đầu, cần phải phê duyệt ngay."]')?.first();
     await expect(approvalWarning)?.toBeVisible();
-    await expect(approvalWarning)?.toHaveAttribute('title', 'Voucher sắp đến hạn bắt đầu, cần phải phê duyệt ngay.');
     await expect(page?.getByText('Mùa Thu Kyoto & Osaka'))?.toBeVisible();
     await expect(page?.getByText('Chi tiết'))?.toHaveCount(0);
 
