@@ -82,7 +82,7 @@ Travela là hệ thống OTA nội bộ + public booking, gồm:
 - `/coordinator/tours/:id/settle`
 - `/coordinator/services`
 - `/coordinator/suppliers`
-- `/coordinator/vouchers`
+- `/coordinator/vouchers` -> redirect về `/coordinator/dashboard` để giữ compatibility route cũ; menu voucher của điều phối đã bỏ khỏi UI
 
 ### Sales
 
@@ -108,6 +108,6 @@ Travela là hệ thống OTA nội bộ + public booking, gồm:
 - Landing
 - Tour list public
 - Blog detail public
-- Một số biểu đồ/tile dashboard mang tính trình bày
+- Một phần tile tổng quan dashboard vẫn mang tính trình bày; riêng `Báo cáo doanh thu theo ngày` của `sales`, `manager`, `coordinator` đã dùng line chart frontend từ aggregate mock
 
 Các phần này không phải nguồn dữ liệu nghiệp vụ và có thể nối API sau khi backend xong.

@@ -67,10 +67,11 @@ Suggested report API endpoints:
 
 Manager approval route: `/manager/tour-programs/:id/approval`
 
-- Approval screen renders the tour program in read-only mode with three business sections:
+- Approval screen renders the same read-only structure as the create flow with four steps:
   - `Thông tin chung`
   - `Lịch trình`
   - `Giá & Cấu hình`
+  - `Tour dự kiến`
 - Reject requires a non-empty reason before confirmation.
 - Approve changes the local UI state to `active` and displays `Đang hoạt động`.
 - `createdBy` and `createdAt` are preserved as source data; approval does not rewrite creator metadata.
@@ -96,6 +97,17 @@ Suggested API endpoint:
 
 - `POST /bookings` should validate `scheduleId`, available seats, passenger payload, contact payload, payment ratio, and payment method.
 
+## Sales Booking Confirmation
+
+Internal sales route: `/sales/bookings/:id?tab=pending_confirm`
+
+- Passenger edit popup allows temporary save even when `CCCD / GKS` is still blank or not yet valid because customer-entered source data may be incomplete.
+- Confirm action is the enforcement point:
+  - adult passengers need a 12-digit `CCCD`;
+  - child and infant passengers need a non-empty birth certificate / `GKS` value;
+  - booking cannot be confirmed when room counts for single, double, and triple are all `0`.
+- Refund bill edit cancel action must restore the previously saved image and must not create a new `editedAt` audit timestamp when no new image is committed.
+
 ## Cancellation Request Visibility
 
 Routes: `/booking/lookup`, `/customer/bookings`
@@ -110,7 +122,7 @@ Routes: `/booking/lookup`, `/customer/bookings`
 - Playwright should cover the role workflows:
   - Sales voucher create/edit/list/detail actions.
   - Manager voucher approval warning and confirmation flows.
-  - Sales/manager/coordinator dashboard daily revenue panels.
+  - Sales/manager/coordinator dashboard daily revenue line charts.
   - Sales report export field selections.
 
 ## Coordinator Internal Ops Mock Boundaries

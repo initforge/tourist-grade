@@ -142,7 +142,7 @@ Kết luận:
 | `frontend/src/features/coordinator/pages/CoordinatorDashboard.tsx` | Mock-owned | Aggregate báo cáo nên đi backend |
 | `frontend/src/features/coordinator/pages/TourGenerationRules.tsx` | Mock-owned | Rule sinh tour cần backend ownership |
 | `frontend/src/features/coordinator/pages/TourPrograms.tsx` | Mock-owned | CRUD/query program |
-| `frontend/src/features/coordinator/pages/TourProgramDetail.tsx` | Mock-owned | Chi tiết program |
+| `frontend/src/features/coordinator/pages/TourProgramDetail.tsx` | Wrapper / shared-screen consumer | Dùng chung `TourProgramDetailScreen` cho coordinator detail |
 | `frontend/src/features/coordinator/pages/TourProgramWizard.tsx` | Refactor hotspot | Wizard lớn, nhiều state business |
 | `frontend/src/features/coordinator/pages/TourInstances.tsx` | Mock-owned | Queue điều hành, cần API/filter thật |
 | `frontend/src/features/coordinator/pages/TourReceiveDispatch.tsx` | Mock-owned | Read-only receive screen, cần API receive ownership |
@@ -150,7 +150,7 @@ Kết luận:
 | `frontend/src/features/coordinator/pages/TourSettlement.tsx` | Refactor hotspot | Quyết toán edit actual cost tại page |
 | `frontend/src/features/coordinator/pages/ServiceList.tsx` | Refactor hotspot | Đang là catalog frontend-only, cần tách service catalog API |
 | `frontend/src/features/coordinator/pages/Suppliers.tsx` | Refactor hotspot | Supplier + guide + quote + edit cùng một page |
-| `frontend/src/features/coordinator/pages/Vouchers.tsx` | Mock-owned | Cần align với voucher module chính |
+| `frontend/src/features/coordinator/pages/Vouchers.tsx` | Legacy / route kept only for redirect compatibility | Sidebar đã bỏ voucher; route cũ redirect về dashboard |
 
 ### Manager
 
@@ -158,7 +158,8 @@ Kết luận:
 | --- | --- | --- |
 | `frontend/src/features/manager/pages/ManagerDashboard.tsx` | Mock-owned | Aggregate backend |
 | `frontend/src/features/manager/pages/TourPrograms.tsx` | Mock-owned | Approval list |
-| `frontend/src/features/manager/pages/TourProgramDetail.tsx` | Mock-owned | Approval detail |
+| `frontend/src/features/manager/pages/TourProgramDetail.tsx` | Wrapper / shared-screen consumer | Dùng cùng `TourProgramDetailScreen` với coordinator detail |
+| `frontend/src/features/coordinator/components/TourProgramDetailScreen.tsx` | Refactor hotspot | Shared detail screen cho coordinator/manager, cần tách tiếp khi backend hóa |
 | `frontend/src/features/manager/pages/AdminTourProgramApproval.tsx` | Mock-owned | Quy trình duyệt bán |
 | `frontend/src/features/manager/pages/TourEstimate.tsx` | Mock-owned | Read-only estimate |
 | `frontend/src/features/manager/pages/ManagerTourEstimateApproval.tsx` | Mock-owned | Duyệt dự toán |
