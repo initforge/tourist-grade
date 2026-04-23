@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview --configLoader native",
     "test:e2e": "playwright test",
-    "test:e2e:local": "playwright test --config=playwright.manual.config.ts"
+    "test:e2e:local": "playwright test --config=playwright.manual.config.ts",
+    "deploy:pages": "npm run build && npx --yes wrangler pages deploy dist --project-name tourist-grade"
   },
   "dependencies": {
     "antd": "^6.3.4",

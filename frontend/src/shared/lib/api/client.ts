@@ -1,4 +1,6 @@
-const API_BASE_URL = import.meta?.env?.VITE_API_BASE_URL ?? 'http://localhost:4000/api/v1';
+// Default to same-origin so static hosting (e.g. Cloudflare Pages) does not accidentally call localhost.
+// Local dev/docker should set VITE_API_BASE_URL explicitly when a real API is available.
+const API_BASE_URL = import.meta?.env?.VITE_API_BASE_URL ?? '';
 
 export class ApiError extends Error {
   status: number;

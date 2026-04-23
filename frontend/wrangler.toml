@@ -1,0 +1,6 @@
+name = "tourist-grade"
+compatibility_date = "2026-04-23"
+
+# Used by Cloudflare Pages when running `wrangler pages dev` or `wrangler pages deploy`.
+pages_build_output_dir = "dist"
+
