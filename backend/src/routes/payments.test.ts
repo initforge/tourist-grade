@@ -9,12 +9,14 @@ const prismaMock = {
   },
   paymentTransaction: {
     create: vi.fn(),
+    findMany: vi.fn(),
     findFirst: vi.fn(),
     update: vi.fn(),
   },
 };
 
 const payosClientMock = {
+  cancelPaymentLink: vi.fn(),
   createPaymentLink: vi.fn(),
   verifyPaymentWebhookData: vi.fn(),
   confirmWebhook: vi.fn(),
@@ -46,6 +48,7 @@ function createTestApp() {
 describe('payments routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.paymentTransaction.findMany.mockResolvedValue([]);
   });
 
   it('creates a PayOS link using the deposit amount when payment ratio is deposit', async () => {
@@ -86,7 +89,7 @@ describe('payments routes', () => {
     expect(response.body.paymentLink.checkoutUrl).toBe('https://pay.payos.vn/checkout/demo');
   });
 
-  it('reuses the latest unpaid PayOS link for the same booking instead of creating duplicates', async () => {
+  it('cancels existing unpaid PayOS links before creating a new payment request', async () => {
     prismaMock.booking.findUnique.mockResolvedValue({
       id: 'B003',
       bookingCode: 'BK-394821',
@@ -99,30 +102,47 @@ describe('payments routes', () => {
       contactPhone: '0988888888',
       tourInstance: {},
     });
-    prismaMock.paymentTransaction.findFirst.mockResolvedValue({
+    prismaMock.paymentTransaction.findMany.mockResolvedValue([{
       id: 'TX_UNPAID',
       bookingId: 'B003',
+      orderCode: '111222333',
       method: 'PAYOS',
       status: 'UNPAID',
       payloadJson: {
         checkoutUrl: 'https://pay.payos.vn/checkout/existing',
         paymentLinkId: 'plink_existing',
       },
+    }]);
+    payosClientMock.cancelPaymentLink.mockResolvedValue({ status: 'CANCELLED' });
+    payosClientMock.createPaymentLink.mockResolvedValue({
+      checkoutUrl: 'https://pay.payos.vn/checkout/new',
+      paymentLinkId: 'plink_new',
     });
 
     const response = await request(createTestApp()).post('/bookings/B003/payos-link');
 
     expect(response.status).toBe(200);
-    expect(response.body.reused).toBe(true);
-    expect(response.body.paymentLink.checkoutUrl).toBe('https://pay.payos.vn/checkout/existing');
-    expect(payosClientMock.createPaymentLink).not.toHaveBeenCalled();
-    expect(prismaMock.paymentTransaction.create).not.toHaveBeenCalled();
+    expect(payosClientMock.cancelPaymentLink).toHaveBeenCalledWith('111222333', expect.any(String));
+    expect(prismaMock.paymentTransaction.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'TX_UNPAID' },
+      data: expect.objectContaining({ status: 'CANCELLED' }),
+    }));
+    expect(payosClientMock.createPaymentLink).toHaveBeenCalledWith(expect.objectContaining({ amount: 28000000 }));
+    expect(response.body.paymentLink.checkoutUrl).toBe('https://pay.payos.vn/checkout/new');
+    expect(prismaMock.paymentTransaction.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        bookingId: 'B003',
+        status: 'UNPAID',
+        transactionRef: 'plink_new',
+      }),
+    }));
   });
 
   it('marks a payment as paid and updates booking balances from webhook data', async () => {
     payosClientMock.verifyPaymentWebhookData.mockReturnValue({
       orderCode: 123456789,
       amount: 4500000,
+      code: '00',
       transactionDateTime: '2026-04-24T10:00:00.000Z',
       reference: 'PAYOS-REF-1',
     });
@@ -162,6 +182,7 @@ describe('payments routes', () => {
     payosClientMock.verifyPaymentWebhookData.mockReturnValue({
       orderCode: 987654321,
       amount: 4500000,
+      status: 'PAID',
       transactionDateTime: '2026-04-24T10:00:00.000Z',
       reference: 'PAYOS-REF-2',
     });
@@ -178,6 +199,63 @@ describe('payments routes', () => {
     const response = await request(createTestApp())
       .post('/payos/webhook')
       .send({ data: 'payload' });
+
+    expect(response.status).toBe(200);
+    expect(prismaMock.paymentTransaction.update).not.toHaveBeenCalled();
+    expect(prismaMock.booking.update).not.toHaveBeenCalled();
+  });
+
+  it('marks an unpaid PayOS transaction as cancelled from webhook without changing booking money', async () => {
+    payosClientMock.verifyPaymentWebhookData.mockReturnValue({
+      orderCode: 333444555,
+      amount: 28000000,
+      status: 'CANCELLED',
+      transactionDateTime: '2026-04-24T10:00:00.000Z',
+      reference: 'PAYOS-CANCEL-1',
+    });
+    prismaMock.paymentTransaction.findFirst.mockResolvedValue({
+      id: 'TX_CANCELLED',
+      bookingId: 'B003',
+      status: 'UNPAID',
+      booking: {
+        paidAmount: 28000000,
+        totalAmount: 56000000,
+      },
+    });
+
+    const response = await request(createTestApp())
+      .post('/payos/webhook')
+      .send({ data: 'cancelled payload' });
+
+    expect(response.status).toBe(200);
+    expect(prismaMock.paymentTransaction.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'TX_CANCELLED' },
+      data: expect.objectContaining({ status: 'CANCELLED' }),
+    }));
+    expect(prismaMock.booking.update).not.toHaveBeenCalled();
+  });
+
+  it('ignores stale paid webhooks for locally cancelled PayOS transactions', async () => {
+    payosClientMock.verifyPaymentWebhookData.mockReturnValue({
+      orderCode: 444555666,
+      amount: 28000000,
+      status: 'PAID',
+      transactionDateTime: '2026-04-24T10:00:00.000Z',
+      reference: 'PAYOS-STALE-PAID',
+    });
+    prismaMock.paymentTransaction.findFirst.mockResolvedValue({
+      id: 'TX_STALE',
+      bookingId: 'B003',
+      status: 'CANCELLED',
+      booking: {
+        paidAmount: 28000000,
+        totalAmount: 56000000,
+      },
+    });
+
+    const response = await request(createTestApp())
+      .post('/payos/webhook')
+      .send({ data: 'stale paid payload' });
 
     expect(response.status).toBe(200);
     expect(prismaMock.paymentTransaction.update).not.toHaveBeenCalled();

@@ -9,6 +9,23 @@ function buildPayOSDescription(bookingCode: string) {
   return `Thanh toan ${bookingCode.replaceAll('-', '')}`.slice(0, 25);
 }
 
+function isPayOSPaidStatus(status: unknown) {
+  const normalized = String(status ?? '').toUpperCase();
+  return normalized === 'PAID' || normalized === '00';
+}
+
+function isPayOSCancelledStatus(status: unknown) {
+  return ['CANCELLED', 'CANCELED'].includes(String(status ?? '').toUpperCase());
+}
+
+function getPayOSWebhookStatus(paymentData: unknown) {
+  return (paymentData as { status?: unknown; code?: unknown } | null)?.status;
+}
+
+function getPayOSWebhookCode(paymentData: unknown) {
+  return (paymentData as { status?: unknown; code?: unknown } | null)?.code;
+}
+
 export function createPaymentsRouter() {
   const router = Router();
 
@@ -41,7 +58,7 @@ export function createPaymentsRouter() {
       throw badRequest('Booking has no remaining balance');
     }
 
-    const existingUnpaidTransaction = await prisma.paymentTransaction.findFirst({
+    const existingUnpaidTransactions = await prisma.paymentTransaction.findMany({
       where: {
         bookingId: booking.id,
         method: 'PAYOS',
@@ -50,19 +67,26 @@ export function createPaymentsRouter() {
       orderBy: { createdAt: 'desc' },
     });
 
-    const existingPaymentLink = existingUnpaidTransaction?.payloadJson as {
-      checkoutUrl?: string;
-      qrCode?: string;
-      paymentLinkId?: string;
-    } | null | undefined;
+    for (const transaction of existingUnpaidTransactions) {
+      if (transaction.orderCode) {
+        try {
+          await client.cancelPaymentLink(transaction.orderCode, 'A new payment request was created for this booking');
+        } catch {
+          // Keep local state consistent even if the PayOS link was already closed remotely.
+        }
+      }
 
-    if (existingUnpaidTransaction && existingPaymentLink?.checkoutUrl) {
-      res.json({
-        success: true,
-        reused: true,
-        paymentLink: existingPaymentLink,
+      await prisma.paymentTransaction.update({
+        where: { id: transaction.id },
+        data: {
+          status: 'CANCELLED',
+          payloadJson: {
+            ...((transaction.payloadJson as Record<string, unknown> | null) ?? {}),
+            cancelledAt: new Date().toISOString(),
+            cancellationReason: 'Superseded by a newer PayOS payment request',
+          },
+        },
       });
-      return;
     }
 
     const orderCode = Number(`${Date.now()}`.slice(-9));
@@ -110,6 +134,8 @@ export function createPaymentsRouter() {
 
     const paymentData = client.verifyPaymentWebhookData(req.body);
     const orderCode = String(paymentData.orderCode);
+    const webhookStatus = getPayOSWebhookStatus(paymentData);
+    const webhookCode = getPayOSWebhookCode(paymentData);
 
     const transaction = await prisma.paymentTransaction.findFirst({
       where: { orderCode },
@@ -123,8 +149,19 @@ export function createPaymentsRouter() {
       throw notFound('Payment transaction not found');
     }
 
-    const alreadyPaid = transaction.status === 'PAID';
-    if (!alreadyPaid) {
+    if (isPayOSCancelledStatus(webhookStatus) || isPayOSCancelledStatus(webhookCode)) {
+      if (transaction.status === 'UNPAID') {
+        await prisma.paymentTransaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: 'CANCELLED',
+            payloadJson: req.body,
+          },
+        });
+      }
+    } else if (transaction.status === 'CANCELLED') {
+      // Ignore stale webhooks from superseded PayOS links so old payment requests cannot change the booking.
+    } else if (transaction.status !== 'PAID' && (isPayOSPaidStatus(webhookStatus) || isPayOSPaidStatus(webhookCode))) {
       const nextPaidAmount = Number(transaction.booking.paidAmount) + Number(paymentData.amount);
       const totalAmount = Number(transaction.booking.totalAmount);
 
