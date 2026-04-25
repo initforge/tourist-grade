@@ -26,12 +26,20 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    env_file:
-      - ./backend/.env
     environment:
       NODE_ENV: development
       DATABASE_URL: postgresql://travela:travela@db:5432/travela?schema=public
       CORS_ORIGIN: http://localhost:8080,http://127.0.0.1:8080
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-travela-local-access-secret-change-in-production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-travela-local-refresh-secret-change-in-production}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      PAYOS_CLIENT_ID: ${PAYOS_CLIENT_ID:-}
+      PAYOS_API_KEY: ${PAYOS_API_KEY:-}
+      PAYOS_CHECKSUM_KEY: ${PAYOS_CHECKSUM_KEY:-}
+      PAYOS_RETURN_URL: ${PAYOS_RETURN_URL:-http://localhost:8080/booking/success}
+      PAYOS_CANCEL_URL: ${PAYOS_CANCEL_URL:-http://localhost:8080/booking/lookup}
+      PAYOS_WEBHOOK_URL: ${PAYOS_WEBHOOK_URL:-}
     ports:
       - '4000:4000'
 
