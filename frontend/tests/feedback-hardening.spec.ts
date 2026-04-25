@@ -26,7 +26,7 @@ async function loginAs(page: Page, role: 'customer' | 'sales' | 'coordinator' | 
   } as const;
 
   await page.locator('input[type="email"]').fill(credentials[role]);
-  await page.locator('input[type="password"]').fill('123456aA@');
+  await page.locator('input[type="password"]').fill('123456');
   await page.getByRole('button', { name: /Đăng Nhập|Đăng nhập|Dang Nhap|Dang nhap|ÄÄƒng Nháº­p/i }).click();
   await page.waitForURL((url) => !url.pathname.endsWith('/login'));
   await page.waitForResponse((response) => response.url().includes('/api/v1/bootstrap') && response.ok(), { timeout: 15000 }).catch(() => null);

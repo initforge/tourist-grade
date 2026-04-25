@@ -5,27 +5,27 @@ export type TestRole = 'admin' | 'customer' | 'sales' | 'coordinator' | 'manager
 const CREDENTIALS: Record<TestRole, { email: string; password: string; defaultPath: string }> = {
   admin: {
     email: 'admin@travela.vn',
-    password: '123456aA@',
+    password: '123456',
     defaultPath: '/admin/users',
   },
   manager: {
     email: 'manager@travela.vn',
-    password: '123456aA@',
+    password: '123456',
     defaultPath: '/manager/dashboard',
   },
   coordinator: {
     email: 'coordinator@travela.vn',
-    password: '123456aA@',
+    password: '123456',
     defaultPath: '/coordinator/dashboard',
   },
   sales: {
     email: 'sales@travela.vn',
-    password: '123456aA@',
+    password: '123456',
     defaultPath: '/sales/dashboard',
   },
   customer: {
     email: 'customer@travela.vn',
-    password: '123456aA@',
+    password: '123456',
     defaultPath: '/',
   },
 };

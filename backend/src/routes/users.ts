@@ -12,7 +12,7 @@ const userSchema = z.object({
   phone: z.string().optional().default(''),
   role: z.enum(['admin', 'manager', 'coordinator', 'sales', 'customer']),
   active: z.boolean().default(true),
-  password: z.string().min(8).optional(),
+  password: z.string().min(6).optional(),
 });
 
 const updateSchema = userSchema.partial();
@@ -24,8 +24,8 @@ const profileSchema = z.object({
 });
 
 const passwordSchema = z.object({
-  currentPassword: z.string().min(8),
-  newPassword: z.string().min(8),
+  currentPassword: z.string().min(6),
+  newPassword: z.string().min(6),
 });
 
 function toRole(role: string) {
@@ -132,7 +132,7 @@ export function createUsersRouter() {
         phone: input.data.phone,
         role: toRole(input.data.role),
         status: input.data.active ? 'ACTIVE' : 'INACTIVE',
-        passwordHash: await hashPassword(input.data.password ?? '123456aA@'),
+        passwordHash: await hashPassword(input.data.password ?? '123456'),
       },
     });
 

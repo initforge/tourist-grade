@@ -29,7 +29,7 @@ async function main() {
   await prisma.refreshToken.deleteMany();
   await prisma.user.deleteMany();
 
-  const defaultPasswordHash = await hashPassword('123456aA@');
+  const defaultPasswordHash = await hashPassword('123456');
 
   const [admin, manager, coordinator, sales, customer] = await Promise.all([
     prisma.user.create({
@@ -1093,11 +1093,11 @@ async function main() {
 
   console.log('Seed completed.');
   console.log('Accounts:');
-  console.log('admin@travela.vn / 123456aA@');
-  console.log('manager@travela.vn / 123456aA@');
-  console.log('coordinator@travela.vn / 123456aA@');
-  console.log('sales@travela.vn / 123456aA@');
-  console.log('customer@travela.vn / 123456aA@');
+  console.log('admin@travela.vn / 123456');
+  console.log('manager@travela.vn / 123456');
+  console.log('coordinator@travela.vn / 123456');
+  console.log('sales@travela.vn / 123456');
+  console.log('customer@travela.vn / 123456');
 }
 
 main()

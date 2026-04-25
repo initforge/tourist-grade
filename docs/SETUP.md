@@ -69,7 +69,7 @@ http://localhost:4000/health
 Mật khẩu tất cả tài khoản:
 
 ```text
-123456aA@
+123456
 ```
 
 - Admin: `admin@travela.vn`

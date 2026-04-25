@@ -40,7 +40,7 @@ function createEmptyForm(): UserFormState {
     phone: '',
     role: 'sales',
     active: true,
-    password: '123456aA@',
+    password: '123456',
   };
 }
 

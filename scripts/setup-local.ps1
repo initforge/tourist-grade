@@ -136,7 +136,7 @@ Wait-HttpOk 'http://localhost:4000/health' 90
 
 Write-Step 'Confirm webhook với PayOS'
 try {
-  $loginBody = @{ email = 'admin@travela.vn'; password = '123456aA@' } | ConvertTo-Json
+  $loginBody = @{ email = 'admin@travela.vn'; password = '123456' } | ConvertTo-Json
   $login = Invoke-RestMethod -Method Post -Uri 'http://localhost:4000/api/v1/auth/login' -ContentType 'application/json' -Body $loginBody
   $confirm = Invoke-RestMethod -Method Post -Uri 'http://localhost:4000/api/v1/payments/payos/confirm-webhook' -Headers @{ Authorization = "Bearer $($login.accessToken)" }
   Write-Host "PayOS webhook confirmed: $($confirm.webhookUrl)" -ForegroundColor Green
