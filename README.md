@@ -1,18 +1,18 @@
 # Travela
 
-Chạy local chỉ cần Docker + file `backend/.env` được gửi riêng.
+Chay local can Docker Desktop va file `backend/.env` duoc gui rieng.
 
 ```powershell
 git clone https://github.com/initforge/tourist-grade.git
 cd tourist-grade
-# copy file .env vào đúng: tourist-grade/backend/.env
+# copy file .env vao dung: tourist-grade/backend/.env
 powershell -ExecutionPolicy Bypass -File scripts/setup-local.ps1
 ```
 
-Mở web:
+Mo web:
 
 ```text
 http://localhost:8080
 ```
 
-Hướng dẫn đầy đủ nằm ở `docs/SETUP.md`.
+Huong dan ngan gon nam o `docs/SETUP.md`.
