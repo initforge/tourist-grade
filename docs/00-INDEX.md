@@ -29,6 +29,7 @@ Bộ tài liệu này được sắp theo thứ tự đọc từ đầu đến c
 - [09. Implementation Roadmap](09-IMPLEMENTATION-ROADMAP.md) — roadmap triển khai/hoàn thiện.
 - [12. Codebase Audit](12-CODEBASE-AUDIT.md) — snapshot audit codebase.
 - [13. Migration Playbook](13-MIGRATION-PLAYBOOK.md) — playbook chuyển từ mock sang API thật.
+- [15. Local Real PayOS Setup](15-LOCAL-REAL-PAYOS-SETUP.md) — hướng dẫn non-tech để setup local với PayOS thật.
 
 ## Source of truth trong code
 
@@ -48,3 +49,4 @@ Bộ tài liệu này được sắp theo thứ tự đọc từ đầu đến c
 - Thay đổi route hoặc flow UI thì cập nhật `01`, `02`, và test liên quan.
 - Thay đổi Docker/env/deploy thì cập nhật `07`, `10`, `14`.
 - Không ghi secret thật vào docs hoặc repo. PayOS thật phải đi qua env/secret manager.
+

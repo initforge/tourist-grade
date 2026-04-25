@@ -54,7 +54,7 @@ Sau đó restart backend:
 docker compose up -d --build backend
 ```
 
-Không commit secret thật vào repo.
+Không commit secret thật vào repo. Nếu đang dùng chính máy local đã setup PayOS, xem file local-only `.local/LOCAL-CREDENTIALS.md` để copy credentials vào root `.env` trên máy mới.
 
 ## Test nhanh
 
@@ -93,3 +93,6 @@ Bắt đầu từ [docs/00-INDEX.md](docs/00-INDEX.md). Thứ tự chính:
 7. [Docker and Environment](docs/07-INFRA-DOCKER-ENV.md)
 8. [Setup To Production](docs/10-SETUP-TO-PRODUCTION.md)
 9. [Cloudflare Pages and PayOS Webhook](docs/14-CLOUDFLARE-PAGES.md)
+10. [Local Real PayOS Setup](docs/15-LOCAL-REAL-PAYOS-SETUP.md)
+
+
