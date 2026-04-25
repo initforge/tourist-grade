@@ -1,92 +1,109 @@
-# 04. Backend Architecture
+﻿# 04. Backend Architecture
 
-## 4.1 Stack chốt
+## Mục tiêu backend
 
-- Runtime: Node.js 22
-- HTTP layer: Express
-- ORM: Prisma
-- Database: PostgreSQL
-- Validation: Zod
-- Container: Docker Compose
+Backend là source of truth cho dữ liệu, trạng thái workflow, auth, payment, cancellation/refund và seed demo. Frontend không nên tự quyết định business state cuối cùng.
 
-Lý do chọn:
+## Stack
 
-- Nhanh để dựng tiếp từ hiện trạng frontend.
-- Prisma cho migration/schema rõ ràng.
-- Express đủ nhẹ cho giai đoạn implement nhanh, không tạo thêm framework overhead.
+- Runtime: Node.js 22.
+- Framework: Express 5.
+- ORM: Prisma.
+- Database: PostgreSQL 16.
+- Validation: Zod.
+- Auth: JWT access token + refresh token.
+- Payment integration: PayOS.
+- Test: Vitest + Supertest.
 
-## 4.2 Kiến trúc module đề xuất
+## Cấu trúc thư mục
 
-### Core
-
-- `src/config/*`: env, app config
-- `src/middlewares/*`: auth, error, request logging
-- `src/lib/*`: db, jwt, crypto, pagination, response helpers
-
-### Modules
-
-- `src/modules/auth/*`
-- `src/modules/users/*`
-- `src/modules/tour-programs/*`
-- `src/modules/tour-instances/*`
-- `src/modules/bookings/*`
-- `src/modules/vouchers/*`
-- `src/modules/suppliers/*`
-- `src/modules/blogs/*`
-- `src/modules/reports/*`
-
-## 4.3 Mẫu cấu trúc một module
-
-- `controller.ts`: nhận request/response
-- `service.ts`: business rules
-- `repository.ts`: Prisma queries
-- `schema.ts`: Zod request validation
-- `mapper.ts`: transform DB model ↔ API DTO
-- `types.ts`: module-level types nếu cần
-
-## 4.4 Response envelope
-
-Chuẩn nên dùng:
-
-```json
-{
-  "success": true,
-  "data": {},
-  "meta": {}
-}
+```text
+backend/
+  prisma/
+    schema.prisma
+    seed.ts
+  src/
+    app.ts
+    index.ts
+    config/env.ts
+    lib/
+    middleware/
+    routes/
 ```
 
-Lỗi:
+## App lifecycle
+
+1. `src/index.ts` khởi động server.
+2. `src/app.ts` tạo Express app, middleware, health route và `/api/v1` router.
+3. `src/routes/v1.ts` mount các domain route.
+4. Route gọi Prisma qua `src/lib/prisma.ts`.
+5. Mapper trong `src/lib/mappers.ts` convert Prisma model sang UI/API model.
+
+## Middleware
+
+- `authenticate`: bắt buộc JWT hợp lệ và user active.
+- `authenticateOptional`: đọc JWT nếu có, không fail nếu guest.
+- `requireRoles`: kiểm tra role nội bộ.
+
+## Domain routes
+
+- `auth.ts`: login, refresh, logout, me, register.
+- `bootstrap.ts`: payload tổng hợp cho frontend sau login/khởi động.
+- `public.ts`: public catalog/blog/tour data.
+- `bookings.ts`: create booking, lookup, update, cancel request.
+- `payments.ts`: PayOS link, webhook, confirm webhook.
+- `users.ts`: admin user/customer operations.
+- `vouchers.ts`: sales/manager voucher flow.
+- `tour-programs.ts`: chương trình tour và approval.
+- `tour-instances.ts`: instance workflow, dispatch, estimate, settlement.
+- `services.ts`: service catalog.
+- `suppliers.ts`: supplier catalog.
+- `dev.ts`: reset fixtures cho local/test, không dùng production.
+
+## Payment architecture
+
+PayOS flow:
+
+1. Frontend gọi `POST /api/v1/payments/bookings/:id/payos-link`.
+2. Backend tính số tiền còn phải trả.
+3. Backend hủy các PayOS transaction cũ của cùng booking còn `UNPAID`.
+4. Backend tạo payment link mới.
+5. Backend lưu `PaymentTransaction` với status `UNPAID`.
+6. PayOS gọi webhook.
+7. Backend verify signature bằng PayOS SDK.
+8. Nếu paid hợp lệ thì update transaction + booking balance.
+9. Nếu webhook thuộc transaction đã `CANCELLED`, backend ignore để tránh trạng thái cũ làm loạn booking.
+
+## Seed và reset
+
+- `prisma/seed.ts` tạo user, tour, booking, voucher, service, supplier và workflow demo.
+- `POST /api/v1/dev/reset-booking-fixtures` reset booking/voucher/tour workflow về trạng thái QA.
+- Route dev chỉ phục vụ local/test.
+
+## Error contract
+
+API trả JSON theo tinh thần:
 
 ```json
-{
-  "success": false,
-  "message": "Human readable error",
-  "errors": []
-}
+{ "success": false, "message": "Human-readable error" }
 ```
 
-## 4.5 Auth strategy
+Các helper lỗi nằm trong `src/lib/http.ts`.
 
-- Access token JWT ngắn hạn.
-- Refresh token lưu DB.
-- Role check bằng middleware.
-- Không dùng auth giả lập sau khi module `auth` hoàn thành.
+## Test backend
 
-## 4.6 Business boundary quan trọng
+- Unit/integration route test nằm cạnh route hoặc lib.
+- Chạy:
 
-- Không để frontend tự tính trạng thái nghiệp vụ quan trọng.
-- Validation vòng đời tour/booking/voucher phải ở backend.
-- Giá trị report/dashboard phải lấy từ aggregate query hoặc materialized logic phía server.
+```bash
+cd backend
+npm test
+npm run build
+```
 
-## 4.7 Thứ tự module backend nên làm
+Các case quan trọng:
 
-1. `auth`
-2. `tour-programs`
-3. `tour-instances`
-4. `bookings`
-5. `users`
-6. `vouchers`
-7. `suppliers`
-8. `blogs`
-9. `reports`
+- Auth và protected route.
+- Booking create/lookup/cancel.
+- PayOS create link, cancel stale link, webhook paid, webhook cancelled, ignore stale webhook.
+- Text normalization.

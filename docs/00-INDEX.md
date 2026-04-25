@@ -1,48 +1,50 @@
-# 00. Docs Index
+﻿# Travela Documentation
 
-Đây là bộ tài liệu nguồn đọc chính của repo trong giai đoạn chuyển tiếp từ frontend demo sang full stack chạy local bằng Docker.
+Travela là hệ thống đặt tour và vận hành tour nội bộ, gồm public booking, khu khách hàng, và dashboard cho các vai trò vận hành.
 
-## Trạng thái hiện tại
+Bộ tài liệu này được sắp theo thứ tự đọc từ đầu đến cuối. Nếu mới clone repo hoặc mới tham gia dự án, đọc theo đúng thứ tự bên dưới.
 
-- Môi trường chuẩn để chạy repo là `localhost` qua `docker compose`.
-- Frontend vẫn còn một phần mock/seed để phục vụ demo và kiểm thử UI.
-- Backend đã có scaffold `Express + Prisma + PostgreSQL`, chưa implement đủ business logic.
-- Docker đã có local stack cho `frontend + backend + postgres`.
+## 1. Đọc nhanh để hiểu sản phẩm
 
-## Thứ tự nên đọc
+1. [01. System Overview](01-CURRENT-SYSTEM.md) — Travela là gì, ai dùng, các phân hệ chính.
+2. [03. Domain Model](03-DOMAIN-MODEL.md) — các khái niệm business: tour program, tour instance, booking, voucher, payment, cancellation.
+3. [02. Frontend Modules](02-FRONTEND-MODULES.md) — map màn hình theo từng role và trách nhiệm UI.
 
-1. [01-CURRENT-SYSTEM.md](01-CURRENT-SYSTEM.md)
-2. [02-FRONTEND-MODULES.md](02-FRONTEND-MODULES.md)
-3. [03-DOMAIN-MODEL.md](03-DOMAIN-MODEL.md)
-4. [04-BACKEND-ARCHITECTURE.md](04-BACKEND-ARCHITECTURE.md)
-5. [05-API-CONTRACT.md](05-API-CONTRACT.md)
-6. [06-DATABASE-DESIGN.md](06-DATABASE-DESIGN.md)
-7. [07-INFRA-DOCKER-ENV.md](07-INFRA-DOCKER-ENV.md)
-8. [08-CLEANUP-DECISIONS.md](08-CLEANUP-DECISIONS.md)
-9. [09-IMPLEMENTATION-ROADMAP.md](09-IMPLEMENTATION-ROADMAP.md)
-10. [10-SETUP-TO-PRODUCTION.md](10-SETUP-TO-PRODUCTION.md)
-11. [12-CODEBASE-AUDIT.md](12-CODEBASE-AUDIT.md)
-12. [13-MIGRATION-PLAYBOOK.md](13-MIGRATION-PLAYBOOK.md)
-13. [14-CLOUDFLARE-PAGES.md](14-CLOUDFLARE-PAGES.md)
+## 2. Đọc để hiểu kỹ thuật
 
-## Source Of Truth
+4. [04. Backend Architecture](04-BACKEND-ARCHITECTURE.md) — Express, route, middleware, Prisma, seed, mapper.
+5. [05. API Contract](05-API-CONTRACT.md) — endpoint chính, auth, booking, payment, workflow.
+6. [06. Database Design](06-DATABASE-DESIGN.md) — schema PostgreSQL/Prisma và quan hệ dữ liệu.
+7. [07. Docker and Environment](07-INFRA-DOCKER-ENV.md) — chạy local bằng Docker, env, reset dữ liệu.
 
-- Route map frontend: `frontend/src/app/AppRouter.tsx`
-- Auth/session frontend: `frontend/src/shared/store/useAuthStore.ts`
-- API client frontend: `frontend/src/shared/lib/api/client.ts`
-- Backend entrypoint: `backend/src/index.ts`
-- Backend app/router: `backend/src/app.ts`, `backend/src/routes/v1.ts`
-- Database schema draft: `backend/prisma/schema.prisma`
-- Docker local stack: `docker-compose.yml`
-- Local runbook: `docs/07-INFRA-DOCKER-ENV.md`, `docs/10-SETUP-TO-PRODUCTION.md`
-- Codebase audit snapshot: `docs/12-CODEBASE-AUDIT.md`
-- Migration playbook: `docs/13-MIGRATION-PLAYBOOK.md`
+## 3. Đọc để vận hành / release
 
-## Quy ước làm tiếp
+8. [10. Setup To Production](10-SETUP-TO-PRODUCTION.md) — local, staging, production checklist.
+9. [14. Cloudflare Pages and PayOS Webhook](14-CLOUDFLARE-PAGES.md) — deploy frontend, public backend, PayOS webhook.
+10. [11. Feedback Checklist](11-FEEDBACK-ROW-CHECKLIST.md) — checklist phản hồi QA/business.
 
-- Tất cả hướng dẫn vận hành mặc định bám `localhost`.
-- Không mở rộng thêm mock frontend cho các module mới nếu có thể seed từ backend.
-- Dữ liệu thật phải đi qua API; mock frontend chỉ là lớp chuyển tiếp cho local demo.
-- Nếu cần dữ liệu demo cho QA, ưu tiên seed DB riêng ở backend thay vì hard-code vào page/component.
-- Mọi thay đổi domain/API phải cập nhật docs `03`, `05`, `06`, `09`.
-- Trước khi cắt mock của một module, phải cập nhật thêm `12` và `13`.
+## 4. Tài liệu phụ trợ / lịch sử
+
+- [08. Cleanup Decisions](08-CLEANUP-DECISIONS.md) — quyết định cleanup và chuẩn dữ liệu.
+- [09. Implementation Roadmap](09-IMPLEMENTATION-ROADMAP.md) — roadmap triển khai/hoàn thiện.
+- [12. Codebase Audit](12-CODEBASE-AUDIT.md) — snapshot audit codebase.
+- [13. Migration Playbook](13-MIGRATION-PLAYBOOK.md) — playbook chuyển từ mock sang API thật.
+
+## Source of truth trong code
+
+- Frontend route map: `frontend/src/app/AppRouter.tsx`
+- Auth store: `frontend/src/shared/store/useAuthStore.ts`
+- App data store: `frontend/src/shared/store/useAppDataStore.ts`
+- Backend app: `backend/src/app.ts`
+- API router: `backend/src/routes/v1.ts`
+- Prisma schema: `backend/prisma/schema.prisma`
+- Seed data: `backend/prisma/seed.ts`
+- Docker stack: `docker-compose.yml`
+- E2E tests: `frontend/tests/*.spec.ts`
+
+## Quy ước cập nhật docs
+
+- Thay đổi business rule thì cập nhật `03`, `05`, `06` nếu có API/DB liên quan.
+- Thay đổi route hoặc flow UI thì cập nhật `01`, `02`, và test liên quan.
+- Thay đổi Docker/env/deploy thì cập nhật `07`, `10`, `14`.
+- Không ghi secret thật vào docs hoặc repo. PayOS thật phải đi qua env/secret manager.

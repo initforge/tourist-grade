@@ -1,40 +1,78 @@
-# 01. Current System
+﻿# 01. System Overview
 
-## 1.1 Mục tiêu repo
+## Mục tiêu sản phẩm
 
-Travela là hệ thống OTA nội bộ + public booking, gồm:
+Travela là hệ thống OTA/tour operation phục vụ hai nhóm người dùng:
 
-- Public site cho khách xem tour, xem blog, đặt tour, tra cứu đơn.
-- Dashboard nội bộ cho `admin`, `manager`, `coordinator`, `sales`.
-- Khu vực khách hàng cho lịch sử booking, chi tiết booking, wishlist, profile.
+- Khách hàng: xem tour, đặt tour, thanh toán, tra cứu booking, quản lý lịch sử đặt tour, yêu thích tour, cập nhật hồ sơ.
+- Nhân sự nội bộ: quản trị người dùng, bán hàng, duyệt chương trình/voucher/dự toán, điều phối tour, quản lý nhà cung cấp và dịch vụ.
 
-## 1.2 Trạng thái code hiện tại
+Mục tiêu local demo là chạy được full stack bằng Docker để người mới clone repo có thể xem và test toàn bộ luồng nghiệp vụ chính.
 
-- Repo hiện chỉ có frontend hoàn chỉnh về mặt màn hình và flow.
-- Backend thật chưa implement nhưng đã có scaffold.
-- Dữ liệu business mock trong `frontend/src/data/*` đã bị rút về rỗng để chặn lệ thuộc vào dữ liệu demo.
-- Một số trang marketing/public vẫn còn text và hình tĩnh phục vụ layout, nhưng không còn business records giả cho booking/tour/user/voucher.
+## Phân hệ chính
 
-## 1.3 Cấu trúc repo
+### Public site
 
-- `frontend/`: React 19, Vite, Zustand, Tailwind v4, Ant Design.
-- `backend/`: Express scaffold, Prisma schema, env + docker.
-- `docs/`: bộ docs đánh số.
-- `docker-compose.yml`: local stack.
+- Landing page giới thiệu thương hiệu.
+- Danh sách tour và chi tiết tour.
+- Checkout đặt tour theo lịch khởi hành.
+- Tra cứu booking bằng mã booking + số điện thoại/email.
+- Blog và trang giới thiệu.
 
-## 1.4 Route map frontend
+### Customer area
+
+- Lịch sử booking.
+- Chi tiết booking.
+- Yêu cầu hủy tour.
+- Wishlist.
+- Profile.
+
+### Admin
+
+- Quản lý nhân sự nội bộ.
+- Xem danh sách khách hàng.
+- Khóa/mở khóa tài khoản.
+- Xem lịch sử giao dịch/booking của khách.
+
+### Sales
+
+- Dashboard kinh doanh.
+- Quản lý booking theo trạng thái.
+- Kiểm tra thông tin hành khách.
+- Xác nhận booking.
+- Xử lý yêu cầu hủy và hoàn tiền.
+- Tạo voucher và gửi duyệt.
+
+### Manager
+
+- Duyệt/từ chối voucher.
+- Duyệt/từ chối chương trình tour.
+- Duyệt/từ chối/yêu cầu chỉnh sửa dự toán.
+- Theo dõi tour đang hoạt động.
+- Quản lý ngày đặc biệt và chính sách hủy.
+
+### Coordinator
+
+- Quản lý chương trình tour.
+- Nhận điều hành tour.
+- Lập dự toán.
+- Phân công hướng dẫn viên.
+- Theo dõi tour đang vận hành và quyết toán.
+- Quản lý dịch vụ và nhà cung cấp.
+
+## Route map chính
 
 ### Public
 
-- `/`: landing
-- `/tours`: danh sách tour
-- `/tours/:slug`: chi tiết tour
-- `/tours/:slug/book`: checkout
-- `/booking/success`: trang thành công
-- `/booking/lookup`: tra cứu booking
-- `/blog`: danh sách blog
-- `/blog/:slug`: chi tiết blog
-- `/about`: giới thiệu
+- `/`
+- `/tours`
+- `/tours/:slug`
+- `/tours/:slug/book`
+- `/booking/success`
+- `/booking/lookup`
+- `/blog`
+- `/blog/:slug`
+- `/about`
 
 ### Auth
 
@@ -51,63 +89,27 @@ Travela là hệ thống OTA nội bộ + public booking, gồm:
 - `/customer/wishlist`
 - `/customer/profile`
 
-### Admin
+### Internal roles
 
-- `/admin/users`
+- Admin: `/admin/users`
+- Sales: `/sales/dashboard`, `/sales/bookings`, `/sales/bookings/:id`, `/sales/vouchers`
+- Manager: `/manager/dashboard`, `/manager/tour-programs`, `/manager/tours`, `/manager/voucher-approval`, `/manager/special-days`
+- Coordinator: `/coordinator/dashboard`, `/coordinator/tour-programs`, `/coordinator/tours`, `/coordinator/services`, `/coordinator/suppliers`
 
-### Manager
+## Trạng thái hiện tại
 
-- `/manager/dashboard`
-- `/manager/tour-programs`
-- `/manager/tour-programs/:id`
-- `/manager/tour-programs/:id/approval`
-- `/manager/tours`
-- `/manager/tours/:id/estimate`
-- `/manager/tours/:id/estimate-approval`
-- `/manager/voucher-approval`
-- `/manager/cancel-policies`
-- `/manager/vouchers`
-- `/manager/special-days`
+- Frontend chạy bằng React + Vite, dùng API backend qua app data store.
+- Backend chạy Express + Prisma + PostgreSQL.
+- Docker Compose chạy đủ `frontend + backend + db`.
+- Seed tạo dữ liệu demo đủ cho các role và luồng QA.
+- Test E2E bao phủ public/customer/admin/sales/manager/coordinator.
 
-### Coordinator
+## Tài khoản seed
 
-- `/coordinator/dashboard`
-- `/coordinator/tour-programs`
-- `/coordinator/tour-programs/create`
-- `/coordinator/tour-programs/:id`
-- `/coordinator/tour-programs/:id/receive`
-- `/coordinator/tour-rules`
-- `/coordinator/tours`
-- `/coordinator/tours/:id/estimate`
-- `/coordinator/tours/:id/settle`
-- `/coordinator/services`
-- `/coordinator/suppliers`
-- `/coordinator/vouchers` -> redirect về `/coordinator/dashboard` để giữ compatibility route cũ; menu voucher của điều phối đã bỏ khỏi UI
+Tất cả dùng mật khẩu `123456aA@`:
 
-### Sales
-
-- `/sales/dashboard`
-- `/sales/bookings`
-- `/sales/bookings/:id`
-- `/sales/vouchers`
-
-## 1.5 Auth hiện tại
-
-- Auth frontend đang là session giả lập bằng localStorage.
-- Không còn `mockUsers` records; login tạo `session user` theo role để giữ flow điều hướng.
-- Khi backend auth land, `useAuthStore` là điểm thay thế đầu tiên.
-
-## 1.6 Hành vi sau khi bỏ mock data
-
-- Các trang list sử dụng domain data thật sẽ hiển thị rỗng nếu API chưa có dữ liệu.
-- Các trang detail phụ thuộc record cụ thể sẽ hiển thị not found / chưa có dữ liệu.
-- Đây là chủ đích để tránh việc UI tiếp tục phụ thuộc vào data demo.
-
-## 1.7 Những phần hiện còn tĩnh
-
-- Landing
-- Tour list public
-- Blog detail public
-- Một phần tile tổng quan dashboard vẫn mang tính trình bày; riêng `Báo cáo doanh thu theo ngày` của `sales`, `manager`, `coordinator` đã dùng line chart frontend từ aggregate mock
-
-Các phần này không phải nguồn dữ liệu nghiệp vụ và có thể nối API sau khi backend xong.
+- `admin@travela.vn`
+- `manager@travela.vn`
+- `coordinator@travela.vn`
+- `sales@travela.vn`
+- `customer@travela.vn`

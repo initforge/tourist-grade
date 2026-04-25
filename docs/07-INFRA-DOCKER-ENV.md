@@ -1,95 +1,123 @@
-# 07. Infra, Docker, Env
+﻿# 07. Docker and Environment
 
-## Standard local stack
+## Mục tiêu
 
-`docker-compose.yml` defines:
+Local demo phải chạy được trên máy mới chỉ với Git và Docker.
 
-- `db`: PostgreSQL 16
-- `backend`: Express + Prisma API
-- `frontend`: built Vite app served by Nginx
+Không bắt buộc cài Node.js, PostgreSQL, Prisma CLI, hoặc tự copy env để xem hệ thống.
 
-## Ports
+## Lệnh chạy local
+
+```bash
+git clone https://github.com/initforge/tourist-grade.git
+cd tourist-grade
+docker compose up -d --build
+```
+
+Sau khi chạy:
 
 - Frontend: `http://localhost:8080`
-- Backend: `http://localhost:4000`
-- Postgres: `localhost:5432`
+- Backend health: `http://localhost:4000/health`
+- Backend API: `http://localhost:4000/api/v1`
+- PostgreSQL: `localhost:5432`
 
-## Backend env
+## Docker services
 
-Primary file:
+### `db`
 
-- `backend/.env`
+- Image: `postgres:16-alpine`
+- Database: `travela`
+- User/password local: `travela/travela`
+- Volume: `travela-postgres`
 
-Template:
+### `backend`
 
-- `backend/.env.example`
+- Build từ `backend/Dockerfile`.
+- Chạy Express + Prisma.
+- Khi container start, backend đảm bảo schema/seed local theo script hiện tại.
+- Port: `4000`.
 
-Main variables:
+### `frontend`
+
+- Build từ `frontend/Dockerfile`.
+- Build Vite static app.
+- Serve bằng nginx.
+- Port: `8080`.
+
+## Env mặc định
+
+`docker-compose.yml` đã cung cấp default development env cho local:
 
 - `DATABASE_URL`
 - `CORS_ORIGIN`
 - `JWT_ACCESS_SECRET`
 - `JWT_REFRESH_SECRET`
-- `JWT_ACCESS_EXPIRES_IN`
-- `JWT_REFRESH_EXPIRES_IN`
-- `PAYOS_CLIENT_ID`
-- `PAYOS_API_KEY`
-- `PAYOS_CHECKSUM_KEY`
-- `PAYOS_RETURN_URL`
-- `PAYOS_CANCEL_URL`
-- `PAYOS_WEBHOOK_URL`
+- token expiry
+- PayOS variables optional
 
-## Frontend env
+Vì vậy máy mới không cần `backend/.env` để chạy demo.
 
-Primary file:
+## Khi nào cần env thật?
 
-- `frontend/.env`
+Chỉ cần env thật nếu muốn:
 
-Main variable:
+- Test PayOS thật với payment link thật.
+- Deploy staging/production.
+- Đổi domain frontend/backend.
+- Đổi JWT secret production.
 
-- `VITE_API_BASE_URL=http://localhost:4000/api/v1`
-
-## Expected startup flow
-
-Backend container startup now does:
-
-1. `prisma db push`
-2. `prisma seed`
-3. `npm run dev`
-
-This keeps local Docker bootstrap close to one-command usage.
-
-## Commands
-
-Full stack:
+Tạo file `.env` ở root repo nếu cần override Compose variables:
 
 ```bash
-docker compose up --build
+PAYOS_CLIENT_ID=...
+PAYOS_API_KEY=...
+PAYOS_CHECKSUM_KEY=...
+PAYOS_WEBHOOK_URL=https://<public-backend>/api/v1/payments/payos/webhook
+JWT_ACCESS_SECRET=...
+JWT_REFRESH_SECRET=...
 ```
 
-Background:
+Không commit `.env` thật.
+
+## Lệnh vận hành thường dùng
 
 ```bash
+# build và chạy
 docker compose up -d --build
-```
 
-Logs:
+# xem logs
+docker compose logs -f backend
 
-```bash
-docker compose logs -f
-```
+# dừng stack
+docker compose down
 
-Reset local data:
-
-```bash
+# xóa cả database volume để seed lại từ đầu
 docker compose down -v
-docker compose up --build
+
+# reset fixtures qua API
+curl -X POST http://localhost:4000/api/v1/dev/reset-booking-fixtures
 ```
 
-## Current verification constraint
+## Test local ngoài Docker
 
-The repository is wired for Docker-first local run, but actual end-to-end verification still requires:
+Nếu muốn chạy test bằng Node local:
 
-- Docker Desktop daemon running
-- PostgreSQL container healthy
-- optional Cloudflare Tunnel for PayOS webhook callbacks
+```bash
+cd backend
+npm ci
+npm test
+npm run build
+```
+
+```bash
+cd frontend
+npm ci
+npm run build
+npx playwright test --workers=1
+```
+
+## Lưu ý PayOS local
+
+- Không có PayOS keys thì app vẫn chạy local, nhưng payment-link thật sẽ không gọi được PayOS.
+- Có keys thật thì backend tạo link PayOS thật.
+- PayOS webhook cần public HTTPS URL; localhost không nhận webhook trực tiếp.

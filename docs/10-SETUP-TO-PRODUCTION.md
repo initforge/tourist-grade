@@ -1,157 +1,97 @@
-# 10. Local Docker Runbook
+﻿# 10. Setup To Production
 
-Tên file được giữ lại để tránh gãy link cũ, nhưng nội dung hiện đã chuẩn hóa theo hướng `localhost + docker compose`.
+## 1. Local demo
 
-## 10.1 Mục tiêu
-
-Chốt một cách chạy repo thống nhất để:
-
-- người mới clone repo có thể boot stack local nhanh
-- mọi verify mặc định bám `localhost`
-- frontend, API và Postgres cùng chạy trong một stack Docker
-- các task tiếp theo có chung giả định môi trường
-
-## 10.2 Môi trường chuẩn
-
-- Frontend: `http://localhost:8080`
-- Backend API: `http://localhost:4000/api/v1`
-- Postgres: `localhost:5432`
-
-Stack chuẩn:
-
-- `frontend`
-- `backend`
-- `db`
-
-## 10.3 Điều kiện máy dev
-
-- Node.js `20.x`
-- npm `10.x`
-- Docker Desktop
-- Git
-
-## 10.4 Cách chạy chuẩn
-
-Từ root repo:
+Mục tiêu: người mới clone repo chạy được app ngay.
 
 ```bash
-docker compose up --build
-```
-
-Nếu muốn chạy nền:
-
-```bash
+git clone https://github.com/initforge/tourist-grade.git
+cd tourist-grade
 docker compose up -d --build
 ```
 
-## 10.5 Trình tự boot local đề xuất
+Kiểm tra:
 
-1. Clone repo.
-2. Kiểm tra Docker Desktop đã chạy.
-3. Từ root repo chạy `docker compose up --build`.
-4. Mở `http://localhost:8080`.
-5. Nếu cần debug backend riêng, kiểm tra container `backend` và logs.
+- `http://localhost:8080`
+- `http://localhost:4000/health`
 
-## 10.6 Env mặc định
+Login bằng seed account trong `01-CURRENT-SYSTEM.md`.
 
-Frontend mặc định dùng:
+## 2. Local QA
 
-- `VITE_API_BASE_URL=http://localhost:4000/api/v1`
-
-Backend trong Docker mặc định dùng:
-
-- `PORT=4000`
-- `DATABASE_URL=postgresql://travela:travela@db:5432/travela?schema=public`
-- `CORS_ORIGIN=http://localhost:8080`
-
-## 10.7 Lệnh thường dùng
-
-### Xem container đang chạy
+Trước khi test destructive:
 
 ```bash
-docker compose ps
+curl -X POST http://localhost:4000/api/v1/dev/reset-booking-fixtures
 ```
 
-### Xem logs
-
-```bash
-docker compose logs -f
-```
-
-### Restart một service
-
-```bash
-docker compose restart backend
-docker compose restart frontend
-```
-
-### Dừng stack
-
-```bash
-docker compose down
-```
-
-### Reset sạch dữ liệu local
-
-```bash
-docker compose down -v
-docker compose up --build
-```
-
-Lệnh reset chỉ dùng khi chấp nhận xóa toàn bộ volume Postgres local.
-
-## 10.8 Chạy split mode khi cần debug
-
-Nếu không muốn chạy full Docker stack cho tất cả service:
-
-### Chạy frontend riêng
+Chạy E2E:
 
 ```bash
 cd frontend
-npm install
-npm run dev
+PLAYWRIGHT_BASE_URL=http://localhost:8080 PLAYWRIGHT_API_BASE_URL=http://localhost:4000/api/v1 npx playwright test --workers=1
 ```
 
-### Chạy backend riêng
-
-```bash
-cd backend
-npm install
-npm run dev
-```
-
-Khi chạy split mode, vẫn giữ giả định backend local là `http://localhost:4000/api/v1`.
-
-## 10.9 Smoke test local tối thiểu
-
-Sau khi boot stack, tối thiểu cần pass:
-
-1. Trang `http://localhost:8080` mở được.
-2. Không có container nào crash loop.
-3. Frontend gọi đúng API local.
-4. Login mock/local flow vẫn vào được các màn role chính.
-5. Các route chính như booking, customer, sales, manager mở được.
-
-## 10.10 Playwright local
-
-Khi cần chạy e2e trên local Docker:
+Trên PowerShell:
 
 ```powershell
-$env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:8080'
-cd frontend
-npm run test:e2e -- sales-booking-detail.spec.ts
+$env:PLAYWRIGHT_BASE_URL='http://localhost:8080'
+$env:PLAYWRIGHT_API_BASE_URL='http://localhost:4000/api/v1'
+npx playwright test --workers=1
 ```
 
-Nếu cần dùng local Vite dev server thay vì Docker frontend:
+## 3. Staging
 
-```powershell
-$env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:4174'
-cd frontend
-npm run test:e2e -- sales-booking-detail.spec.ts
-```
+Staging cần tách rõ:
 
-## 10.11 Quy ước cho task tiếp theo
+- PostgreSQL managed hoặc container volume riêng.
+- Backend public HTTPS URL.
+- Frontend trỏ `VITE_API_BASE_URL` tới backend staging.
+- JWT secrets staging riêng.
+- PayOS sandbox/staging credentials nếu có.
 
-- Mặc định mọi task mới đều hiểu là chạy local.
-- Nếu docs nào còn nhắc `production/pages.dev`, coi đó là tham chiếu lịch sử trừ khi có ghi chú khác.
-- Nếu sau này phát sinh nhu cầu staging/production thật, phải tách thành runbook riêng thay vì trộn vào local runbook này.
+Checklist staging:
+
+1. Build backend image.
+2. Apply Prisma migration/schema.
+3. Seed dữ liệu QA nếu cần.
+4. Deploy backend với HTTPS.
+5. Deploy frontend với API base URL staging.
+6. Confirm PayOS webhook nếu test payment thật.
+7. Chạy smoke test auth, booking, payment link, lookup, dashboard role.
+
+## 4. Production
+
+Production không dùng default dev secrets.
+
+Bắt buộc cấu hình:
+
+- `DATABASE_URL` production.
+- `JWT_ACCESS_SECRET` mạnh.
+- `JWT_REFRESH_SECRET` mạnh.
+- `CORS_ORIGIN` domain frontend production.
+- `PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY` nếu bật payment thật.
+- `PAYOS_RETURN_URL`, `PAYOS_CANCEL_URL`, `PAYOS_WEBHOOK_URL` production.
+
+Không bật route dev/reset ở production. Backend hiện có guard `NODE_ENV=production` để không expose reset route.
+
+## 5. Release checklist
+
+Trước khi release:
+
+- `backend npm test`
+- `backend npm run build`
+- `frontend npm run build`
+- Playwright E2E nhóm liên quan.
+- Kiểm tra không commit `.env` thật.
+- Kiểm tra PayOS không còn payment request cũ gây nhầm lẫn trong dashboard.
+- Kiểm tra docs nếu có đổi business/API/DB/deploy.
+
+## 6. Rollback
+
+Nếu release lỗi:
+
+1. Rollback image/container về tag trước.
+2. Không tự rollback DB nếu đã có migration destructive; cần migration reverse có kiểm soát.
+3. Tạm disable PayOS/payment nếu lỗi payment consistency.
+4. Reset fixtures chỉ dùng local/staging, không dùng production.

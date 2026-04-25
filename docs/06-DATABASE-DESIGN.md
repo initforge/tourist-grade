@@ -1,173 +1,134 @@
-# 06. Database Design
+﻿# 06. Database Design
 
-## 6.1 Database được chọn
+## Database
 
-- PostgreSQL 16
-- Prisma schema nằm ở `backend/prisma/schema.prisma`
+- Engine: PostgreSQL.
+- ORM: Prisma.
+- Schema: `backend/prisma/schema.prisma`.
+- Seed: `backend/prisma/seed.ts`.
 
-## 6.2 Mô hình chính
+## Nhóm bảng chính
 
-### Bảng người dùng
+### User
 
-- `User`
-- `RefreshToken`
+Lưu tài khoản khách hàng và nhân sự nội bộ.
 
-### Bảng sản phẩm tour
+Trường quan trọng:
 
-- `TourProgram`
-- `TourInstance`
+- `role`: `ADMIN`, `MANAGER`, `COORDINATOR`, `SALES`, `CUSTOMER`.
+- `status`: active/locked.
+- password hash.
 
-### Bảng bán hàng
+### Auth/session
 
-- `Booking`
-- `BookingPassenger`
-- `PaymentTransaction`
+Refresh token/session phục vụ login và refresh token.
 
-### Bảng khuyến mãi
+### TourProgram
 
-- `Voucher`
-- `VoucherTarget`
+Chương trình tour gốc.
 
-### Bảng NCC
+Quan hệ:
 
-- `Supplier`
-- `SupplierServiceVariant`
+- Có nhiều `TourInstance`.
+- Có thể được voucher target.
+- Có dữ liệu itinerary/pricing/policy trong JSON hoặc bảng liên quan tùy schema.
 
-### Bảng nội dung
+### TourInstance
 
-- `BlogPost`
+Một lịch khởi hành cụ thể.
 
-## 6.3 Quan hệ quan trọng
+Quan hệ:
 
-- Một `TourProgram` có nhiều `TourInstance`.
-- Một `TourInstance` có nhiều `Booking`.
-- Một `Booking` có nhiều `BookingPassenger`.
-- Một `Booking` có nhiều `PaymentTransaction`.
-- Một `Voucher` có thể áp dụng cho nhiều `TourProgram`.
+- Thuộc một `TourProgram`.
+- Có nhiều `Booking`.
+- Có workflow vận hành.
+- Có coordinator/guide assignment nếu đã điều phối.
 
-## 6.4 Quyết định mô hình hóa
+### Booking
 
-### Dùng cột JSON cho
+Đơn đặt tour.
 
-- `sightseeingSpots`
-- `itineraryJson`
-- `pricingConfigJson`
-- `costEstimateJson`
-- `settlementJson`
-- `coverageJson`
-- `standardsJson`
+Quan hệ:
 
-Lý do:
+- Thuộc một `TourInstance`.
+- Có thể thuộc một customer user.
+- Có nhiều `BookingPassenger`.
+- Có nhiều `PaymentTransaction`.
 
-- Giai đoạn đầu cần đi nhanh.
-- Dữ liệu có cấu trúc lồng nhau, thay đổi nhiều.
-- Chưa cần query analytics phức tạp trên từng node con.
+Các field tiền:
 
-### Tách bảng riêng cho
+- `totalAmount`
+- `paidAmount`
+- `remainingAmount`
+- `discountAmount`
+- `refundAmount`
 
-- passengers
-- payment transactions
-- refresh tokens
-- voucher targets
-- supplier service variants
+### BookingPassenger
 
-Lý do:
+Danh sách hành khách của booking.
 
-- Cần query/report/filter rõ ràng.
-- Có vòng đời và constraint riêng.
+Dùng cho sales kiểm tra giấy tờ, CCCD/GKS/passport, nationality, single room supplement.
 
-## 6.5 Indexes tối thiểu
+### PaymentTransaction
 
-- `User.email`
-- `TourProgram.code`, `TourProgram.slug`
-- `TourInstance.code`
-- `TourInstance(programId, status)`
-- `TourInstance.departureDate`
-- `Booking.bookingCode`
-- `Booking(tourInstanceId, status)`
-- `Voucher.code`
+Ghi từng giao dịch/yêu cầu thanh toán.
 
-## 6.6 Migration strategy
+Status:
 
-1. Tạo schema rỗng.
-2. Dựng auth + users.
-3. Dựng tour program + tour instance.
-4. Dựng bookings + passengers + payments.
-5. Dựng vouchers.
-6. Dựng suppliers.
-7. Dựng blogs/reports.
+- `UNPAID`: yêu cầu thanh toán còn mở.
+- `PAID`: đã nhận tiền.
+- `PARTIAL`: trạng thái thanh toán một phần.
+- `REFUNDED`: đã hoàn tiền.
+- `CANCELLED`: yêu cầu thanh toán đã hủy/superseded.
 
-## 6.7 Chính sách seed
+Quy tắc consistency:
 
-- Không seed business demo vào frontend.
-- Nếu cần QA/demo nội bộ, seed ở backend dưới dạng migration/seed script riêng.
-- Seed phải tách khỏi production path.
+- Một booking có thể có nhiều transaction theo thời gian.
+- Chỉ transaction mới nhất còn `UNPAID` nên được khách sử dụng để thanh toán.
+- Khi tạo PayOS link mới, các PayOS transaction cũ còn `UNPAID` phải chuyển `CANCELLED`.
+- Webhook stale từ transaction `CANCELLED` không được cập nhật booking.
 
-## 6.8 Phần mở rộng bắt buộc trước khi cắt mock coordinator
+### Voucher
 
-Schema draft hiện tại chưa đủ để thay thế hoàn toàn mock ở các màn:
+Lưu mã khuyến mãi.
 
-- kho dịch vụ
-- nhà cung cấp
-- hướng dẫn viên
-- dự toán / nhận điều hành / quyết toán
+Status:
 
-Đề xuất bổ sung:
+- draft.
+- pending approval.
+- approved/active.
+- rejected.
 
-### Service catalog
+Quan hệ:
 
-- `ServiceCatalog`
-- `ServiceCatalogPrice`
+- Có createdBy/approvedBy/rejectedBy.
+- Có target tour program nếu voucher giới hạn tour.
 
-Field tối thiểu:
+### Service / Supplier
 
-- `category`
-- `name`
-- `unit`
-- `priceMode`
-- `setupMode`
-- `provinceCode` cho vé tham quan
-- `formulaCount`
-- `formulaQuantity`
-- `status`
+Phục vụ điều phối và dự toán.
 
-### Supplier operation
+- Supplier: nhà cung cấp.
+- Service: dịch vụ như khách sạn, vận chuyển, ăn uống, vé, HDV.
+- Price/variant: giá theo đơn vị, công thức hoặc supplier.
 
-- `SupplierServiceLine`
-- `SupplierServicePrice`
+## Seed data
 
-Field tối thiểu:
+Seed tạo dữ liệu đủ cho:
 
-- `supplierId`
-- `serviceGroup` (`main`, `meal`)
-- `transportType` nếu là vận chuyển
-- `menu`, `note`
-- `priceEffectiveFrom`
-- `priceEffectiveTo`
-- `createdBy`
+- 5 account theo role.
+- Tour public.
+- Tour program và tour instance ở nhiều trạng thái.
+- Booking ở nhiều trạng thái: pending, confirmed, pending cancel, cancelled, completed.
+- Voucher ở draft/pending/approved/rejected.
+- Service/supplier demo.
 
-### Guide profile
+## Reset fixtures
 
-- `GuideProfile`
-- `GuideLanguage`
+`POST /api/v1/dev/reset-booking-fixtures` reset các nhóm dữ liệu phục vụ test:
 
-Field tối thiểu:
+- Booking và payment fixtures.
+- Tour workflow fixtures.
+- Voucher fixtures.
 
-- `phone`
-- `email`
-- `address`
-- `operatingArea`
-- `guideCardNumber`
-- `issueDate`
-- `expiryDate`
-- `issuePlace`
-- `languages`
-
-### Estimate and settlement persistence
-
-Nếu vẫn giữ snapshot JSON giai đoạn đầu, vẫn nên có metadata bảng riêng cho:
-
-- `TourInstanceEstimateVersion`
-- `TourInstanceSettlementVersion`
-
-để audit được ai sửa, sửa lúc nào, và rollback/read-only approval dễ hơn.
+Dùng sau destructive E2E để DB trở lại trạng thái ban đầu.

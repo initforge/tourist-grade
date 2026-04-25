@@ -1,14 +1,10 @@
-# Travela
+﻿# Travela
 
-Travela is now being moved from a frontend-only mock setup to a real local stack:
+Travela là hệ thống đặt tour và vận hành tour gồm public booking, customer portal và dashboard nội bộ cho admin/manager/coordinator/sales.
 
-- `frontend/`: React 19 + Vite
-- `backend/`: Express + Prisma + PostgreSQL
-- `docker-compose.yml`: local `frontend + backend + postgres`
+## Chạy nhanh trên máy mới
 
-## Current local target
-
-The intended fresh-machine local flow is:
+Yêu cầu duy nhất: đã cài Git và Docker.
 
 ```bash
 git clone https://github.com/initforge/tourist-grade.git
@@ -16,49 +12,84 @@ cd tourist-grade
 docker compose up -d --build
 ```
 
-No Node.js install or manual `.env` copy is required for the default demo stack.
-Docker Compose provides safe development defaults for database, JWT, and optional
-PayOS variables.
-
-Services:
+Mở app:
 
 - Frontend: `http://localhost:8080`
+- Backend health: `http://localhost:4000/health`
 - Backend API: `http://localhost:4000/api/v1`
-- Health check: `http://localhost:4000/health`
-- Postgres: `localhost:5432`
 
-## Local credentials
+Không cần cài Node.js, PostgreSQL, Prisma CLI, hoặc tự copy `.env` để chạy demo local.
 
-Seed accounts created by `backend/prisma/seed.ts`:
+## Tài khoản demo
 
-- `admin@travela.vn / 123456aA@`
-- `manager@travela.vn / 123456aA@`
-- `coordinator@travela.vn / 123456aA@`
-- `sales@travela.vn / 123456aA@`
-- `customer@travela.vn / 123456aA@`
+Tất cả dùng mật khẩu `123456aA@`:
 
-## PayOS local notes
+- `admin@travela.vn`
+- `manager@travela.vn`
+- `coordinator@travela.vn`
+- `sales@travela.vn`
+- `customer@travela.vn`
 
-- The app runs without PayOS keys; payment-link creation returns a clear
-  configuration error until keys are supplied.
-- For real PayOS testing, pass keys through a local root `.env`, shell variables,
-  or your deployment secret manager. Do not commit real PayOS credentials.
-- Webhook URL must be public even when API runs on localhost
-- Use a Cloudflare Tunnel and set `PAYOS_WEBHOOK_URL` to:
-  `https://<your-tunnel>/api/v1/payments/payos/webhook`
+## Cấu trúc repo
 
-Example root `.env` for real PayOS testing:
+- `frontend/`: React 19 + Vite + Zustand + Ant Design/Tailwind.
+- `backend/`: Express + Prisma + PostgreSQL + JWT + PayOS integration.
+- `docs/`: tài liệu business, technical, setup, deploy.
+- `docker-compose.yml`: local stack `frontend + backend + postgres`.
+
+## PayOS local
+
+Local demo chạy được không cần PayOS keys. Nếu muốn test PayOS thật, tạo file `.env` ở root repo hoặc set shell env:
 
 ```bash
 PAYOS_CLIENT_ID=...
 PAYOS_API_KEY=...
 PAYOS_CHECKSUM_KEY=...
-PAYOS_WEBHOOK_URL=https://<your-tunnel>/api/v1/payments/payos/webhook
+PAYOS_WEBHOOK_URL=https://<public-backend>/api/v1/payments/payos/webhook
 ```
 
-See:
+Sau đó restart backend:
 
-1. [docs/07-INFRA-DOCKER-ENV.md](docs/07-INFRA-DOCKER-ENV.md)
-2. [docs/14-CLOUDFLARE-PAGES.md](docs/14-CLOUDFLARE-PAGES.md)
-3. [docs/04-BACKEND-ARCHITECTURE.md](docs/04-BACKEND-ARCHITECTURE.md)
-4. [docs/05-API-CONTRACT.md](docs/05-API-CONTRACT.md)
+```bash
+docker compose up -d --build backend
+```
+
+Không commit secret thật vào repo.
+
+## Test nhanh
+
+Backend:
+
+```bash
+cd backend
+npm test
+npm run build
+```
+
+Frontend build:
+
+```bash
+cd frontend
+npm run build
+```
+
+E2E local khi Docker stack đang chạy:
+
+```bash
+cd frontend
+PLAYWRIGHT_BASE_URL=http://localhost:8080 PLAYWRIGHT_API_BASE_URL=http://localhost:4000/api/v1 npx playwright test --workers=1
+```
+
+## Docs nên đọc
+
+Bắt đầu từ [docs/00-INDEX.md](docs/00-INDEX.md). Thứ tự chính:
+
+1. [System Overview](docs/01-CURRENT-SYSTEM.md)
+2. [Domain Model](docs/03-DOMAIN-MODEL.md)
+3. [Frontend Modules](docs/02-FRONTEND-MODULES.md)
+4. [Backend Architecture](docs/04-BACKEND-ARCHITECTURE.md)
+5. [API Contract](docs/05-API-CONTRACT.md)
+6. [Database Design](docs/06-DATABASE-DESIGN.md)
+7. [Docker and Environment](docs/07-INFRA-DOCKER-ENV.md)
+8. [Setup To Production](docs/10-SETUP-TO-PRODUCTION.md)
+9. [Cloudflare Pages and PayOS Webhook](docs/14-CLOUDFLARE-PAGES.md)
