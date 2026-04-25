@@ -1,53 +1,58 @@
-﻿# SETUP CHẠY LOCAL CHO KHÁCH
+# Setup Local
 
-Làm đúng các bước này. Không tự đoán thêm.
+Mục tiêu: clone repo, đặt đúng file `.env`, chạy một script là toàn bộ hệ thống tự build và tự chạy.
 
-## Bước 1: Clone repo
+## 1. Cần có sẵn
+
+- Docker Desktop đã cài và đang mở.
+- File `.env` được gửi riêng.
+
+Không cần tự cài Node, PostgreSQL, frontend, backend hay cloudflared. Script sẽ xử lý phần cần thiết.
+
+## 2. Clone repo
 
 ```powershell
 git clone https://github.com/initforge/tourist-grade.git
 cd tourist-grade
 ```
 
-## Bước 2: Bỏ file `.env` vào đúng chỗ
+## 3. Đặt file `.env`
 
-Copy file `.env` được gửi riêng vào:
+Copy file `.env` vào đúng đường dẫn này:
 
 ```text
 tourist-grade/backend/.env
 ```
 
-Đúng cấu trúc:
+Cấu trúc đúng:
 
 ```text
 tourist-grade/
   backend/
-    .env          <-- file phải nằm ở đây
-  frontend/
+    .env
   docker-compose.yml
   scripts/
     setup-local.ps1
 ```
 
-## Bước 3: Chạy setup một lệnh
+## 4. Chạy một lệnh
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/setup-local.ps1
 ```
 
-Script này tự làm các việc sau:
+Script sẽ tự làm hết:
 
-1. Kiểm tra `backend/.env` có PayOS keys chưa.
-2. Kiểm tra Docker.
-3. Kiểm tra/cài `cloudflared` nếu máy chưa có.
-4. Build và chạy `frontend + backend + database` bằng Docker.
-5. Bật Cloudflare tunnel cho backend local.
-6. Tự lấy URL tunnel mới.
-7. Tự ghi `PAYOS_WEBHOOK_URL` vào `backend/.env`.
-8. Tự restart backend.
-9. Tự gọi PayOS confirm webhook.
+- Kiểm tra `backend/.env`.
+- Kiểm tra Docker.
+- Cài/kiểm tra `cloudflared` nếu máy chưa có.
+- Build và chạy database, backend, frontend bằng Docker.
+- Tạo Cloudflare tunnel cho backend local.
+- Ghi tunnel URL mới vào `PAYOS_WEBHOOK_URL` trong `backend/.env`.
+- Restart backend.
+- Confirm webhook PayOS.
 
-## Bước 4: Mở web
+## 5. Mở web
 
 ```text
 http://localhost:8080
@@ -59,7 +64,7 @@ Backend health:
 http://localhost:4000/health
 ```
 
-## Tài khoản đăng nhập
+## 6. Tài khoản đăng nhập
 
 Mật khẩu tất cả tài khoản:
 
@@ -73,49 +78,36 @@ Mật khẩu tất cả tài khoản:
 - Sales: `sales@travela.vn`
 - Customer: `customer@travela.vn`
 
-## Nếu tắt máy hoặc tắt terminal
+## 7. Lần sau mở lại
 
-Chạy lại đúng lệnh này để mở lại Docker + Cloudflare tunnel + cập nhật webhook URL mới:
+Chạy lại đúng một lệnh:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/setup-local.ps1
 ```
 
-Cloudflare quick tunnel thường đổi URL mỗi lần chạy, nên không sửa tay nếu không cần. Script sẽ tự sửa `PAYOS_WEBHOOK_URL`.
+Quick tunnel của Cloudflare có thể đổi URL mỗi lần chạy, nhưng script tự cập nhật lại webhook PayOS. Không cần sửa tay.
 
-## Muốn link tunnel không đổi
+## 8. Muốn tunnel URL không đổi
 
-Quick tunnel miễn phí/ẩn danh không giữ cố định URL. Muốn một link dùng lâu dài ở mọi nơi thì cần Cloudflare named tunnel gắn với domain thật.
+Quick tunnel không giữ URL cố định. Muốn URL cố định thì cần Cloudflare named tunnel + domain thật đang nằm trong Cloudflare DNS.
 
-Cần chuẩn bị:
-
-1. Tài khoản Cloudflare.
-2. Domain đang nằm trong Cloudflare DNS.
-3. Tạo named tunnel trỏ về backend local `http://localhost:4000`.
-4. Gắn hostname ví dụ `api.tenmiencuaban.com` vào tunnel.
-5. Đổi `PAYOS_WEBHOOK_URL` trong `backend/.env` thành:
+Khi có domain cố định, đặt webhook PayOS về:
 
 ```text
-https://api.tenmiencuaban.com/api/v1/payments/payos/webhook
+https://ten-mien-co-dinh/api/v1/payments/payos/webhook
 ```
 
-Nếu chưa có domain Cloudflare thì cứ dùng `scripts/setup-local.ps1`; script sẽ tự tạo quick tunnel mới và tự confirm webhook PayOS mỗi lần chạy.
+Nếu chưa có domain thì dùng script ở trên là đủ cho local.
 
-## Reset dữ liệu test
-
-```powershell
-Invoke-RestMethod -Method Post -Uri "http://localhost:4000/api/v1/dev/reset-booking-fixtures"
-```
-
-## Xem logs khi lỗi
+## 9. Xem log khi lỗi
 
 ```powershell
 docker compose logs -f backend
 ```
 
-## Lưu ý
+## 10. Reset dữ liệu test
 
-- Không đặt `.env` ở root project.
-- Không đặt `.env` trong `frontend`.
-- File đúng là `tourist-grade/backend/.env`.
-- Muốn PayOS báo thành công thật thì phải thanh toán QR/link thật hoặc sandbox chính thức của PayOS. Tạo link không đồng nghĩa đã thanh toán.
+```powershell
+Invoke-RestMethod -Method Post -Uri "http://localhost:4000/api/v1/dev/reset-booking-fixtures"
+```
