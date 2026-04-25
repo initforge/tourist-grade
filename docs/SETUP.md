@@ -1,11 +1,11 @@
 # Setup Nhanh
 
-## 1. Chay app
+## 1. Chạy app
 
-Can co:
+Cần có:
 
-- Docker Desktop dang mo.
-- File `.env` duoc gui rieng.
+- Docker Desktop đang mở.
+- File `.env` được gửi riêng.
 
 Clone repo:
 
@@ -14,29 +14,29 @@ git clone https://github.com/initforge/tourist-grade.git
 cd tourist-grade
 ```
 
-Copy file `.env` vao dung vi tri:
+Copy file `.env` vào đúng vị trí:
 
 ```text
 tourist-grade/backend/.env
 ```
 
-Chay mot lenh:
+Chạy một lệnh:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/setup-local.ps1
 ```
 
-Script tu build Docker, chay database/backend/frontend, mo Cloudflare tunnel, cap nhat `PAYOS_WEBHOOK_URL`, restart backend va confirm webhook PayOS.
+Script tự build Docker, chạy database/backend/frontend, mở Cloudflare tunnel, cập nhật `PAYOS_WEBHOOK_URL`, restart backend và confirm webhook PayOS.
 
-Mo web:
+Mở web:
 
 ```text
 http://localhost:8080
 ```
 
-## 2. Tai khoan
+## 2. Tài khoản
 
-Mat khau tat ca tai khoan:
+Mật khẩu tất cả tài khoản:
 
 ```text
 123456
@@ -48,15 +48,15 @@ Mat khau tat ca tai khoan:
 - `sales@travela.vn`
 - `customer@travela.vn`
 
-## 3. Mo lai lan sau
+## 3. Mở lại lần sau
 
-Chay lai lenh nay:
+Chạy lại lệnh này:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/setup-local.ps1
 ```
 
-Cloudflare quick tunnel co the doi link moi lan chay. Script tu cap nhat webhook PayOS, khong can sua tay.
+Cloudflare quick tunnel có thể đổi link mỗi lần chạy. Script tự cập nhật webhook PayOS, không cần sửa tay.
 
 ## 4. Test nhanh
 
@@ -75,7 +75,7 @@ cd frontend
 npm run build
 ```
 
-E2E khi Docker dang chay:
+E2E khi Docker đang chạy:
 
 ```powershell
 cd frontend
@@ -84,7 +84,7 @@ $env:PLAYWRIGHT_API_BASE_URL='http://localhost:4000/api/v1'
 npx playwright test tests/customer-flow.spec.ts tests/ui-surface-audit.spec.ts --workers=1
 ```
 
-## 5. Lenh huu ich
+## 5. Lệnh hữu ích
 
 Xem backend log:
 
@@ -92,14 +92,14 @@ Xem backend log:
 docker compose logs -f backend
 ```
 
-Reset du lieu booking test:
+Reset dữ liệu booking test:
 
 ```powershell
 Invoke-RestMethod -Method Post -Uri "http://localhost:4000/api/v1/dev/reset-booking-fixtures"
 ```
 
-## 6. Tunnel co dinh
+## 6. Tunnel cố định
 
-Quick tunnel khong giu URL co dinh. Muon link co dinh thi can Cloudflare named tunnel + domain that.
+Quick tunnel không giữ URL cố định. Muốn link cố định thì cần Cloudflare named tunnel + domain thật.
 
-Neu chi chay local cho khach xem/test thi dung script la du.
+Nếu chỉ chạy local cho khách xem/test thì dùng script là đủ.
