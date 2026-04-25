@@ -24,6 +24,5 @@ http://localhost:8080
 - `docs/SETUP.md`: hướng dẫn chạy local nhanh nhất.
 - `docs/00-MUC-LUC.md`: mục lục tài liệu.
 - `docs/01-TONG-QUAN.md`: tổng quan dự án.
-- `docs/02-KIEN-TRUC.md`: kiến trúc đơn giản.
-- `docs/03-LUONG-NGHIEP-VU.md`: các luồng nghiệp vụ chính.
-- `docs/04-TEST-VA-VAN-HANH.md`: test và vận hành local.
+- `docs/02-KIEN-TRUC.md`: kiến trúc hệ thống và cách các phần nối với nhau.
+- `docs/03-LUONG-NGHIEP-VU.md`: các luồng nghiệp vụ chính và trạng thái dữ liệu.
