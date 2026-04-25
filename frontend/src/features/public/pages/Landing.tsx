@@ -1,4 +1,5 @@
-﻿import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
 
 function formatCurrency(value: number) {
@@ -11,17 +12,27 @@ function formatDuration(days: number, nights: number) {
 }
 
 export default function Landing() {
+  const navigate = useNavigate();
   const publicTours = useAppDataStore((state) => state.publicTours);
+  const [search, setSearch] = useState('');
+  const [budget, setBudget] = useState('all');
   const domesticTours = publicTours.filter((tour) => tour.category === 'domestic').slice(0, 4);
   const featuredTours = publicTours.slice(0, 4);
   const heroTour = publicTours[0];
+
+  const submitSearch = () => {
+    const params = new URLSearchParams();
+    if (search.trim()) params.set('q', search.trim());
+    if (budget !== 'all') params.set('budget', budget);
+    navigate(`/tours${params.toString() ? `?${params.toString()}` : ''}`);
+  };
 
   return (
     <div className="public-page">
       <section className="public-hero-banner flex items-center">
         <img
           className="absolute inset-0 w-full h-full object-cover"
-          src={heroTour?.image ?? 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?q=80&w=1400'}
+          src={heroTour?.image ?? 'https://images.unsplash.com/photo-1528127269322-539801943592?q=80&w=1400'}
           alt={heroTour?.title ?? 'Du lịch Việt Nam'}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-primary/25 via-primary/15 to-surface/95" />
@@ -36,7 +47,7 @@ export default function Landing() {
               Khám phá Việt Nam cùng Travela
             </h1>
             <p className="mt-5 text-sm md:text-base text-white/85 leading-relaxed max-w-2xl">
-              Dữ liệu tour, giá, lịch trình và trạng thái được lấy từ backend local qua API, phục vụ demo thật cho các luồng đặt tour và vận hành.
+              Dữ liệu tour, giá, lịch trình và trạng thái được đồng bộ từ backend local qua API cho luồng đặt tour và vận hành.
             </p>
           </div>
 
@@ -45,25 +56,37 @@ export default function Landing() {
               <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-outline-variant/30">
                 <div className="flex flex-col items-start px-4 py-3">
                   <label className="text-[0.65rem] uppercase tracking-widest text-secondary font-semibold mb-1">Điểm đến</label>
-                  <input className="w-full bg-transparent border-none p-0 text-primary focus:ring-0 placeholder:text-primary/40 text-sm" placeholder="Hạ Long, Ninh Thuận, Kyoto..." type="text" />
+                  <input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    onKeyDown={(event) => event.key === 'Enter' && submitSearch()}
+                    className="w-full bg-transparent border-none p-0 text-primary focus:ring-0 placeholder:text-primary/40 text-sm"
+                    placeholder="Hạ Long, Ninh Thuận, Kyoto..."
+                    type="text"
+                  />
                 </div>
                 <div className="flex flex-col items-start px-4 py-3">
                   <label className="text-[0.65rem] uppercase tracking-widest text-secondary font-semibold mb-1">Thời gian</label>
-                  <input className="w-full bg-transparent border-none p-0 text-primary focus:ring-0 placeholder:text-primary/40 text-sm" placeholder="Chọn ngày khởi hành" type="text" />
+                  <input
+                    onKeyDown={(event) => event.key === 'Enter' && submitSearch()}
+                    className="w-full bg-transparent border-none p-0 text-primary focus:ring-0 placeholder:text-primary/40 text-sm"
+                    placeholder="Chọn trên trang chi tiết tour"
+                    type="text"
+                  />
                 </div>
                 <div className="flex flex-col items-start px-4 py-3">
                   <label className="text-[0.65rem] uppercase tracking-widest text-secondary font-semibold mb-1">Ngân sách</label>
-                  <select className="w-full bg-transparent border-none p-0 text-primary focus:ring-0 text-sm">
-                    <option>Tất cả mức giá</option>
-                    <option>Dưới 5.000.000đ</option>
-                    <option>Từ 5.000.000đ - 10.000.000đ</option>
-                    <option>Trên 10.000.000đ</option>
+                  <select value={budget} onChange={(event) => setBudget(event.target.value)} className="w-full bg-transparent border-none p-0 text-primary focus:ring-0 text-sm">
+                    <option value="all">Tất cả mức giá</option>
+                    <option value="under-5m">Dưới 5.000.000đ</option>
+                    <option value="5m-10m">Từ 5.000.000đ - 10.000.000đ</option>
+                    <option value="over-10m">Trên 10.000.000đ</option>
                   </select>
                 </div>
               </div>
-              <Link to="/tours" className="w-full lg:w-auto bg-primary text-white px-7 py-4 font-serif text-sm uppercase tracking-widest hover:bg-secondary transition-colors duration-500 text-center">
+              <button type="button" onClick={submitSearch} className="w-full lg:w-auto bg-primary text-white px-7 py-4 font-serif text-sm uppercase tracking-widest hover:bg-secondary transition-colors duration-500 text-center">
                 Tìm kiếm tour
-              </Link>
+              </button>
             </div>
           </div>
         </div>
@@ -103,9 +126,11 @@ export default function Landing() {
 
       <section className="public-section bg-white">
         <div className="public-container">
-          <h2 className="font-headline text-3xl md:text-4xl tracking-tighter text-primary mb-6">HÀNH TRÌNH TRONG NƯỚC</h2>
-          <div className="flex gap-10 border-b border-primary/70 mb-10">
-            <button className="pb-4 text-[0.75rem] uppercase tracking-[0.2em] font-bold text-secondary border-b-2 border-secondary">Tour nội địa</button>
+          <div className="flex items-end justify-between gap-6 mb-8">
+            <h2 className="font-headline text-3xl md:text-4xl tracking-tighter text-primary">Hành trình trong nước</h2>
+            <Link to="/tours?region=all" className="text-xs uppercase tracking-[0.22em] font-bold text-primary border-b border-primary pb-2 w-fit">
+              Lọc thêm
+            </Link>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-7">

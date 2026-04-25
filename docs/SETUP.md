@@ -83,6 +83,24 @@ powershell -ExecutionPolicy Bypass -File scripts/setup-local.ps1
 
 Cloudflare quick tunnel thường đổi URL mỗi lần chạy, nên không sửa tay nếu không cần. Script sẽ tự sửa `PAYOS_WEBHOOK_URL`.
 
+## Muốn link tunnel không đổi
+
+Quick tunnel miễn phí/ẩn danh không giữ cố định URL. Muốn một link dùng lâu dài ở mọi nơi thì cần Cloudflare named tunnel gắn với domain thật.
+
+Cần chuẩn bị:
+
+1. Tài khoản Cloudflare.
+2. Domain đang nằm trong Cloudflare DNS.
+3. Tạo named tunnel trỏ về backend local `http://localhost:4000`.
+4. Gắn hostname ví dụ `api.tenmiencuaban.com` vào tunnel.
+5. Đổi `PAYOS_WEBHOOK_URL` trong `backend/.env` thành:
+
+```text
+https://api.tenmiencuaban.com/api/v1/payments/payos/webhook
+```
+
+Nếu chưa có domain Cloudflare thì cứ dùng `scripts/setup-local.ps1`; script sẽ tự tạo quick tunnel mới và tự confirm webhook PayOS mỗi lần chạy.
+
 ## Reset dữ liệu test
 
 ```powershell
