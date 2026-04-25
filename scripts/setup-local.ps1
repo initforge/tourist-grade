@@ -1,0 +1,153 @@
+﻿param(
+  [switch]$SkipCloudflaredInstall
+)
+
+$ErrorActionPreference = 'Stop'
+$repoRoot = Split-Path -Parent $PSScriptRoot
+Set-Location $repoRoot
+
+function Write-Step($message) {
+  Write-Host "`n==> $message" -ForegroundColor Cyan
+}
+
+function Find-Cloudflared {
+  $cmd = Get-Command cloudflared -ErrorAction SilentlyContinue
+  if ($cmd) { return $cmd.Source }
+
+  $known = @(
+    'C:\Program Files\cloudflared\cloudflared.exe',
+    'C:\Program Files (x86)\cloudflared\cloudflared.exe',
+    "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Cloudflare.cloudflared_Microsoft.Winget.Source_8wekyb3d8bbwe\cloudflared.exe"
+  )
+
+  foreach ($path in $known) {
+    if (Test-Path $path) { return $path }
+  }
+
+  return $null
+}
+
+function Ensure-EnvFile {
+  $envPath = Join-Path $repoRoot 'backend\.env'
+  if (!(Test-Path $envPath)) {
+    throw "Thiếu file backend\.env. Hãy đặt file .env được gửi riêng vào tourist-grade\backend\.env rồi chạy lại."
+  }
+
+  $content = Get-Content $envPath -Raw
+  foreach ($key in @('PAYOS_CLIENT_ID', 'PAYOS_API_KEY', 'PAYOS_CHECKSUM_KEY')) {
+    if ($content -notmatch "(?m)^$key=.+") {
+      throw "backend\.env thiếu $key. Hãy kiểm tra file .env được gửi riêng."
+    }
+  }
+
+  return $envPath
+}
+
+function Set-EnvValue($path, $key, $value) {
+  $lines = Get-Content $path
+  $found = $false
+  $next = foreach ($line in $lines) {
+    if ($line -match "^$([regex]::Escape($key))=") {
+      $found = $true
+      "$key=$value"
+    } else {
+      $line
+    }
+  }
+  if (!$found) { $next += "$key=$value" }
+  Set-Content -Encoding UTF8 $path $next
+}
+
+function Wait-HttpOk($url, $seconds = 60) {
+  $deadline = (Get-Date).AddSeconds($seconds)
+  do {
+    try {
+      $response = Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 5
+      if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300) { return }
+    } catch {}
+    Start-Sleep -Seconds 2
+  } while ((Get-Date) -lt $deadline)
+  throw "Không gọi được $url sau $seconds giây."
+}
+
+Write-Step 'Kiểm tra file backend\.env'
+$envPath = Ensure-EnvFile
+
+Write-Step 'Kiểm tra Docker'
+docker version | Out-Null
+
+Write-Step 'Kiểm tra cloudflared'
+$cloudflared = Find-Cloudflared
+if (!$cloudflared -and !$SkipCloudflaredInstall) {
+  Write-Host 'Chưa thấy cloudflared, đang cài bằng winget...'
+  winget install --id Cloudflare.cloudflared --accept-package-agreements --accept-source-agreements
+  $cloudflared = Find-Cloudflared
+}
+if (!$cloudflared) {
+  throw 'Không tìm thấy cloudflared. Cài Cloudflare Tunnel rồi chạy lại: winget install --id Cloudflare.cloudflared'
+}
+Write-Host "cloudflared: $cloudflared"
+
+Write-Step 'Build và chạy Docker stack'
+docker compose up -d --build
+Wait-HttpOk 'http://localhost:4000/health' 90
+
+Write-Step 'Bật Cloudflare tunnel cho backend local'
+$logDir = Join-Path $repoRoot '.local'
+if (!(Test-Path $logDir)) { New-Item -ItemType Directory $logDir | Out-Null }
+$outLog = Join-Path $logDir 'cloudflared.out.log'
+$errLog = Join-Path $logDir 'cloudflared.err.log'
+$pidFile = Join-Path $logDir 'cloudflared.pid'
+
+if (Test-Path $pidFile) {
+  $oldPid = Get-Content $pidFile -ErrorAction SilentlyContinue
+  if ($oldPid) {
+    Stop-Process -Id ([int]$oldPid) -ErrorAction SilentlyContinue
+  }
+}
+Remove-Item $outLog, $errLog -ErrorAction SilentlyContinue
+
+$process = Start-Process -FilePath $cloudflared -ArgumentList @('tunnel', '--url', 'http://localhost:4000') -RedirectStandardOutput $outLog -RedirectStandardError $errLog -WindowStyle Hidden -PassThru
+Set-Content -Encoding UTF8 $pidFile $process.Id
+
+$tunnelUrl = $null
+$deadline = (Get-Date).AddSeconds(60)
+do {
+  Start-Sleep -Seconds 2
+  $logs = ''
+  if (Test-Path $outLog) { $logs += Get-Content $outLog -Raw -ErrorAction SilentlyContinue }
+  if (Test-Path $errLog) { $logs += "`n" + (Get-Content $errLog -Raw -ErrorAction SilentlyContinue) }
+  $match = [regex]::Match($logs, 'https://[a-zA-Z0-9-]+\.trycloudflare\.com')
+  if ($match.Success) { $tunnelUrl = $match.Value; break }
+} while ((Get-Date) -lt $deadline)
+
+if (!$tunnelUrl) {
+  throw "Không lấy được Cloudflare tunnel URL. Xem log: $errLog"
+}
+Write-Host "Tunnel URL: $tunnelUrl" -ForegroundColor Green
+
+$webhookUrl = "$tunnelUrl/api/v1/payments/payos/webhook"
+Write-Step "Ghi PAYOS_WEBHOOK_URL vào backend\.env"
+Set-EnvValue $envPath 'PAYOS_WEBHOOK_URL' $webhookUrl
+
+Write-Step 'Restart backend để nhận webhook URL mới'
+docker compose up -d --build backend
+Wait-HttpOk 'http://localhost:4000/health' 90
+
+Write-Step 'Confirm webhook với PayOS'
+try {
+  $loginBody = @{ email = 'admin@travela.vn'; password = '123456aA@' } | ConvertTo-Json
+  $login = Invoke-RestMethod -Method Post -Uri 'http://localhost:4000/api/v1/auth/login' -ContentType 'application/json' -Body $loginBody
+  $confirm = Invoke-RestMethod -Method Post -Uri 'http://localhost:4000/api/v1/payments/payos/confirm-webhook' -Headers @{ Authorization = "Bearer $($login.accessToken)" }
+  Write-Host "PayOS webhook confirmed: $($confirm.webhookUrl)" -ForegroundColor Green
+} catch {
+  Write-Warning "Backend đã chạy và webhook URL đã ghi, nhưng PayOS confirm chưa thành công: $($_.Exception.Message)"
+  Write-Warning 'Nếu gặp Webhook URL invalid, giữ tunnel đang chạy rồi thử lại sau hoặc đổi tunnel/domain.'
+}
+
+Write-Step 'Hoàn tất'
+Write-Host 'Frontend: http://localhost:8080' -ForegroundColor Green
+Write-Host 'Backend:  http://localhost:4000/health' -ForegroundColor Green
+Write-Host "Webhook:  $webhookUrl" -ForegroundColor Green
+Write-Host 'Cloudflare tunnel đang chạy nền. Muốn tắt thì chạy:' -ForegroundColor Yellow
+Write-Host "Stop-Process -Id $($process.Id)" -ForegroundColor Yellow
