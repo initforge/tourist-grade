@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import type { Tour } from '@entities/tour/data/tours';
 import type { BlogPost } from '@entities/blog/data/blogs';
 import type { Booking } from '@entities/booking/data/bookings';
@@ -313,3 +313,5 @@ export const useAppDataStore = create<AppDataState>((set) => ({
     vouchers: state.vouchers.filter((item) => item.id !== id),
   })),
 }));
+
+

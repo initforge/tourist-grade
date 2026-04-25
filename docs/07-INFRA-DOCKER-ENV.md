@@ -4,7 +4,7 @@
 
 Local demo phải chạy được trên máy mới chỉ với Git và Docker.
 
-Không bắt buộc cài Node.js, PostgreSQL, Prisma CLI, hoặc tự copy env để xem hệ thống.
+Không bắt buộc cài Node.js, PostgreSQL hoặc Prisma CLI. Với bản bàn giao có PayOS thật, khách cần đặt file `backend/.env` được gửi riêng vào đúng thư mục trước khi chạy Docker.
 
 ## Lệnh chạy local
 
@@ -55,7 +55,7 @@ Sau khi chạy:
 - token expiry
 - PayOS variables optional
 
-Vì vậy máy mới không cần `backend/.env` để chạy demo.
+Máy khách dùng PayOS thật cần file `backend/.env`. Docker Compose đọc file này qua `env_file`.
 
 ## Khi nào cần env thật?
 
@@ -66,7 +66,7 @@ Chỉ cần env thật nếu muốn:
 - Đổi domain frontend/backend.
 - Đổi JWT secret production.
 
-Tạo file `.env` ở root repo nếu cần override Compose variables:
+Tạo hoặc copy file `backend/.env` nếu cần cấu hình PayOS/JWT:
 
 ```bash
 PAYOS_CLIENT_ID=...
@@ -121,3 +121,4 @@ npx playwright test --workers=1
 - Không có PayOS keys thì app vẫn chạy local, nhưng payment-link thật sẽ không gọi được PayOS.
 - Có keys thật thì backend tạo link PayOS thật.
 - PayOS webhook cần public HTTPS URL; localhost không nhận webhook trực tiếp.
+

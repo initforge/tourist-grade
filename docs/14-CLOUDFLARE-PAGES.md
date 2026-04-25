@@ -57,7 +57,7 @@ Lấy URL dạng:
 https://<generated-host>.trycloudflare.com
 ```
 
-Set root `.env`:
+Sửa file `backend/.env`:
 
 ```bash
 PAYOS_CLIENT_ID=...
@@ -123,3 +123,4 @@ Sau khi thanh toán thật:
 - `Webhook URL invalid`: URL tunnel/domain không được PayOS chấp nhận hoặc không reachable HTTPS.
 - Nhiều dòng `Chờ thanh toán`: kiểm tra backend đã chạy bản có cancel stale payment chưa; hủy các order cũ trên dashboard/API nếu chúng được tạo trước bản fix.
 - Webhook không update booking: kiểm tra signature, `orderCode`, transaction local, và backend logs.
+
