@@ -1,12 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Breadcrumb, message } from 'antd';
-import {
-  loadTourPrograms,
-  saveTourPrograms,
-  type TourProgram,
-} from '@entities/tour-program/data/tourProgram';
+import { type TourProgram } from '@entities/tour-program/data/tourProgram';
 import { PageSearchInput } from '@shared/ui/PageSearchInput';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
 
 type TabKey = 'draft' | 'active' | 'inactive';
 
@@ -16,11 +13,6 @@ function fmtPrice(n: number) {
 
 function tourTypeLabel(type: TourProgram['tourType']) {
   return type === 'mua_le' ? 'Mùa lễ' : 'Quanh năm';
-}
-
-function persistPrograms(nextPrograms: TourProgram[], setPrograms: (value: TourProgram[]) => void) {
-  saveTourPrograms(nextPrograms);
-  setPrograms(nextPrograms);
 }
 
 interface StopProgramModalProps {
@@ -83,9 +75,10 @@ export default function CoordinatorTourPrograms() {
   const navigate = useNavigate();
   const location = useLocation();
   const initialTab = (location?.state as { tab?: TabKey } | null)?.tab;
+  const programs = useAppDataStore(state => state.tourPrograms);
+  const setPrograms = useAppDataStore(state => state.setTourPrograms);
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab ?? 'draft');
   const [searchQuery, setSearchQuery] = useState('');
-  const [programs, setPrograms] = useState<TourProgram[]>(() => loadTourPrograms());
   const [programToStop, setProgramToStop] = useState<TourProgram | null>(null);
 
   const filtered = useMemo(() => {
@@ -134,7 +127,7 @@ export default function CoordinatorTourPrograms() {
                   }
                 : item
             ));
-            persistPrograms(nextPrograms, setPrograms);
+            setPrograms(nextPrograms);
             setProgramToStop(null);
             setActiveTab('inactive');
             message.success(`Đã ngừng kinh doanh ${programToStop?.name}`);

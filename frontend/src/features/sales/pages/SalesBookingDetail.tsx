@@ -1,7 +1,9 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
-import { loadBookings, saveBookings, type Booking, type Passenger } from '@entities/booking/data/bookings';
+import type { Booking, Passenger } from '@entities/booking/data/bookings';
 import { useAuthStore } from '@shared/store/useAuthStore';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
+import { updateBooking } from '@shared/lib/api/bookings';
 import { NationalitySelect } from '@shared/ui/NationalitySelect';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -49,6 +51,7 @@ const PAYMENT_STYLE: Record<string, string> = {
 const PAYMENT_METHOD_LABEL: Record<Booking['paymentMethod'], string> = {
   vnpay: 'VNPAY / VietQR',
   stripe: 'Thẻ / Stripe',
+  payos: 'PayOS',
 };
 
 type RoomCounts = NonNullable<Booking['roomCounts']>;
@@ -295,9 +298,13 @@ export default function SalesBookingDetail() {
   const [searchParams] = useSearchParams();
   const tab = searchParams?.get('tab') ?? 'pending_confirm';
   const currentUser = useAuthStore(s => s?.user);
+  const accessToken = useAuthStore(s => s?.accessToken);
+  const bookings = useAppDataStore(s => s.bookings);
+  const protectedLoading = useAppDataStore(s => s.protectedLoading);
+  const upsertBooking = useAppDataStore(s => s.upsertBooking);
 
-  const foundBooking = loadBookings()?.find(b => b.id === id);
-  const [booking, setBooking] = useState<Booking>(foundBooking!);
+  const foundBooking = bookings?.find(b => b.id === id || b.bookingCode === id);
+  const [booking, setBooking] = useState<Booking | null>(null);
   const [showRefundPopup, setShowRefundPopup] = useState(false);
   const [showPassengerModal, setShowPassengerModal] = useState(false);
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
@@ -311,6 +318,17 @@ export default function SalesBookingDetail() {
     toRoomCountsDraft(foundBooking?.roomCounts)
   );
   const [showEmailToast, setShowEmailToast] = useState(false);
+  const [persistCount, setPersistCount] = useState(0);
+  const persistQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  useEffect(() => {
+    if (!foundBooking) return;
+
+    setBooking(foundBooking);
+    setRoomCountsDraft(toRoomCountsDraft(foundBooking.roomCounts));
+    setBillPreview(foundBooking.refundBillUrl ?? null);
+    setBillFile(null);
+  }, [foundBooking]);
 
   // Cleanup BLOB URLs
   useEffect(() => {
@@ -329,18 +347,56 @@ export default function SalesBookingDetail() {
     setBillFile(null);
   };
 
+  if (!booking) {
+    return (
+      <div className="w-full min-h-full bg-[#F3F3F3] flex items-center justify-center p-6">
+        <div className="bg-white border border-[#D0C5AF]/30 p-8 text-center shadow-sm">
+          <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold mb-2">
+            {protectedLoading ? 'Đang tải dữ liệu' : 'Không tìm thấy booking'}
+          </p>
+          <h1 className="font-['Noto_Serif'] text-2xl text-[#2A2421] mb-4">
+            {protectedLoading ? 'Đang đồng bộ dữ liệu đơn hàng' : `Booking ${id ?? ''} không tồn tại`}
+          </h1>
+          {!protectedLoading && (
+            <Link
+              to={`/sales/bookings?tab=${tab}`}
+              className="inline-flex items-center justify-center px-5 py-3 bg-[#2A2421] text-white text-xs font-['Inter'] uppercase tracking-widest hover:bg-[#D4AF37] transition-colors"
+            >
+              Danh sách đơn booking
+            </Link>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   const closeRefundPopup = () => {
     resetBillDraft(booking?.refundBillUrl ?? null);
     setShowRefundPopup(false);
   };
 
-  const persistBooking = (updater: (current: Booking) => Booking) => {
-    setBooking(prev => {
-      const next = updater(prev);
-      const updatedBookings = loadBookings()?.map(item => item.id === next?.id ? next : item);
-      saveBookings(updatedBookings);
-      return next;
-    });
+  const persistBooking = (
+    updater: (current: Booking) => Booking,
+    toPatch?: (next: Booking) => Record<string, unknown>,
+  ) => {
+    if (!booking) return;
+
+    const next = updater(booking);
+    setBooking(next);
+    upsertBooking(next);
+
+    if (!accessToken) return;
+
+    const payload = toPatch ? toPatch(next) : next as unknown as Record<string, unknown>;
+    setPersistCount(count => count + 1);
+    const job = persistQueueRef.current
+      .catch(() => undefined)
+      .then(() => updateBooking(next.id, payload, accessToken, { keepalive: true }))
+      .then(() => undefined)
+      .catch(() => null)
+      .finally(() => setPersistCount(count => Math.max(0, count - 1)))
+      .then(() => undefined);
+    persistQueueRef.current = job;
   };
 
   // refundStatus === 'pending' = yêu cầu hủy đang chờ xử lý
@@ -350,7 +406,7 @@ export default function SalesBookingDetail() {
   const hasValidPassengerData = booking?.passengers?.every(hasCompletePassengerData);
   const parsedRoomCounts = parseRoomCountsDraft(roomCountsDraft);
   const hasAssignedRooms = Object.values(parsedRoomCounts)?.some(count => count > 0);
-  const canConfirm = booking.status === 'pending' && hasValidPassengerData && hasAssignedRooms;
+  const canConfirm = booking.status === 'pending' && hasValidPassengerData && hasAssignedRooms && persistCount === 0;
   const canRefund = booking.status === 'cancelled' && booking.refundStatus === 'pending';
 
   // ── Actions ──────────────────────────────────────────────────────────────
@@ -409,11 +465,17 @@ export default function SalesBookingDetail() {
   };
 
   const handleSaveRoomCounts = () => {
-    persistBooking(prev => ({ ...prev, roomCounts: parseRoomCountsDraft(roomCountsDraft) }));
+    persistBooking(
+      prev => ({ ...prev, roomCounts: parseRoomCountsDraft(roomCountsDraft) }),
+      next => ({ roomCounts: next.roomCounts }),
+    );
   };
 
   const handleSavePassengers = (updated: Passenger[]) => {
-    persistBooking(prev => ({ ...prev, passengers: updated }));
+    persistBooking(
+      prev => ({ ...prev, passengers: updated }),
+      next => ({ passengers: next.passengers }),
+    );
     setShowPassengerModal(false);
   };
 

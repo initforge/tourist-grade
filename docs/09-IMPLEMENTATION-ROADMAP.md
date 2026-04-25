@@ -34,7 +34,7 @@ Done khi:
 - cài backend deps
 - generate Prisma client
 - tạo migration đầu tiên
-- chạy được `db + api + frontend` qua Docker
+- chạy được `db + backend + frontend` qua Docker
 
 Done khi:
 

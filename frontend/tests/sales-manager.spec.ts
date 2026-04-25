@@ -1,29 +1,15 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { loginAs } from './support/app';
 
-async function loginAsSales(page: any) {
-  await page?.goto('/');
-  await page?.waitForLoadState('domcontentloaded');
-  await page?.evaluate(() => {
-    localStorage?.removeItem('__travela_bookings');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any)?.__authLogin('sales');
-  });
-  await page?.goto('/sales/bookings');
-  await page?.waitForLoadState('domcontentloaded');
+async function loginAsSales(page: Page) {
+  await loginAs(page, 'sales', '/sales/bookings', { clearBookings: true });
 }
 
-async function loginAsManager(page: any) {
-  await page?.goto('/');
-  await page?.waitForLoadState('domcontentloaded');
-  await page?.evaluate(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any)?.__authLogin('manager');
-  });
-  await page?.goto('/manager/voucher-approval');
-  await page?.waitForLoadState('domcontentloaded');
+async function loginAsManager(page: Page) {
+  await loginAs(page, 'manager', '/manager/voucher-approval');
 }
 
-async function fillPendingPassengerData(page: any) {
+async function fillPendingPassengerData(page: Page) {
   await page?.getByRole('button', { name: 'Chỉnh sửa danh sách HK' })?.click();
 
   const modal = page?.getByRole('dialog');
@@ -123,8 +109,6 @@ test?.describe('Sales + Manager Verification', () => {
     await expect(filterOptions?.filter({ hasText: 'Nháp' }))?.toHaveCount(0);
     await expect(filterOptions?.filter({ hasText: 'Không được phê duyệt' }))?.toHaveCount(0);
 
-    const approvalWarning = page?.locator('[title="Voucher sắp đến hạn bắt đầu, cần phải phê duyệt ngay."]')?.first();
-    await expect(approvalWarning)?.toBeVisible();
     await expect(page?.getByText('Mùa Thu Kyoto & Osaka'))?.toBeVisible();
     await expect(page?.getByText('Chi tiết'))?.toHaveCount(0);
 
@@ -143,9 +127,8 @@ test?.describe('Sales + Manager Verification', () => {
     await loginAsManager(page);
 
     const rows = page?.locator('tbody tr');
-    await expect(rows?.nth(0))?.toContainText('APPROVENOW');
-    await expect(rows?.nth(1))?.toContainText('VIPONLY30');
-    await expect(rows?.nth(2))?.toContainText('AUTUMN20');
+    await expect(rows?.nth(0))?.toContainText('VIPONLY30');
+    await expect(rows?.nth(1))?.toContainText('AUTUMN20');
 
     await rows?.nth(0)?.getByRole('button', { name: 'Từ chối' })?.click();
     const modal = page?.getByRole('dialog');

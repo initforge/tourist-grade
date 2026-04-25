@@ -78,6 +78,37 @@ test.describe('Coordinator remaining feedback', () => {
     await expect(dialog.getByRole('button', { name: /Chuyển trạng thái dịch vụ/i })).toBeVisible();
   });
 
+  test('service create flow captures supplier, contact, unit price, and dropdown formulas', async ({ page }) => {
+    await loginAsCoordinator(page);
+    await page.goto('/coordinator/services');
+
+    await page.getByRole('button', { name: /Thêm dịch vụ/i }).click();
+    const dialog = page.getByRole('dialog');
+
+    await expect(dialog.getByText(/Tên nhà cung cấp/i)).toBeVisible();
+    await expect(dialog.getByText(/Thông tin liên hệ/i)).toBeVisible();
+    await expect(dialog.getByText(/^Đơn giá$/i)).toBeVisible();
+
+    await dialog.getByLabel(/Phân loại/i).selectOption('Các dịch vụ khác');
+    await dialog.getByLabel(/Tên dịch vụ/i).fill('Phí nước uống đoàn');
+    await dialog.getByLabel(/Tên nhà cung cấp/i).fill('Công ty Nước Suối');
+    await dialog.getByLabel(/Thông tin liên hệ/i).fill('0909 000 111');
+    await dialog.getByLabel(/^Đơn giá$/i).fill('25000');
+    await dialog.getByLabel(/Công thức tính số lần/i).selectOption('Giá trị mặc định');
+    await dialog.getByLabel(/Công thức tính số lượng/i).selectOption('Giá trị mặc định');
+    await dialog.getByLabel(/Số lần mặc định/i).fill('2');
+    await dialog.getByLabel(/Số lượng mặc định/i).fill('10');
+    await dialog.getByRole('button', { name: /Lưu dịch vụ/i }).click();
+
+    await page.getByRole('row', { name: /Phí nước uống đoàn/i }).getByRole('button', { name: /Xem/i }).click();
+    const detail = page.getByRole('dialog');
+    await expect(detail.getByText('Công ty Nước Suối', { exact: true })).toBeVisible();
+    await expect(detail.getByText(/0909 000 111/i)).toBeVisible();
+    await expect(detail.getByText(/Giá trị mặc định: 2/i)).toBeVisible();
+    await expect(detail.getByText(/Giá trị mặc định: 10/i)).toBeVisible();
+    await expect(detail.getByText(/25.000 đ/i)).toBeVisible();
+  });
+
   test('supplier create and edit layouts follow new service table rules', async ({ page }) => {
     await loginAsCoordinator(page);
     await page.goto('/coordinator/suppliers');
@@ -98,14 +129,15 @@ test.describe('Coordinator remaining feedback', () => {
     await expect(dialog.getByRole('columnheader', { name: /Đơn giá/i })).toBeVisible();
     await dialog.getByRole('button', { name: /Hủy bỏ/i }).click();
 
-    await page.getByRole('row', { name: /Vận tải Xuyên Việt/i }).getByRole('button', { name: /Xem/i }).click();
+    await page.getByRole('row', { name: /Khách sạn Di Sản Việt/i }).getByRole('button', { name: /Xem/i }).click();
     dialog = page.getByRole('dialog');
     await dialog.getByRole('button', { name: /^Sửa$/i }).click();
 
     dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('button', { name: /^Thêm bảng giá$/i })).toBeVisible();
     await expect(dialog.getByRole('button', { name: /Mở rộng bảng giá/i }).first()).toBeVisible();
     await dialog.getByRole('button', { name: /Mở rộng bảng giá/i }).first().click();
     await expect(dialog.getByRole('columnheader', { name: /Đơn giá/i })).toBeVisible();
-    await expect(dialog.getByRole('button', { name: /Thêm bảng giá/i }).first()).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /Thêm bảng giá/i })).toHaveCount(1);
   });
 });

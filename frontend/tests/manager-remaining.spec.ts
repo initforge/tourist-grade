@@ -1,12 +1,8 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { loginAs } from './support/app';
 
-async function loginAsManager(page: any) {
-  await page?.goto('/');
-  await page?.waitForLoadState('domcontentloaded');
-  await page?.evaluate(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any)?.__authLogin('manager');
-  });
+async function loginAsManager(page: Page) {
+  await loginAs(page, 'manager');
 }
 
 test.describe('Manager remaining feedback', () => {
@@ -120,9 +116,9 @@ test.describe('Manager remaining feedback', () => {
     await expect(page?.getByRole('dialog')?.getByRole('heading', { name: /Duy.*t d.* to.*n/i }))?.toBeVisible();
   });
 
-  test('manager tour program detail mirrors coordinator detail and pricing is read only', async ({ page }) => {
+  test('manager active tour program detail mirrors coordinator detail and pricing is read only', async ({ page }) => {
     await loginAsManager(page);
-    await page?.goto('/manager/tour-programs/TP003');
+    await page?.goto('/manager/tour-programs/TP001');
     await page?.waitForLoadState('domcontentloaded');
 
     await expect(page?.getByRole('button', { name: /Thông tin chung/i }))?.toBeVisible();
@@ -135,6 +131,7 @@ test.describe('Manager remaining feedback', () => {
     await expect(page?.getByText(/Bảng kê chi phí dự kiến/i))?.toBeVisible();
     await expect(page?.getByText(/Tính toán dự kiến/i))?.toBeVisible();
     await expect(page?.locator('fieldset[disabled]'))?.toBeVisible();
+    await expect(page?.getByRole('columnheader', { name: /Thao tác/i }))?.toHaveCount(0);
   });
 
   test('manager tour programs and catalog match the revised scope', async ({ page }) => {
@@ -149,9 +146,10 @@ test.describe('Manager remaining feedback', () => {
 
     await page?.getByRole('button', { name: /.*ang ho.*t .*ng/i })?.click();
     await page?.locator('tbody tr')?.first()?.getByRole('button', { name: /^Xem$/i })?.click();
-    const detailDialog = page?.getByRole('dialog');
-    await expect(detailDialog?.getByRole('heading', { name: /Chi ti.*t ch.*ng tr.*nh tour/i }))?.toBeVisible();
-    await detailDialog?.getByRole('button', { name: /.*ng/i })?.click();
+    await expect(page).toHaveURL(/\/manager\/tour-programs\/TP001$/);
+    await expect(page?.getByRole('heading', { name: /Kh.*m Ph.* V.*nh H.* Long/i }))?.toBeVisible();
+    await page?.goto('/manager/tour-programs');
+    await page?.getByRole('button', { name: /.*ang ho.*t .*ng/i })?.click();
 
     await page?.locator('tbody tr')?.first()?.getByRole('button', { name: /T.*m ng.*ng/i })?.click();
     await expect(page?.getByText(/T.*m ng.*ng th.* c.*ng/i))?.toBeVisible();

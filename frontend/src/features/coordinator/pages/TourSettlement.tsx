@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useParams, useLocation, Link, useNavigate } from 'react-router-dom';
 import { Breadcrumb, message } from 'antd';
-import { mockTourInstances } from '@entities/tour-program/data/tourProgram';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
 
 type SettlementRow = {
   rowId: string;
@@ -27,7 +27,7 @@ export default function TourSettlement() {
   const basePrefix = location?.pathname?.startsWith('/manager') ? '/manager' : '/coordinator';
   const isReadOnly = Boolean(location.state?.readOnly);
 
-  const instance = mockTourInstances?.find(i => i.id === id);
+  const instance = useAppDataStore(state => state.tourInstances)?.find(i => i.id === id);
 
   if (!instance) {
     return (

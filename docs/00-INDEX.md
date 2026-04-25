@@ -7,7 +7,7 @@
 - Môi trường chuẩn để chạy repo là `localhost` qua `docker compose`.
 - Frontend vẫn còn một phần mock/seed để phục vụ demo và kiểm thử UI.
 - Backend đã có scaffold `Express + Prisma + PostgreSQL`, chưa implement đủ business logic.
-- Docker đã có local stack cho `frontend + api + postgres`.
+- Docker đã có local stack cho `frontend + backend + postgres`.
 
 ## Thứ tự nên đọc
 

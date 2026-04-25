@@ -3,12 +3,11 @@ import { Breadcrumb, message } from 'antd';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import TourProgramPricingTables from '@features/coordinator/components/TourProgramPricingTables';
 import {
-  loadTourPrograms,
-  saveTourPrograms,
   VIETNAM_PROVINCES,
   WEEKDAYS,
   type TourProgram,
 } from '@entities/tour-program/data/tourProgram';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
 
 type DetailTab = 'general' | 'itinerary' | 'pricing';
 type DetailRole = 'coordinator' | 'manager';
@@ -137,6 +136,7 @@ function ReadonlyPricingSection({ program }: { program: EditableProgram }) {
             itinerary={pricingItinerary}
             guideUnitPrice={guideUnitPrice}
             onGuideUnitPriceChange={() => undefined}
+            hideActionColumn
           />
         </div>
       </section>
@@ -179,7 +179,8 @@ function ReadonlyPricingSection({ program }: { program: EditableProgram }) {
 export default function TourProgramDetailScreen({ role }: { role: DetailRole }) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [programs, setPrograms] = useState<TourProgram[]>(() => loadTourPrograms());
+  const programs = useAppDataStore(state => state.tourPrograms);
+  const setPrograms = useAppDataStore(state => state.setTourPrograms);
   const [activeTab, setActiveTab] = useState<DetailTab>('general');
   const [isEditing, setIsEditing] = useState(false);
 
@@ -193,7 +194,7 @@ export default function TourProgramDetailScreen({ role }: { role: DetailRole }) 
   );
 
   const [draft, setDraft] = useState<EditableProgram | null>(() => {
-    const found = loadTourPrograms()?.find(item => item?.id === id);
+    const found = programs?.find(item => item?.id === id);
     return found ? toEditableProgram(found) : null;
   });
 
@@ -231,7 +232,6 @@ export default function TourProgramDetailScreen({ role }: { role: DetailRole }) 
 
   const persistProgram = (nextProgram: TourProgram) => {
     const nextPrograms = programs?.map(item => item?.id === nextProgram?.id ? nextProgram : item);
-    saveTourPrograms(nextPrograms);
     setPrograms(nextPrograms);
     setDraft(toEditableProgram(nextProgram));
   };

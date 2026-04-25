@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { mockTourInstances } from '@entities/tour-program/data/tourProgram';
 import type { CostCategory, CostItem } from '@entities/tour-program/data/tourProgram';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
+import { useAuthStore } from '@shared/store/useAuthStore';
+import { updateTourInstanceCommand } from '@shared/lib/api/tourInstances';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -65,12 +67,27 @@ export default function ManagerTourEstimateApproval() {
   const [showReject, setShowReject] = useState(false);
   const [showRequestEdit, setShowRequestEdit] = useState(false);
   const [showApprove, setShowApprove] = useState(false);
+  const token = useAuthStore(state => state.accessToken);
+  const tourInstances = useAppDataStore(state => state.tourInstances);
+  const upsertTourInstance = useAppDataStore(state => state.upsertTourInstance);
 
-  const instance = mockTourInstances?.find(i => i.id === id);
+  const instance = tourInstances?.find(i => i.id === id);
   const estimate = instance?.costEstimate;
 
-  const handleApprove = () => { setShowApprove(false); };
-  const handleReject = (_reason: string) => { setShowReject(false); };
+  const handleApprove = async () => {
+    if (token && instance) {
+      const response = await updateTourInstanceCommand(token, instance.id, 'estimate/approve');
+      upsertTourInstance(response.tourInstance);
+    }
+    setShowApprove(false);
+  };
+  const handleReject = async (_reason: string) => {
+    if (token && instance) {
+      const response = await updateTourInstanceCommand(token, instance.id, 'reject-sale', { reason: _reason });
+      upsertTourInstance(response.tourInstance);
+    }
+    setShowReject(false);
+  };
   const handleRequestEdit = (_reason: string) => { setShowRequestEdit(false); };
 
   if (!instance) {

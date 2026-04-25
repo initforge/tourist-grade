@@ -1,82 +1,88 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { message } from 'antd';
-import { mockTourPrograms } from '@entities/tour-program/data/tourProgram';
-import type { TourProgram } from '@entities/tour-program/data/tourProgram';
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
+import { type TourProgram } from '@entities/tour-program/data/tourProgram';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
 
 function fmtPrice(n: number) {
-  return new Intl.NumberFormat('vi-VN')?.format(n) + ' VND';
+  return new Intl.NumberFormat('vi-VN').format(n) + ' VND';
 }
-
-// ── Component ────────────────────────────────────────────────────────────────
 
 export default function AdminTourPrograms() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<string>('pending');
-  const [programs, setPrograms] = useState<TourProgram[]>(mockTourPrograms);
+  const programs = useAppDataStore(state => state.tourPrograms);
+  const setPrograms = useAppDataStore(state => state.setTourPrograms);
+  const [activeTab, setActiveTab] = useState<'pending' | 'active' | 'inactive'>('pending');
   const [inactiveReasons, setInactiveReasons] = useState<Record<string, string>>({});
-  const [viewProgram, setViewProgram] = useState<TourProgram | null>(null);
 
-  const filtered = programs?.filter(p => {
-    if (activeTab === 'pending') return p.status === 'draft';
-    return p.status === activeTab;
-  });
+  const filtered = useMemo(() => programs.filter((program) => {
+    if (activeTab === 'pending') return program.status === 'draft';
+    return program.status === activeTab;
+  }), [activeTab, programs]);
 
-  const tabCounts = {
-    pending: programs?.filter(p => p.status === 'draft')?.length,
-    active: programs?.filter(p => p.status === 'active')?.length,
-    inactive: programs?.filter(p => p.status === 'inactive')?.length,
+  const tabCounts = useMemo(() => ({
+    pending: programs.filter(program => program.status === 'draft').length,
+    active: programs.filter(program => program.status === 'active').length,
+    inactive: programs.filter(program => program.status === 'inactive').length,
+  }), [programs]);
+
+  const persistPrograms = (nextPrograms: TourProgram[]) => {
+    setPrograms(nextPrograms);
   };
 
   return (
-    <div className="w-full bg-[#F3F3F3] min-h-full">
+    <div className="w-full min-h-full bg-[#F3F3F3]">
       <div className="p-6 md:p-10">
-
-        {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="w-1 h-5 bg-[#D4AF37] rounded-sm"></div>
+          <div className="mb-5 flex items-center gap-3">
+            <div className="h-5 w-1 rounded-sm bg-[#D4AF37]" />
             <h1 className="font-['Noto_Serif'] text-3xl text-[#2A2421]">Quản lý Chương trình Tour</h1>
           </div>
-          <p className="text-xs text-[#2A2421]/50 ml-4">Quản lý và phê duyệt các chương trình tour trong hệ thống.</p>
+          <p className="ml-4 text-xs text-[#2A2421]/50">Quản lý và phê duyệt các chương trình tour trong hệ thống.</p>
         </div>
 
-        {/* Tab Bar */}
-        <div className="bg-white border border-[#D0C5AF]/30 mb-6">
+        <div className="mb-6 border border-[#D0C5AF]/30 bg-white">
           <div className="flex overflow-x-auto">
-            {([
+            {[
               { key: 'pending' as const, label: 'Chờ duyệt', icon: 'pending' },
               { key: 'active' as const, label: 'Đang hoạt động', icon: 'check_circle' },
               { key: 'inactive' as const, label: 'Ngừng hoạt động', icon: 'pause_circle' },
-            ])?.map(tab => (
-              <button key={tab?.key} onClick={() => setActiveTab(tab?.key)}
-                className={`flex items-center gap-2 px-5 py-3.5 text-xs font-['Inter'] uppercase tracking-widest border-b-2 whitespace-nowrap transition-all ${
-                  activeTab === tab?.key ? 'border-[#D4AF37] text-[#D4AF37] font-bold bg-[#D0C5AF]/5' : 'border-transparent text-[#2A2421]/50 hover:text-[#2A2421] hover:bg-gray-50'
-                }`}>
-                <span className="material-symbols-outlined text-[16px]">{tab?.icon}</span>
-                {tab?.label}
-                <span className={`ml-1 px-1.5 py-0.5 text-[9px] rounded-full ${activeTab === tab?.key ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'bg-gray-100 text-gray-500'}`}>
-                  {tabCounts[tab?.key]}
+            ].map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-5 py-3.5 font-['Inter'] text-xs uppercase tracking-widest transition-all ${
+                  activeTab === tab.key
+                    ? 'border-[#D4AF37] bg-[#D0C5AF]/5 font-bold text-[#D4AF37]'
+                    : 'border-transparent text-[#2A2421]/50 hover:bg-gray-50 hover:text-[#2A2421]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[16px]">{tab.icon}</span>
+                {tab.label}
+                <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[9px] ${
+                  activeTab === tab.key ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'bg-gray-100 text-gray-500'
+                }`}
+                >
+                  {tabCounts[tab.key]}
                 </span>
               </button>
             ))}
           </div>
         </div>
 
-        {/* Table */}
-        <div className="bg-white border border-[#D0C5AF]/20 shadow-sm overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[900px]">
+        <div className="overflow-x-auto border border-[#D0C5AF]/20 bg-white shadow-sm">
+          <table className="min-w-[900px] w-full border-collapse text-left">
             <thead>
-              <tr className="bg-[#FAFAF5] border-b border-[#D0C5AF]/30">
+              <tr className="border-b border-[#D0C5AF]/30 bg-[#FAFAF5]">
                 {(activeTab === 'pending'
                   ? ['Mã nháp', 'Tên CT Tour', 'Điểm KH', 'Điểm TQ', 'Thời lượng', 'Đơn giá', 'Người tạo', 'Hành động']
                   : activeTab === 'active'
-                  ? ['Mã Tour', 'Tên CT Tour', 'Điểm KH', 'Điểm TQ', 'Thời lượng', 'Số tour đang bán', 'Đơn giá', 'Hành động']
-                  : ['Mã Tour', 'Tên CT Tour', 'Điểm KH', 'Điểm TQ', 'Thời lượng', 'Loại tour', 'Lý do ngừng']
-                )?.map(h => (
-                  <th key={h} className="px-4 py-3.5 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">{h}</th>
+                    ? ['Mã Tour', 'Tên CT Tour', 'Điểm KH', 'Điểm TQ', 'Thời lượng', 'Số tour đang bán', 'Đơn giá', 'Hành động']
+                    : ['Mã Tour', 'Tên CT Tour', 'Điểm KH', 'Điểm TQ', 'Thời lượng', 'Loại tour', 'Lý do ngừng']
+                ).map(header => (
+                  <th key={header} className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-widest text-[#2A2421]">
+                    {header}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -84,71 +90,80 @@ export default function AdminTourPrograms() {
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={activeTab === 'inactive' ? 7 : 8} className="px-5 py-16 text-center text-sm text-[#2A2421]/40">
-                    <span className="material-symbols-outlined text-4xl block mb-2 text-[#D0C5AF]">inbox</span>
+                    <span className="material-symbols-outlined mb-2 block text-4xl text-[#D0C5AF]">inbox</span>
                     Không có chương trình tour nào
                   </td>
                 </tr>
               )}
-              {filtered?.map(p => (
-                <tr key={p?.id}
-                  className="hover:bg-[#FAFAF5] transition-colors cursor-pointer"
+
+              {filtered.map(program => (
+                <tr
+                  key={program.id}
+                  className="cursor-pointer transition-colors hover:bg-[#FAFAF5]"
                   onClick={() => {
-                    if (activeTab === 'pending') navigate(`/manager/tour-programs/${p?.id}/approval`);
+                    if (activeTab === 'pending') {
+                      navigate(`/manager/tour-programs/${program.id}/approval`);
+                    }
                   }}
                 >
-                  <td className="px-4 py-4 font-medium text-sm font-['Noto_Serif'] text-[#2A2421]">{p?.id}</td>
-                  <td className="px-4 py-4 text-sm font-semibold text-[#2A2421]">{p?.name}</td>
-                  <td className="px-4 py-4 text-sm text-[#2A2421]/70">{p?.departurePoint}</td>
-                  <td className="px-4 py-4 text-sm text-[#2A2421]/70">{p?.sightseeingSpots?.join(', ')}</td>
-                  <td className="px-4 py-4 text-sm text-[#2A2421]/70">{p?.duration?.days}N{p?.duration?.nights}Đ</td>
+                  <td className="px-4 py-4 font-['Noto_Serif'] text-sm font-medium text-[#2A2421]">{program.id}</td>
+                  <td className="px-4 py-4 text-sm font-semibold text-[#2A2421]">{program.name}</td>
+                  <td className="px-4 py-4 text-sm text-[#2A2421]/70">{program.departurePoint}</td>
+                  <td className="px-4 py-4 text-sm text-[#2A2421]/70">{program.sightseeingSpots.join(', ')}</td>
+                  <td className="px-4 py-4 text-sm text-[#2A2421]/70">{program.duration.days}N{program.duration.nights}Đ</td>
 
                   {activeTab === 'pending' && (
                     <>
-                      <td className="px-4 py-4 text-sm font-bold text-[#D4AF37]">{fmtPrice(p?.pricingConfig?.sellPriceAdult)}</td>
-                      <td className="px-4 py-4 text-sm text-[#2A2421]/70">{p?.createdBy}</td>
+                      <td className="px-4 py-4 text-sm font-bold text-[#D4AF37]">{fmtPrice(program.pricingConfig.sellPriceAdult)}</td>
+                      <td className="px-4 py-4 text-sm text-[#2A2421]/70">{program.createdBy}</td>
                       <td className="px-4 py-4">
                         <button
-                          onClick={e => { e?.stopPropagation(); navigate(`/manager/tour-programs/${p?.id}/approval`); }}
-                          className="px-3 py-1.5 text-[10px] font-bold bg-emerald-600 text-white hover:bg-emerald-700"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            navigate(`/manager/tour-programs/${program.id}/approval`);
+                          }}
+                          className="bg-emerald-600 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-emerald-700"
                         >
                           Duyệt
                         </button>
                       </td>
                     </>
                   )}
+
                   {activeTab === 'active' && (
                     <>
                       <td className="px-4 py-4 text-center">
-                        <span className="px-2 py-1 bg-[#D4AF37]/10 text-[#D4AF37] text-xs font-bold">—</span>
+                        <span className="bg-[#D4AF37]/10 px-2 py-1 text-xs font-bold text-[#D4AF37]">—</span>
                       </td>
-                      <td className="px-4 py-4 text-sm font-bold text-[#D4AF37]">{fmtPrice(p?.pricingConfig?.sellPriceAdult)}</td>
+                      <td className="px-4 py-4 text-sm font-bold text-[#D4AF37]">{fmtPrice(program.pricingConfig.sellPriceAdult)}</td>
                       <td className="px-4 py-4">
                         <div className="flex gap-2">
                           <button
-                            onClick={e => {
-                              e?.stopPropagation();
-                              setViewProgram(p);
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              navigate(`/manager/tour-programs/${program.id}`);
                             }}
-                            className="px-2 py-1 text-[10px] font-bold border border-[#D0C5AF] text-[#2A2421]/60 hover:bg-gray-50"
+                            className="border border-[#D0C5AF] px-2 py-1 text-[10px] font-bold text-[#2A2421]/60 hover:bg-gray-50"
                           >
                             Xem
                           </button>
                           <button
-                            onClick={e => {
-                              e?.stopPropagation();
-                              setPrograms(prev => prev.map(item => (
-                                item.id === p.id
-                                  ? { ...item, status: 'inactive', updatedAt: new Date().toISOString() }
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              const nextPrograms: TourProgram[] = programs.map(item => (
+                                item.id === program.id
+                                  ? { ...item, status: 'inactive' as const, updatedAt: new Date().toISOString() }
                                   : item
-                              )));
+                              ));
+                              persistPrograms(nextPrograms);
                               setInactiveReasons(prev => ({
                                 ...prev,
-                                [p.id]: 'Tạm ngừng thủ công từ màn quản lý chương trình tour',
+                                [program.id]: 'Tạm ngừng thủ công từ màn quản lý chương trình tour',
                               }));
                               setActiveTab('inactive');
-                              message.success(`Đã tạm ngừng ${p?.name}`);
+                              message.success(`Đã tạm ngừng ${program.name}`);
                             }}
-                            className="px-2 py-1 text-[10px] font-bold border border-red-300 text-red-600 hover:bg-red-50"
+                            className="border border-red-300 px-2 py-1 text-[10px] font-bold text-red-600 hover:bg-red-50"
                           >
                             Tạm ngừng
                           </button>
@@ -156,10 +171,11 @@ export default function AdminTourPrograms() {
                       </td>
                     </>
                   )}
+
                   {activeTab === 'inactive' && (
                     <>
-                      <td className="px-4 py-4 text-sm text-[#2A2421]/70">{p.tourType === 'mua_le' ? 'Mùa lễ' : 'Quanh năm'}</td>
-                      <td className="px-4 py-4 text-sm text-[#2A2421]/70">{inactiveReasons[p.id] ?? '—'}</td>
+                      <td className="px-4 py-4 text-sm text-[#2A2421]/70">{program.tourType === 'mua_le' ? 'Mùa lễ' : 'Quanh năm'}</td>
+                      <td className="px-4 py-4 text-sm text-[#2A2421]/70">{inactiveReasons[program.id] ?? '—'}</td>
                     </>
                   )}
                 </tr>
@@ -168,47 +184,10 @@ export default function AdminTourPrograms() {
           </table>
         </div>
 
-        <div className="mt-4 flex justify-between items-center">
-          <p className="text-[11px] text-[#2A2421]/40">Hiển thị {filtered?.length} chương trình tour</p>
+        <div className="mt-4 flex items-center justify-between">
+          <p className="text-[11px] text-[#2A2421]/40">Hiển thị {filtered.length} chương trình tour</p>
         </div>
       </div>
-
-      {viewProgram && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-[#2A2421]/40" onClick={() => setViewProgram(null)} />
-          <div role="dialog" aria-modal="true" aria-labelledby="program-detail-title" className="relative w-full max-w-3xl bg-white border border-[#D0C5AF]/40 shadow-2xl">
-            <div className="flex items-start justify-between border-b border-[#D0C5AF]/30 px-6 py-5">
-              <div>
-                <h2 id="program-detail-title" className="font-['Noto_Serif'] text-2xl text-[#2A2421]">Chi tiết chương trình tour</h2>
-                <p className="mt-1 text-xs text-[#2A2421]/50">{viewProgram.id} · {viewProgram.name}</p>
-              </div>
-              <button onClick={() => setViewProgram(null)} className="text-[#2A2421]/40 hover:text-[#2A2421]">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <div className="grid gap-4 p-6 md:grid-cols-2">
-              {[
-                ['Điểm khởi hành', viewProgram.departurePoint],
-                ['Điểm tham quan', viewProgram.sightseeingSpots?.join(', ')],
-                ['Thời lượng', `${viewProgram.duration?.days} ngày ${viewProgram.duration?.nights} đêm`],
-                ['Loại tour', viewProgram.tourType === 'mua_le' ? 'Mùa lễ' : 'Quanh năm'],
-                ['Giá người lớn', fmtPrice(viewProgram.pricingConfig?.sellPriceAdult)],
-                ['Người tạo', viewProgram.createdBy],
-              ]?.map(([label, value]) => (
-                <div key={label} className="border border-[#D0C5AF]/30 bg-[#FAFAF5] px-4 py-3">
-                  <p className="text-[10px] uppercase tracking-widest text-[#2A2421]/45">{label}</p>
-                  <p className="mt-1 text-sm font-semibold text-[#2A2421]">{value}</p>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-end border-t border-[#D0C5AF]/30 px-6 py-4">
-              <button onClick={() => setViewProgram(null)} className="px-4 py-2 text-xs font-bold uppercase tracking-widest border border-[#D0C5AF] text-[#2A2421]/70 hover:bg-[#FAFAF5]">
-                Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

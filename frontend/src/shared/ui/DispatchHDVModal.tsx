@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { mockTourGuides } from '@entities/tour-program/data/tourProgram';
 import type { TourGuide } from '@entities/tour-program/data/tourProgram';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
 
 interface DispatchHDVModalProps {
   tourId: string;
@@ -11,9 +11,10 @@ interface DispatchHDVModalProps {
 
 export function DispatchHDVModal({ tourId, tourName, onClose, onConfirm }: DispatchHDVModalProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const guides = useAppDataStore((state) => state.guides);
 
-  const selected = mockTourGuides?.find((h: TourGuide) => h.id === selectedId);
-  const getTourSpecificCount = (hdv: TourGuide) => Math.max(0, hdv?.tourGuidedCount % 5);
+  const selected = guides?.find((h: TourGuide) => h.id === selectedId);
+  const getTourSpecificCount = (hdv: TourGuide) => Math.max(0, (hdv?.tourGuidedCount ?? 0) % 5);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -40,7 +41,7 @@ export function DispatchHDVModal({ tourId, tourName, onClose, onConfirm }: Dispa
           <p className="text-sm font-medium text-primary mb-4">Chọn hướng dẫn viên</p>
 
           <div className="space-y-3 mb-6">
-            {mockTourGuides?.map((hdv: TourGuide) => (
+            {guides?.map((hdv: TourGuide) => (
               <button
                 type="button"
                 key={hdv?.id}

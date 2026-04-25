@@ -2,9 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { Breadcrumb, message } from 'antd';
 import { useAuthStore } from '@shared/store/useAuthStore';
-import { mockTourInstances, mockTourPrograms } from '@entities/tour-program/data/tourProgram';
-import { mockBookings } from '@entities/booking/data/bookings';
 import type { Booking } from '@entities/booking/data/bookings';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
+import { updateTourInstanceCommand } from '@shared/lib/api/tourInstances';
 
 type EstimateSupplierRow = {
   rowId: string;
@@ -53,10 +53,15 @@ export default function TourEstimate() {
   const location = useLocation();
   const basePrefix = location?.pathname?.startsWith('/manager') ? '/manager' : '/coordinator';
   const user = useAuthStore(s => s?.user);
+  const token = useAuthStore(s => s?.accessToken);
+  const upsertTourInstance = useAppDataStore(s => s?.upsertTourInstance);
+  const tourInstances = useAppDataStore(s => s?.tourInstances);
+  const tourPrograms = useAppDataStore(s => s?.tourPrograms);
+  const bookings = useAppDataStore(s => s?.bookings);
   const role = user?.role || 'guest';
 
-  const instance = mockTourInstances?.find(i => i.id === id);
-  const program = instance ? mockTourPrograms?.find(p => p.id === instance?.programId) : undefined;
+  const instance = tourInstances?.find(i => i.id === id);
+  const program = instance ? tourPrograms?.find(p => p.id === instance?.programId) : undefined;
 
   if (!instance || !program) {
     return (
@@ -199,7 +204,7 @@ export default function TourEstimate() {
   const profit = expectedRevenue - totalCost;
   const margin = expectedRevenue > 0 ? (profit / expectedRevenue) * 100 : 0;
 
-  const tourBookings = mockBookings?.filter((booking: Booking) =>
+  const tourBookings = bookings?.filter((booking: Booking) =>
     booking?.tourName?.toLowerCase()?.includes(instance?.programName?.toLowerCase()?.split(' ')[0]),
   );
 
@@ -239,7 +244,13 @@ export default function TourEstimate() {
               <button onClick={() => navigate(`${basePrefix}/tours`)} className="px-6 py-2 border border-red-500 text-red-600 hover:bg-red-50 text-sm uppercase tracking-widest transition-colors font-medium">
                 Từ Chối
               </button>
-              <button onClick={() => navigate(`${basePrefix}/tours`)} className="px-6 py-2 bg-[#2C5545] text-white hover:bg-[#1a382b] text-sm uppercase tracking-widest transition-colors font-medium shadow-md">
+              <button onClick={async () => {
+                if (token && instance) {
+                  const response = await updateTourInstanceCommand(token, instance.id, 'estimate/approve');
+                  upsertTourInstance(response.tourInstance);
+                }
+                navigate(`${basePrefix}/tours`);
+              }} className="px-6 py-2 bg-[#2C5545] text-white hover:bg-[#1a382b] text-sm uppercase tracking-widest transition-colors font-medium shadow-md">
                 Phê Duyệt Dự Toán
               </button>
             </>
@@ -248,7 +259,11 @@ export default function TourEstimate() {
               <button onClick={() => message.success('Đã lưu nháp dự toán')} className="px-6 py-2 border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-black/5 text-sm uppercase tracking-widest transition-colors font-medium">
                 Lưu Nháp
               </button>
-              <button onClick={() => {
+              <button onClick={async () => {
+                if (token && instance) {
+                  const response = await updateTourInstanceCommand(token, instance.id, 'estimate');
+                  upsertTourInstance(response.tourInstance);
+                }
                 message.success('Đã gửi dự toán phê duyệt');
                 navigate(`${basePrefix}/tours`);
               }} className="px-6 py-2 bg-[var(--color-tertiary)] text-white hover:bg-[var(--color-tertiary)]/90 text-sm uppercase tracking-widest transition-colors font-medium shadow-md">

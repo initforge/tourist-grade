@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import TourProgramWizard from '@features/coordinator/pages/TourProgramWizard';
-import { mockTourPrograms } from '@entities/tour-program/data/tourProgram';
 import type { TourProgram } from '@entities/tour-program/data/tourProgram';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
+import { useAuthStore } from '@shared/store/useAuthStore';
+import { apiRequest } from '@shared/lib/api/client';
 
 function RejectPopup({ onConfirm, onCancel }: { onConfirm: (reason: string) => void; onCancel: () => void }) {
   const [reason, setReason] = useState('');
@@ -96,8 +98,11 @@ export default function AdminTourProgramApproval() {
   const [showApprove, setShowApprove] = useState(false);
   const [rejected, setRejected] = useState<string | null>(null);
   const [approved, setApproved] = useState(false);
+  const token = useAuthStore(state => state.accessToken);
+  const tourPrograms = useAppDataStore(state => state.tourPrograms);
+  const upsertTourProgram = useAppDataStore(state => state.upsertTourProgram);
 
-  const program: TourProgram | undefined = useMemo(() => mockTourPrograms?.find(p => p.id === id), [id]);
+  const program: TourProgram | undefined = useMemo(() => tourPrograms?.find(p => p.id === id), [id, tourPrograms]);
 
   if (!program) {
     return (
@@ -113,13 +118,28 @@ export default function AdminTourProgramApproval() {
     );
   }
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
+    if (token && program) {
+      const response = await apiRequest<{ success: boolean; tourProgram: TourProgram }>(`/tour-programs/${program.id}/approve`, {
+        method: 'POST',
+        token,
+      });
+      upsertTourProgram(response.tourProgram);
+    }
     setApproved(true);
     setRejected(null);
     setShowApprove(false);
   };
 
-  const handleReject = (reason: string) => {
+  const handleReject = async (reason: string) => {
+    if (token && program) {
+      const response = await apiRequest<{ success: boolean; tourProgram: TourProgram }>(`/tour-programs/${program.id}/reject`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ reason }),
+      });
+      upsertTourProgram(response.tourProgram);
+    }
     setRejected(reason);
     setApproved(false);
     setShowReject(false);
@@ -163,4 +183,3 @@ export default function AdminTourProgramApproval() {
     </>
   );
 }
-

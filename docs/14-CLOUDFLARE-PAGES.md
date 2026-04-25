@@ -1,38 +1,48 @@
-# 14. Cloudflare Pages (Frontend Only)
+# 14. Cloudflare Pages and Tunnel
 
-Repo ưu tiên chạy local bằng `docker compose`. Tuy nhiên có thể deploy **frontend-only** lên Cloudflare Pages để demo UI.
+## Frontend deploy
 
-Lưu ý:
+Cloudflare Pages should only be used once the frontend points at a reachable API.
 
-- Hiện frontend vẫn còn mock/seed (localStorage) cho nhiều màn hình, nên deploy frontend-only vẫn chạy được.
-- Nếu cần gọi API thật, phải có backend public và set `VITE_API_BASE_URL` tương ứng trong Cloudflare Pages.
-
-## 14.1 Deploy thủ công bằng Wrangler
+Manual deploy:
 
 ```bash
 cd frontend
 npm ci
 npm run build
-npx wrangler login
 npx wrangler pages deploy dist --project-name tourist-grade
 ```
 
-Hoặc dùng script:
+Or:
 
 ```bash
 cd frontend
 npm run deploy:pages
 ```
 
-## 14.2 Deploy qua Cloudflare Pages (kết nối GitHub)
+Recommended Pages env:
 
-Trong Cloudflare Pages:
+- `VITE_API_BASE_URL=https://<public-backend-domain>/api/v1`
 
-- Root directory: `frontend`
-- Build command: `npm ci && npm run build`
-- Build output directory: `dist`
+## Local PayOS webhook with Cloudflare Tunnel
 
-Env variables (tuỳ chọn):
+PayOS webhook cannot target raw localhost. Use a tunnel:
 
-- `VITE_API_BASE_URL`: URL API thật (ví dụ: `https://api.example.com/api/v1`)
+```bash
+cloudflared tunnel --url http://localhost:4000
+```
 
+Then update:
+
+- `backend/.env`
+- `PAYOS_WEBHOOK_URL=https://<generated-host>/api/v1/payments/payos/webhook`
+
+Optional API call to confirm webhook registration:
+
+```bash
+POST /api/v1/payments/payos/confirm-webhook
+```
+
+## Important note
+
+If the frontend is deployed to Pages before the backend is public, login, booking, and payment flows will fail because auth and PayOS are no longer mock-only.

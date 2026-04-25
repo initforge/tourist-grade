@@ -1,7 +1,10 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { mockTourInstances, mockTourPrograms, TOUR_INSTANCE_STATUS_LABEL } from '@entities/tour-program/data/tourProgram';
-import type { TourInstance } from '@entities/tour-program/data/tourProgram';
+import { TOUR_INSTANCE_STATUS_LABEL } from '@entities/tour-program/data/tourProgram';
+import type { TourInstance, TourProgram } from '@entities/tour-program/data/tourProgram';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
+import { useAuthStore } from '@shared/store/useAuthStore';
+import { updateTourInstanceCommand } from '@shared/lib/api/tourInstances';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,14 +39,14 @@ function fmtCurrency(n: number) {
   return n?.toString();
 }
 
-function getProjectedProfitPercent(instance: TourInstance) {
+function getProjectedProfitPercent(instance: TourInstance, programs: TourProgram[] = []) {
   if (instance?.costEstimate) {
     const revenue = instance?.costEstimate?.estimatedGuests * instance?.costEstimate?.pricingConfig?.sellPriceAdult;
     const profit = revenue - instance?.costEstimate?.totalCost;
     return revenue > 0 ? Number(((profit / revenue) * 100)?.toFixed(1)) : 0;
   }
 
-  const program = mockTourPrograms?.find(item => item?.id === instance?.programId);
+  const program = programs?.find(item => item?.id === instance?.programId);
   return program?.pricingConfig?.profitMargin ?? 0;
 }
 
@@ -65,8 +68,8 @@ type ApprovalPreviewRow = {
   checked: boolean;
 };
 
-function buildApprovalPreviewRows(instance: TourInstance): ApprovalPreviewRow[] {
-  const program = mockTourPrograms?.find(item => item.id === instance?.programId);
+function buildApprovalPreviewRows(instance: TourInstance, programs: TourProgram[] = []): ApprovalPreviewRow[] {
+  const program = programs?.find(item => item.id === instance?.programId);
 
   return Array.from({ length: 6 }, (_, index) => {
     const departureDate = new Date(instance?.departureDate);
@@ -120,19 +123,21 @@ function RejectPopup({ title, onConfirm, onCancel }: { title: string; onConfirm:
 
 function ApprovePreviewPopup({
   instance,
+  programs,
   onApprove,
   onRequestEdit,
   onReject,
   onCancel,
 }: {
   instance: TourInstance;
+  programs: TourProgram[];
   onApprove: () => void;
   onRequestEdit: () => void;
   onReject: () => void;
   onCancel: () => void;
 }) {
-  const program = mockTourPrograms?.find(item => item.id === instance?.programId);
-  const rows = buildApprovalPreviewRows(instance);
+  const program = programs?.find(item => item.id === instance?.programId);
+  const rows = buildApprovalPreviewRows(instance, programs);
   const selectedCount = rows?.filter(row => row?.checked)?.length;
   const unselectedCount = rows?.length - selectedCount;
 
@@ -243,6 +248,7 @@ type BatchActionMode = 'cancel' | 'extend' | 'continue';
 function SelectedToursActionPopup({
   mode,
   instances,
+  programs,
   extendDates,
   onChangeExtendDate,
   onRemove,
@@ -251,6 +257,7 @@ function SelectedToursActionPopup({
 }: {
   mode: BatchActionMode;
   instances: TourInstance[];
+  programs: TourProgram[];
   extendDates: Record<string, string>;
   onChangeExtendDate: (id: string, value: string) => void;
   onRemove: (id: string) => void;
@@ -323,7 +330,7 @@ function SelectedToursActionPopup({
                     <td className="px-4 py-3">{fmtCurrency(instance?.expectedGuests * instance?.priceAdult)}</td>
                     <td className="px-4 py-3">
                       <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold">
-                        {getProjectedProfitPercent(instance)}%
+                        {getProjectedProfitPercent(instance, programs)}%
                       </span>
                     </td>
                     {mode === 'extend' && (
@@ -367,13 +374,17 @@ function SelectedToursActionPopup({
 
 export default function AdminActiveTours() {
   const navigate = useNavigate();
+  const token = useAuthStore(state => state.accessToken);
+  const storeInstances = useAppDataStore(state => state.tourInstances);
+  const programs = useAppDataStore(state => state.tourPrograms);
+  const upsertTourInstance = useAppDataStore(state => state.upsertTourInstance);
   const [activeTab, setActiveTab] = useState<TourTab>('pending_sell');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showRejectPopup, setShowRejectPopup] = useState<{ id: string; name: string; mode: 'reject' | 'request_edit' } | null>(null);
   const [showApprovePopup, setShowApprovePopup] = useState<string | null>(null);
   const [batchActionMode, setBatchActionMode] = useState<BatchActionMode | null>(null);
   const [extendDates, setExtendDates] = useState<Record<string, string>>({});
-  const [instances, setInstances] = useState<TourInstance[]>(mockTourInstances);
+  const [instances, setInstances] = useState<TourInstance[]>(storeInstances);
 
   // Filter theo tab
   const filtered = instances?.filter(i => TAB_STATUS_MAP[activeTab]?.includes(i?.status) ?? false);
@@ -395,8 +406,22 @@ export default function AdminActiveTours() {
     setSelectedIds(prev => prev.size === ids?.length ? new Set() : new Set(ids));
   };
 
-  const handleApprove = (_id: string) => { setShowApprovePopup(null); };
-  const handleReject = (_id: string, _reason: string) => { setShowRejectPopup(null); };
+  const handleApprove = async (id: string) => {
+    if (token) {
+      const response = await updateTourInstanceCommand(token, id, 'approve-sale');
+      upsertTourInstance(response.tourInstance);
+      setInstances(prev => prev?.map(instance => instance.id === id ? response.tourInstance : instance));
+    }
+    setShowApprovePopup(null);
+  };
+  const handleReject = async (id: string, reason: string) => {
+    if (token) {
+      const response = await updateTourInstanceCommand(token, id, 'reject-sale', { reason });
+      upsertTourInstance(response.tourInstance);
+      setInstances(prev => prev?.map(instance => instance.id === id ? response.tourInstance : instance));
+    }
+    setShowRejectPopup(null);
+  };
   const openBatchAction = (mode: BatchActionMode) => {
     if (selectedIds.size === 0) return;
     if (mode === 'extend') {
@@ -422,8 +447,34 @@ export default function AdminActiveTours() {
     });
   };
 
-  const handleBatchConfirm = () => {
+  const handleBatchConfirm = async () => {
     if (!batchActionMode || selectedIds.size === 0) return;
+    const selectedInstances = instances?.filter(instance => selectedIds?.has(instance.id));
+
+    if (token) {
+      const updates = await Promise.all(selectedInstances?.map(instance => {
+        if (batchActionMode === 'cancel') {
+          return updateTourInstanceCommand(token, instance.id, 'cancel', {
+            reason: instance?.cancelReason || 'Quản lý hủy tour do không đủ điều kiện khởi hành',
+          }).then(response => response.tourInstance);
+        }
+
+        if (batchActionMode === 'extend') {
+          return updateTourInstanceCommand(token, instance.id, 'extend-deadline', {
+            bookingDeadline: extendDates[instance?.id] || instance?.bookingDeadline,
+          }).then(response => response.tourInstance);
+        }
+
+        return updateTourInstanceCommand(token, instance.id, 'estimate/approve')
+          .then(response => response.tourInstance);
+      }));
+
+      updates?.forEach(upsertTourInstance);
+      setInstances(prev => prev?.map(instance => updates?.find(updated => updated.id === instance.id) ?? instance));
+      setSelectedIds(new Set());
+      setBatchActionMode(null);
+      return;
+    }
 
     if (batchActionMode === 'cancel') {
       setInstances(prev => prev?.map(instance => (
@@ -594,7 +645,7 @@ export default function AdminActiveTours() {
                       <td className="px-4 py-4 text-sm font-bold text-[#D4AF37]">{fmtCurrency(t?.expectedGuests * t?.priceAdult)}</td>
                       <td className="px-4 py-4">
                         <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold">
-                          {getProjectedProfitPercent(t)}%
+                          {getProjectedProfitPercent(t, programs)}%
                         </span>
                       </td>
                     </tr>
@@ -770,6 +821,7 @@ export default function AdminActiveTours() {
         return (
           <ApprovePreviewPopup
             instance={selectedInstance}
+            programs={programs}
             onApprove={() => handleApprove(showApprovePopup)}
             onRequestEdit={() => {
               setShowApprovePopup(null);
@@ -787,6 +839,7 @@ export default function AdminActiveTours() {
         <SelectedToursActionPopup
           mode={batchActionMode}
           instances={selectedInsufficientInstances}
+          programs={programs}
           extendDates={extendDates}
           onChangeExtendDate={(id, value) => setExtendDates(prev => ({ ...prev, [id]: value }))}
           onRemove={removeSelectedInPopup}

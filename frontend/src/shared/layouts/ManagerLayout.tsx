@@ -1,12 +1,20 @@
 import { Outlet, Link, useLocation, Navigate } from "react-router-dom";
 import { useAuthStore } from '@shared/store/useAuthStore';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
 
 export function ManagerLayout() {
   const location = useLocation();
   const user = useAuthStore(s => s?.user);
+  const isBootstrapping = useAuthStore(s => s?.isBootstrapping);
+  const protectedReady = useAppDataStore(s => s?.protectedReady);
+  const protectedLoading = useAppDataStore(s => s?.protectedLoading);
 
   const isActive = (path: string) => location.pathname === path || location?.pathname?.startsWith(path + '/');
   const role = user?.role || 'guest';
+
+  if (isBootstrapping || protectedLoading || !protectedReady) {
+    return null;
+  }
 
   if (role !== 'manager') {
     return <Navigate to="/" replace />;

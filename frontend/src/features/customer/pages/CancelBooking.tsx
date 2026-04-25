@@ -1,12 +1,13 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { mockBookings } from '@entities/booking/data/bookings';
 import { CancelBookingModal } from '@shared/ui/CancelBookingModal';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
 
 // Redirects to modal — booking ID from URL param
 export default function CancelBooking() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const booking = mockBookings?.find(b => b.id === id);
+  const bookings = useAppDataStore((state) => state.bookings);
+  const booking = bookings.find((item) => item.id === id);
 
   if (!booking) {
     return (

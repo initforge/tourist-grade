@@ -1,7 +1,3 @@
-// ============================================================
-// Voucher Types — Sales + Manager scope
-// ============================================================
-
 export type VoucherType = 'percent' | 'fixed';
 export type VoucherStatus = 'draft' | 'pending_approval' | 'rejected' | 'upcoming' | 'active' | 'inactive';
 
@@ -10,15 +6,11 @@ export interface Voucher {
   code: string;
   type: VoucherType;
   value: string;
-  /** Ngày bắt đầu áp dụng */
   startDate: string;
-  /** Ngày kết thức áp dụng */
   endDate: string;
-  /** Alias for endDate (used in UI pages) */
   expiryDate?: string;
   used: number;
   limit: number;
-  /** Danh sách id chương trình tour được áp dụng (empty = tất cả) */
   applicableTours: string[];
   status: VoucherStatus;
   rejectionReason?: string;
@@ -27,194 +19,6 @@ export interface Voucher {
   createdAt?: string;
 }
 
-function isoOffset(days: number) {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() + days);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-// Canonical mock data
-export const mockVouchers: Voucher[] = [
-  {
-    id: 'VOU-01',
-    code: 'SUMMER2024',
-    type: 'percent',
-    value: '15%',
-    startDate: '2024-06-01',
-    endDate: '2026-08-31',
-    used: 45,
-    limit: 100,
-    applicableTours: [],
-    status: 'active',
-    description: 'Khuyến mãi mùa hè 2024',
-  },
-  {
-    id: 'VOU-02',
-    code: 'LUXURY500K',
-    type: 'fixed',
-    value: '500,000 đ',
-    startDate: '2026-01-01',
-    endDate: '2026-12-31',
-    used: 12,
-    limit: 50,
-    applicableTours: [],
-    status: 'active',
-    description: 'Giảm 500K cho đơn hàng cao cấp',
-  },
-  {
-    id: 'VOU-03',
-    code: 'FLASHWINTER',
-    type: 'percent',
-    value: '20%',
-    startDate: '2024-01-01',
-    endDate: '2024-02-28',
-    used: 100,
-    limit: 100,
-    applicableTours: [],
-    status: 'inactive',
-    description: 'Flash sale mùa đông',
-  },
-  {
-    id: 'VOU-04',
-    code: 'SUMMER2026',
-    type: 'percent',
-    value: '20%',
-    startDate: '2026-06-01',
-    endDate: '2026-08-31',
-    used: 0,
-    limit: 200,
-    applicableTours: [],
-    status: 'draft',
-    createdBy: 'Nguyễn Văn Sales',
-    createdAt: '2026-04-20',
-    description: 'Khuyến mãi mùa hè 2026',
-  },
-  {
-    id: 'VOU-10',
-    code: 'APPROVENOW',
-    type: 'percent',
-    value: '12%',
-    startDate: isoOffset(1),
-    endDate: isoOffset(40),
-    used: 0,
-    limit: 80,
-    applicableTours: ['TP003'],
-    status: 'pending_approval',
-    createdBy: 'Nguyễn Văn Sales',
-    createdAt: isoOffset(-5),
-    description: 'Dữ liệu mẫu kiểm tra cảnh báo phê duyệt còn 1-2 ngày',
-  },
-  {
-    id: 'VOU-11',
-    code: 'DRAFTWARN',
-    type: 'fixed',
-    value: '200,000 đ',
-    startDate: isoOffset(7),
-    endDate: isoOffset(25),
-    used: 0,
-    limit: 60,
-    applicableTours: [],
-    status: 'draft',
-    createdBy: 'Nguyễn Văn Sales',
-    createdAt: isoOffset(0),
-    description: 'Dữ liệu mẫu kiểm tra cảnh báo nháp sắp hết hạn gửi duyệt',
-  },
-  {
-    id: 'VOU-12',
-    code: 'SENDSOON8',
-    type: 'percent',
-    value: '8%',
-    startDate: isoOffset(8),
-    endDate: isoOffset(28),
-    used: 0,
-    limit: 40,
-    applicableTours: ['TP001'],
-    status: 'draft',
-    createdBy: 'Nguyễn Văn Sales',
-    createdAt: isoOffset(-1),
-    description: 'Bản ghi mẫu để NV kinh doanh test icon cảnh báo 7-8 ngày trước ngày bắt đầu',
-  },
-  {
-    id: 'VOU-09',
-    code: 'NATIONALDAY2026',
-    type: 'fixed',
-    value: '250,000 đ',
-    startDate: '2026-09-01',
-    endDate: '2026-09-05',
-    used: 0,
-    limit: 120,
-    applicableTours: [],
-    status: 'upcoming',
-    createdBy: 'Nguyễn Văn Sales',
-    createdAt: '2026-04-10',
-    description: 'Ưu đãi Quốc khành chưa đến thời gian áp dụng',
-  },
-  {
-    id: 'VOU-05',
-    code: 'PROMO10PCT',
-    type: 'percent',
-    value: '10%',
-    startDate: '2026-04-20',
-    endDate: '2026-12-31',
-    used: 15,
-    limit: 100,
-    applicableTours: ['TP001'],
-    status: 'pending_approval',
-    createdBy: 'Nguyễn Văn Sales',
-    createdAt: '2026-03-28',
-    description: 'Giảm 10% cho tất cả tour',
-  },
-  {
-    id: 'VOU-06',
-    code: 'VIP50PCT',
-    type: 'percent',
-    value: '50%',
-    startDate: '2026-04-01',
-    endDate: '2026-06-30',
-    used: 0,
-    limit: 10,
-    applicableTours: [],
-    status: 'rejected',
-    rejectionReason: 'Giá trị giảm quá cao, vui lòng giảm xuống 30%?.',
-    description: 'VIP khách hàng thân thiết',
-  },
-  {
-    id: 'VOU-07',
-    code: 'AUTUMN20',
-    type: 'percent',
-    value: '20%',
-    startDate: '2026-09-01',
-    endDate: '2026-10-31',
-    used: 0,
-    limit: 150,
-    applicableTours: ['TP002'],
-    status: 'pending_approval',
-    createdBy: 'Trần Thị E',
-    createdAt: '2026-03-29',
-    description: 'Giảm 20% mùa thu',
-  },
-  {
-    id: 'VOU-08',
-    code: 'VIPONLY30',
-    type: 'fixed',
-    value: '300,000 đ',
-    startDate: '2026-05-01',
-    endDate: '2026-09-30',
-    used: 2,
-    limit: 50,
-    applicableTours: [],
-    status: 'pending_approval',
-    createdBy: 'Lê Văn G',
-    createdAt: '2026-03-30',
-    description: 'Giảm 300K cho tour VIP',
-  },
-];
-
-// Labels
 export const VOUCHER_STATUS_LABEL: Record<VoucherStatus, string> = {
   draft: 'Nháp',
   pending_approval: 'Chờ phê duyệt',

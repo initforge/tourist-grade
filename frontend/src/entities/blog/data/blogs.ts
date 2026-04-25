@@ -1,5 +1,6 @@
-﻿export interface BlogPost {
-  id: number;
+export interface BlogPost {
+  id: number | string;
+  slug?: string;
   category: string;
   title: string;
   excerpt?: string;
@@ -7,6 +8,8 @@
   date: string;
   readTime?: string;
   image: string;
+  contentMarkdown?: string;
+  publishedAt?: string | null;
 }
 
 export const blogPosts: BlogPost[] = [

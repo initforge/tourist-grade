@@ -6,13 +6,14 @@ export function useRequireAuth(redirectTo?: string) {
   const navigate = useNavigate();
   const user = useAuthStore(s => s?.user);
   const isAuthenticated = useAuthStore(s => s?.isAuthenticated);
+  const isBootstrapping = useAuthStore(s => s?.isBootstrapping);
 
   useEffect(() => {
-    if (!isAuthenticated || !user) {
+    if (!isBootstrapping && (!isAuthenticated || !user)) {
       navigate(redirectTo ?? '/login', { replace: true });
     }
-  }, [isAuthenticated, user, navigate, redirectTo]);
+  }, [isAuthenticated, isBootstrapping, user, navigate, redirectTo]);
 
-  return { user, isAuthenticated };
+  return { user, isAuthenticated, isBootstrapping };
 }
 

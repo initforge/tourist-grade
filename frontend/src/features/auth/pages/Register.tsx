@@ -1,27 +1,49 @@
-﻿import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ApiError } from '@shared/lib/api/client';
 import { useAuthStore } from '@shared/store/useAuthStore';
 
 export default function Register() {
   const navigate = useNavigate();
-  const { login } = useAuthStore();
+  const register = useAuthStore((state) => state.register);
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
     email: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
   });
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e?.preventDefault();
-    // Simulate successful registration and auto-login
-    login('customer');
-    navigate('/booking/successátype=register');
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (formData.password !== formData.confirmPassword) {
+      setErrorMessage('Mật khẩu xác nhận không khớp');
+      return;
+    }
+
+    setErrorMessage('');
+    setIsSubmitting(true);
+
+    try {
+      await register({
+        name: formData.name,
+        phone: formData.phone,
+        email: formData.email,
+        password: formData.password,
+      });
+      navigate('/', { replace: true });
+    } catch (error) {
+      setErrorMessage(error instanceof ApiError ? error.message : 'Đăng ký thất bại');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e?.target?.name]: e?.target?.value });
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({ ...formData, [event.target.name]: event.target.value });
   };
 
   return (
@@ -33,43 +55,43 @@ export default function Register() {
 
       <div className="bg-white p-10 border border-[#D0C5AF]/30 shadow-sm relative">
         <div className="absolute top-0 w-full h-1 bg-[var(--color-tertiary)] left-0"></div>
-        <h2 className="font-serif text-2xl text-[var(--color-primary)] mb-8 text-center">Đăng K?</h2>
-        
+        <h2 className="font-serif text-2xl text-[var(--color-primary)] mb-8 text-center">Đăng Ký</h2>
+
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-1 relative group">
             <label className="text-[10px] uppercase tracking-widest text-[var(--color-primary)]/60 transition-colors group-focus-within:text-[var(--color-secondary)]">Họ và tên</label>
-            <input 
+            <input
               name="name"
-              type="text" 
+              type="text"
               required
               placeholder="Nguyễn Văn A"
-              value={formData?.name}
+              value={formData.name}
               onChange={handleChange}
               className="w-full border-b border-[#D0C5AF]/50 bg-transparent py-2 px-0 focus:ring-0 focus:border-[var(--color-secondary)] text-sm outline-none transition-colors"
             />
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1 relative group">
               <label className="text-[10px] uppercase tracking-widest text-[var(--color-primary)]/60 transition-colors group-focus-within:text-[var(--color-secondary)]">Điện thoại</label>
-              <input 
+              <input
                 name="phone"
-                type="tel" 
+                type="tel"
                 required
                 placeholder="0988..."
-                value={formData?.phone}
+                value={formData.phone}
                 onChange={handleChange}
                 className="w-full border-b border-[#D0C5AF]/50 bg-transparent py-2 px-0 focus:ring-0 focus:border-[var(--color-secondary)] text-sm outline-none transition-colors"
               />
             </div>
             <div className="space-y-1 relative group">
               <label className="text-[10px] uppercase tracking-widest text-[var(--color-primary)]/60 transition-colors group-focus-within:text-[var(--color-secondary)]">Email</label>
-              <input 
+              <input
                 name="email"
-                type="email" 
+                type="email"
                 required
                 placeholder="vip@travela.vn"
-                value={formData?.email}
+                value={formData.email}
                 onChange={handleChange}
                 className="w-full border-b border-[#D0C5AF]/50 bg-transparent py-2 px-0 focus:ring-0 focus:border-[var(--color-secondary)] text-sm outline-none transition-colors"
               />
@@ -78,12 +100,12 @@ export default function Register() {
 
           <div className="space-y-1 relative group">
             <label className="text-[10px] uppercase tracking-widest text-[var(--color-primary)]/60 transition-colors group-focus-within:text-[var(--color-secondary)]">Mật khẩu</label>
-            <input 
+            <input
               name="password"
-              type="password" 
+              type="password"
               required
-              placeholder="?"
-              value={formData?.password}
+              placeholder="••••••••"
+              value={formData.password}
               onChange={handleChange}
               className="w-full border-b border-[#D0C5AF]/50 bg-transparent py-2 px-0 focus:ring-0 focus:border-[var(--color-secondary)] text-sm outline-none transition-colors tracking-widest"
             />
@@ -91,22 +113,29 @@ export default function Register() {
 
           <div className="space-y-1 relative group">
             <label className="text-[10px] uppercase tracking-widest text-[var(--color-primary)]/60 transition-colors group-focus-within:text-[var(--color-secondary)]">Xác nhận mật khẩu</label>
-            <input 
+            <input
               name="confirmPassword"
-              type="password" 
+              type="password"
               required
               placeholder="••••••••"
-              value={formData?.confirmPassword}
+              value={formData.confirmPassword}
               onChange={handleChange}
               className="w-full border-b border-[#D0C5AF]/50 bg-transparent py-2 px-0 focus:ring-0 focus:border-[var(--color-secondary)] text-sm outline-none transition-colors tracking-widest"
             />
           </div>
-          
-          <button 
+
+          {errorMessage && (
+            <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {errorMessage}
+            </div>
+          )}
+
+          <button
             type="submit"
-            className="w-full bg-[var(--color-primary)] text-white py-4 mt-4 font-sans uppercase tracking-[0.2em] text-xs hover:bg-[var(--color-secondary)] transition-colors duration-300"
+            disabled={isSubmitting}
+            className="w-full bg-[var(--color-primary)] text-white py-4 mt-4 font-sans uppercase tracking-[0.2em] text-xs hover:bg-[var(--color-secondary)] transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Tạo Tài Khoản
+            {isSubmitting ? 'Đang xử lý...' : 'Tạo Tài Khoản'}
           </button>
         </form>
 
@@ -122,4 +151,3 @@ export default function Register() {
     </div>
   );
 }
-

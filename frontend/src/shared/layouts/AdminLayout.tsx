@@ -4,11 +4,16 @@ import { useAuthStore } from '@shared/store/useAuthStore';
 export function AdminLayout() {
   const location = useLocation();
   const user = useAuthStore(s => s?.user);
+  const isBootstrapping = useAuthStore(s => s?.isBootstrapping);
 
   const isActive = (path: string) => location.pathname === path || location?.pathname?.startsWith(path + '/');
   const role = user?.role || 'guest';
   
   // Only Admin can access /admin
+  if (isBootstrapping) {
+    return null;
+  }
+
   if (role !== 'admin') {
     return <Navigate to="/" replace />;
   }

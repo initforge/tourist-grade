@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Modal, message } from 'antd';
-import { useAuthStore } from '@shared/store/useAuthStore';
-import { mockTourPrograms } from '@entities/tour-program/data/tourProgram';
-import { mockVouchers, VOUCHER_STATUS_LABEL, VOUCHER_STATUS_STYLE } from '@entities/voucher/data/vouchers';
+import { Modal } from 'antd';
+import type { TourProgram } from '@entities/tour-program/data/tourProgram';
+import { VOUCHER_STATUS_LABEL, VOUCHER_STATUS_STYLE } from '@entities/voucher/data/vouchers';
 import type { Voucher, VoucherStatus, VoucherType } from '@entities/voucher/data/vouchers';
 import {
   SALES_DRAFT_WARNING,
@@ -15,73 +14,78 @@ import {
   formatVoucherValue,
   hasSalesDraftWarning,
   isPositiveIntegerText,
-  isValidVoucherLimit,
   normalizeVoucherLifecycle,
   voucherTodayIso,
   voucherValueInput,
   voucherValuePlaceholder,
 } from '@entities/voucher/lib/voucherRules';
-
-const STORE_KEY = '__travela_sales_vouchers';
-const SEED_VERSION_KEY = '__travela_sales_vouchers_seed_version';
-const SEED_VERSION = '2026-04-23-voucher-rules-v3';
+import { createVoucher, deleteVoucher, updateVoucher } from '@shared/lib/api/vouchers';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
+import { useAuthStore } from '@shared/store/useAuthStore';
 
 type FormState = {
-  id?: string; code: string; type: VoucherType; value: string; startDate: string; endDate: string;
-  limit: string; applicableTours: string[]; description: string; status: VoucherStatus;
-  createdAt: string; createdBy: string; rejectionReason?: string; used: number;
+  id?: string;
+  code: string;
+  type: VoucherType;
+  value: string;
+  startDate: string;
+  endDate: string;
+  limit: string;
+  applicableTours: string[];
+  description: string;
+  status: VoucherStatus;
+  createdAt: string;
+  createdBy: string;
+  rejectionReason?: string;
+  used: number;
 };
 
-const tourName = (id: string) => mockTourPrograms.find((tour) => tour.id === id)?.name ?? id;
-const todayIso = voucherTodayIso;
-const canSave = canSaveVoucher;
-const canSend = canSendVoucherApproval;
-const warnDraft = hasSalesDraftWarning;
-const toValueInput = voucherValueInput;
-const valuePlaceholder = voucherValuePlaceholder;
-const approvedStatusFor = (voucher: Voucher): VoucherStatus => approvedVoucherStatus(voucher.startDate);
-const normalize = normalizeVoucherLifecycle;
-
-function loadVouchers() {
-  const normalizedSeeds = mockVouchers.map((voucher) => normalize(voucher));
-  const raw = localStorage.getItem(STORE_KEY);
-  if (!raw) {
-    localStorage.setItem(SEED_VERSION_KEY, SEED_VERSION);
-    return normalizedSeeds;
-  }
-  try {
-    const stored = (JSON.parse(raw) as Voucher[]).map((voucher) => normalize(voucher));
-    if (localStorage.getItem(SEED_VERSION_KEY) === SEED_VERSION) return stored;
-    const storedIds = new Set(stored.map((voucher) => voucher.id));
-    localStorage.setItem(SEED_VERSION_KEY, SEED_VERSION);
-    return [...stored, ...normalizedSeeds.filter((voucher) => !storedIds.has(voucher.id))];
-  } catch {
-    localStorage.setItem(SEED_VERSION_KEY, SEED_VERSION);
-    return normalizedSeeds;
-  }
+function emptyForm(createdBy: string): FormState {
+  return {
+    code: '',
+    type: 'percent',
+    value: '',
+    startDate: '',
+    endDate: '',
+    limit: '',
+    applicableTours: [],
+    description: '',
+    status: 'draft',
+    createdAt: voucherTodayIso(),
+    createdBy,
+    used: 0,
+  };
 }
 
 function toForm(voucher: Voucher): FormState {
   return {
-    id: voucher.id, code: voucher.code, type: voucher.type, value: toValueInput(voucher.value), startDate: voucher.startDate, endDate: voucher.endDate,
-    limit: String(voucher.limit), applicableTours: [...voucher.applicableTours], description: voucher.description ?? '', status: voucher.status,
-    createdAt: voucher.createdAt ?? todayIso(), createdBy: voucher.createdBy ?? 'Nhân viên kinh doanh', rejectionReason: voucher.rejectionReason, used: voucher.used,
+    id: voucher.id,
+    code: voucher.code,
+    type: voucher.type,
+    value: voucherValueInput(voucher.value),
+    startDate: voucher.startDate,
+    endDate: voucher.endDate,
+    limit: String(voucher.limit),
+    applicableTours: [...voucher.applicableTours],
+    description: voucher.description ?? '',
+    status: voucher.status,
+    createdAt: voucher.createdAt ?? voucherTodayIso(),
+    createdBy: voucher.createdBy ?? 'Nhân viên kinh doanh',
+    rejectionReason: voucher.rejectionReason,
+    used: voucher.used,
   };
 }
 
-function emptyForm(createdBy: string): FormState {
-  return { code: '', type: 'percent', value: '', startDate: '', endDate: '', limit: '', applicableTours: [], description: '', status: 'draft', createdAt: todayIso(), createdBy, used: 0 };
-}
-
 function fromForm(form: FormState, fallbackId: string): Voucher {
-  const normalizedValue = String(Number(form.value));
+  const value = String(Number(form.value));
   return {
     id: form.id ?? fallbackId,
-    code: form.code,
+    code: form.code.trim().toUpperCase(),
     type: form.type,
-    value: form.type === 'percent' ? `${normalizedValue}%` : `${Number(normalizedValue).toLocaleString('vi-VN')} đ`,
+    value: form.type === 'percent' ? `${value}%` : `${Number(value).toLocaleString('vi-VN')} đ`,
     startDate: form.startDate,
     endDate: form.endDate,
+    expiryDate: form.endDate,
     used: form.used,
     limit: Number(form.limit),
     applicableTours: form.applicableTours,
@@ -93,15 +97,11 @@ function fromForm(form: FormState, fallbackId: string): Voucher {
   };
 }
 
-function isFormState(source: Voucher | FormState): source is FormState {
-  return typeof source.limit === 'string';
-}
-
 function validateFields(form: FormState) {
   const errors: Record<string, string> = {};
   if (!form.code.trim()) errors.code = 'Mã voucher không được để trống';
   if (!form.value.trim()) errors.value = 'Giá trị không được để trống';
-  else if (!isPositiveIntegerText(form.value)) errors.value = form.type === 'percent' ? 'Giá trị phần trăm phải là số nguyên dương' : 'Giá trị tiền mặt phải là số nguyên dương';
+  else if (!isPositiveIntegerText(form.value)) errors.value = 'Giá trị phải là số nguyên dương';
   if (!form.startDate) errors.startDate = 'Ngày bắt đầu không được để trống';
   if (!form.endDate) errors.endDate = 'Ngày kết thúc không được để trống';
   if (form.startDate && form.endDate && form.endDate < form.startDate) errors.endDate = 'Ngày kết thúc phải sau ngày bắt đầu';
@@ -111,173 +111,229 @@ function validateFields(form: FormState) {
 
 function validate(form: FormState, action: 'save' | 'send') {
   const errors = validateFields(form);
-  if (form.startDate && action === 'save' && !canSave(form.startDate)) errors.startDate = 'Ngày bắt đầu phải cách ngày hiện tại ít nhất 10 ngày';
-  if (form.startDate && action === 'send' && !canSend(form.startDate)) errors.startDate = 'Voucher phải được gửi phê duyệt trước ngày bắt đầu ít nhất 7 ngày';
+  if (form.startDate && action === 'save' && !canSaveVoucher(form.startDate)) {
+    errors.startDate = 'Ngày bắt đầu phải cách ngày hiện tại ít nhất 10 ngày';
+  }
+  if (form.startDate && action === 'send' && !canSendVoucherApproval(form.startDate)) {
+    errors.startDate = 'Voucher phải được gửi phê duyệt trước ngày bắt đầu ít nhất 7 ngày';
+  }
   return errors;
 }
 
 function WarningIcon({ title }: { title: string }) {
   return (
-    <span
-      className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 text-amber-700 border border-amber-200"
-      title={title}
-      aria-label={title}
-    >
+    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-amber-700" title={title} aria-label={title}>
       <span className="material-symbols-outlined text-[14px]">warning</span>
     </span>
   );
 }
 
-function FormDrawer({ form, setForm, onClose, onSave, onSend }: { form: FormState; setForm: (form: FormState) => void; onClose: () => void; onSave: () => void; onSend: () => void; }) {
+function FormDrawer({
+  form,
+  setForm,
+  onClose,
+  onSave,
+  onSend,
+  tourPrograms,
+}: {
+  form: FormState;
+  setForm: (form: FormState) => void;
+  onClose: () => void;
+  onSave: () => void;
+  onSend: () => void;
+  tourPrograms: TourProgram[];
+}) {
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const fieldErrors = validateFields(form);
+  const saveAllowed = Object.keys(fieldErrors).length === 0 && canSaveVoucher(form.startDate);
+  const sendAllowed = Object.keys(fieldErrors).length === 0 && canSendVoucherApproval(form.startDate);
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm({ ...form, [key]: value });
-  const updateType = (type: VoucherType) => setForm({ ...form, type, value: digitsOnly(form.value) });
   const toggleTour = (id: string) => update('applicableTours', form.applicableTours.includes(id) ? form.applicableTours.filter((item) => item !== id) : [...form.applicableTours, id]);
-  const hasFieldErrors = Object.keys(validateFields(form)).length > 0;
-  const saveAllowed = !hasFieldErrors && canSave(form.startDate);
-  const sendAllowed = !hasFieldErrors && canSend(form.startDate);
-  const submitSave = () => { const next = validate(form, 'save'); setErrors(next); if (!Object.keys(next).length) onSave(); };
-  const submitSend = () => { const next = validate(form, 'send'); setErrors(next); if (!Object.keys(next).length) onSend(); };
+
+  const submit = (action: 'save' | 'send') => {
+    const next = validate(form, action);
+    setErrors(next);
+    if (Object.keys(next).length) return;
+    if (action === 'save') onSave();
+    else onSend();
+  };
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-[#2A2421]/50" onClick={onClose} />
-      <div className="absolute inset-y-0 right-0 w-full max-w-lg bg-white shadow-2xl flex flex-col">
-        <div className="px-6 py-5 border-b border-[#D0C5AF]/30 flex items-center justify-between">
+      <div className="absolute inset-y-0 right-0 flex w-full max-w-lg flex-col bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[#D0C5AF]/30 px-6 py-5">
           <div>
-            <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold">Voucher</p>
+            <p className="font-['Inter'] text-[10px] font-bold uppercase tracking-[0.2em] text-[#D4AF37]">Voucher</p>
             <h2 className="font-['Noto_Serif'] text-xl text-[#2A2421]">{form.id ? 'Chỉnh sửa Voucher' : 'Tạo Voucher Mới'}</h2>
           </div>
-          <button onClick={onClose}><span className="material-symbols-outlined">close</span></button>
+          <button onClick={onClose} aria-label="close"><span className="material-symbols-outlined">close</span></button>
         </div>
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          {form.status === 'rejected' && form.rejectionReason && <div className="p-3 border border-red-200 bg-red-50 text-sm text-red-700">Lý do: {form.rejectionReason}</div>}
+
+        <div className="flex-1 space-y-5 overflow-y-auto p-6">
+          {form.status === 'rejected' && form.rejectionReason && (
+            <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">Lý do: {form.rejectionReason}</div>
+          )}
           <div>
-            <label className="text-[10px] uppercase tracking-widest text-[#2A2421]/60 font-bold mb-2 block">Mã Khuyến Mãi *</label>
-            <input value={form.code} onChange={(e) => update('code', e.target.value.toUpperCase())} className="w-full border p-3 text-sm outline-none font-bold uppercase border-[#D0C5AF]/40" />
-            {errors.code && <p className="text-red-500 text-xs mt-1">{errors.code}</p>}
+            <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Mã Khuyến Mãi *</label>
+            <input value={form.code} onChange={(event) => update('code', event.target.value.toUpperCase())} className="w-full border border-[#D0C5AF]/40 p-3 text-sm font-bold uppercase outline-none" />
+            {errors.code && <p className="mt-1 text-xs text-red-500">{errors.code}</p>}
           </div>
           <div className="flex gap-4">
             <div className="flex-1">
-              <label className="text-[10px] uppercase tracking-widest text-[#2A2421]/60 font-bold mb-2 block">Loại chiết khấu</label>
-              <select value={form.type} onChange={(e) => updateType(e.target.value as VoucherType)} className="w-full border p-3 text-sm outline-none border-[#D0C5AF]/40">
+              <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Loại chiết khấu</label>
+              <select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as VoucherType, value: digitsOnly(form.value) })} className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none">
                 <option value="percent">Phần trăm (%)</option>
                 <option value="fixed">Tiền mặt</option>
               </select>
             </div>
             <div className="flex-1">
-              <label className="text-[10px] uppercase tracking-widest text-[#2A2421]/60 font-bold mb-2 block">Giá trị *</label>
-              <div className="relative">
-                <input inputMode="numeric" value={form.value} onChange={(e) => update('value', digitsOnly(e.target.value))} placeholder={valuePlaceholder(form.type)} className="w-full border p-3 pr-10 text-sm outline-none border-[#D0C5AF]/40" />
-                {form.type === 'percent' && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[#2A2421]/50">%</span>}
-              </div>
-              {errors.value && <p className="text-red-500 text-xs mt-1">{errors.value}</p>}
+              <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Giá trị *</label>
+              <input inputMode="numeric" value={form.value} onChange={(event) => update('value', digitsOnly(event.target.value))} placeholder={voucherValuePlaceholder(form.type)} className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none" />
+              {errors.value && <p className="mt-1 text-xs text-red-500">{errors.value}</p>}
             </div>
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-widest text-[#2A2421]/60 font-bold mb-2 block">Số lượng được dùng *</label>
-            <input inputMode="numeric" value={form.limit} onChange={(e) => update('limit', digitsOnly(e.target.value))} className="w-full border p-3 text-sm outline-none border-[#D0C5AF]/40" />
-            {errors.limit && <p className="text-red-500 text-xs mt-1">{errors.limit}</p>}
+            <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Số lượng được dùng *</label>
+            <input inputMode="numeric" value={form.limit} onChange={(event) => update('limit', digitsOnly(event.target.value))} className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none" />
+            {errors.limit && <p className="mt-1 text-xs text-red-500">{errors.limit}</p>}
           </div>
           <div className="flex gap-4">
             <div className="flex-1">
-              <label className="text-[10px] uppercase tracking-widest text-[#2A2421]/60 font-bold mb-2 block">Ngày bắt đầu *</label>
-              <input type="date" value={form.startDate} onChange={(e) => update('startDate', e.target.value)} className="w-full border p-3 text-sm outline-none border-[#D0C5AF]/40" />
-              <p className="text-[#2A2421]/45 text-xs italic mt-1">{VOUCHER_DATE_RULE_HELP}</p>
-              {errors.startDate && <p className="text-red-500 text-xs mt-1">{errors.startDate}</p>}
+              <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Ngày bắt đầu *</label>
+              <input type="date" value={form.startDate} onChange={(event) => update('startDate', event.target.value)} className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none" />
+              <p className="mt-1 text-xs italic text-[#2A2421]/45">{VOUCHER_DATE_RULE_HELP}</p>
+              {errors.startDate && <p className="mt-1 text-xs text-red-500">{errors.startDate}</p>}
             </div>
             <div className="flex-1">
-              <label className="text-[10px] uppercase tracking-widest text-[#2A2421]/60 font-bold mb-2 block">Ngày kết thúc *</label>
-              <input type="date" value={form.endDate} onChange={(e) => update('endDate', e.target.value)} className="w-full border p-3 text-sm outline-none border-[#D0C5AF]/40" />
-              {errors.endDate && <p className="text-red-500 text-xs mt-1">{errors.endDate}</p>}
+              <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Ngày kết thúc *</label>
+              <input type="date" value={form.endDate} onChange={(event) => update('endDate', event.target.value)} className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none" />
+              {errors.endDate && <p className="mt-1 text-xs text-red-500">{errors.endDate}</p>}
             </div>
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-widest text-[#2A2421]/60 font-bold mb-2 block">Chương trình tour áp dụng</label>
-            <button type="button" onClick={() => update('applicableTours', [])} className="text-sm text-[#D4AF37] font-medium mb-2">Áp dụng cho tất cả chương trình</button>
-            <div className="space-y-2 border border-[#D0C5AF]/40 p-3">{mockTourPrograms.map((tour) => <label key={tour.id} className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.applicableTours.includes(tour.id)} onChange={() => toggleTour(tour.id)} /><span>{tour.name}</span></label>)}</div>
+            <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Chương trình tour áp dụng</label>
+            <button type="button" onClick={() => update('applicableTours', [])} className="mb-2 text-sm font-medium text-[#D4AF37]">Áp dụng cho tất cả chương trình</button>
+            <div className="space-y-2 border border-[#D0C5AF]/40 p-3">
+              {tourPrograms.map((tour) => (
+                <label key={tour.id} className="flex items-center gap-3 text-sm">
+                  <input type="checkbox" checked={form.applicableTours.includes(tour.id)} onChange={() => toggleTour(tour.id)} />
+                  <span>{tour.name}</span>
+                </label>
+              ))}
+            </div>
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-widest text-[#2A2421]/60 font-bold mb-2 block">Ghi chú</label>
-            <textarea value={form.description} onChange={(e) => update('description', e.target.value)} rows={3} className="w-full border p-3 text-sm outline-none resize-none border-[#D0C5AF]/40" />
+            <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Ghi chú</label>
+            <textarea value={form.description} onChange={(event) => update('description', event.target.value)} rows={3} className="w-full resize-none border border-[#D0C5AF]/40 p-3 text-sm outline-none" />
           </div>
         </div>
-        <div className="p-6 border-t border-[#D0C5AF]/30 bg-[#FAFAF5] flex gap-3">
-          <button onClick={onClose} className="flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest border border-[#2A2421]/20">Hủy</button>
-          <button onClick={submitSave} disabled={!saveAllowed} className={`flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold ${saveAllowed ? 'bg-[#2A2421] text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>Lưu</button>
-          <button onClick={submitSend} disabled={!sendAllowed} className={`flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold ${sendAllowed ? 'bg-[#D4AF37] text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>Gửi Phê Duyệt</button>
+
+        <div className="flex gap-3 border-t border-[#D0C5AF]/30 bg-[#FAFAF5] p-6">
+          <button onClick={onClose} className="flex-1 border border-[#2A2421]/20 py-3 font-['Inter'] text-xs uppercase tracking-widest">Hủy</button>
+          <button onClick={() => submit('save')} disabled={!saveAllowed} className={`flex-1 py-3 font-['Inter'] text-xs font-bold uppercase tracking-widest ${saveAllowed ? 'bg-[#2A2421] text-white' : 'cursor-not-allowed bg-gray-200 text-gray-400'}`}>Lưu</button>
+          <button onClick={() => submit('send')} disabled={!sendAllowed} className={`flex-1 py-3 font-['Inter'] text-xs font-bold uppercase tracking-widest ${sendAllowed ? 'bg-[#D4AF37] text-white' : 'cursor-not-allowed bg-gray-200 text-gray-400'}`}>Gửi Phê Duyệt</button>
         </div>
       </div>
     </div>
   );
 }
 
-function ListPage({ vouchers, onCreate, onEdit, onDelete, onSend }: { vouchers: Voucher[]; onCreate: () => void; onEdit: (voucher: Voucher) => void; onDelete: (voucher: Voucher) => void; onSend: (voucher: Voucher) => void; }) {
-  const nav = useNavigate();
+function ListPage({
+  vouchers,
+  onCreate,
+  onEdit,
+  onDelete,
+  onSend,
+  getTourName,
+}: {
+  vouchers: Voucher[];
+  onCreate: () => void;
+  onEdit: (voucher: Voucher) => void;
+  onDelete: (voucher: Voucher) => void;
+  onSend: (voucher: Voucher) => void;
+  getTourName: (id: string) => string;
+}) {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<VoucherStatus | 'all'>('all');
-  const filtered = useMemo(() => vouchers.filter((v) => (status === 'all' || v.status === status) && (`${v.code} ${v.description ?? ''} ${v.applicableTours.map(tourName).join(' ')}`.toLowerCase().includes(search.toLowerCase()))), [search, status, vouchers]);
+  const filtered = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    return vouchers.filter((voucher) => {
+      if (status !== 'all' && voucher.status !== status) return false;
+      if (!keyword) return true;
+      return `${voucher.code} ${voucher.description ?? ''} ${voucher.applicableTours.map(getTourName).join(' ')}`.toLowerCase().includes(keyword);
+    });
+  }, [getTourName, search, status, vouchers]);
 
   return (
-    <div className="w-full bg-[#F3F3F3] min-h-full">
+    <div className="min-h-full w-full bg-[#F3F3F3]">
       <div className="p-6 md:p-10">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+        <div className="mb-8 flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
           <div className="space-y-1.5">
-            <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold">Khuyến mãi</p>
-            <h1 className="font-['Noto_Serif'] text-3xl text-[#2A2421] leading-tight">Quản lý Voucher</h1>
+            <p className="font-['Inter'] text-[10px] font-bold uppercase tracking-[0.2em] text-[#D4AF37]">Khuyến mãi</p>
+            <h1 className="font-['Noto_Serif'] text-3xl leading-tight text-[#2A2421]">Quản lý Voucher</h1>
             <p className="text-xs text-[#2A2421]/50">Chi tiết voucher được điều hướng sang trang riêng thay vì popup.</p>
           </div>
-          <button onClick={onCreate} className="flex items-center gap-2 bg-[#2A2421] text-white px-5 py-2.5 text-xs font-['Inter'] uppercase tracking-widest"><span className="material-symbols-outlined text-[16px]">add</span>Tạo Voucher Mới</button>
+          <button onClick={onCreate} className="flex items-center gap-2 bg-[#2A2421] px-5 py-2.5 font-['Inter'] text-xs uppercase tracking-widest text-white">
+            <span className="material-symbols-outlined text-[16px]">add</span>
+            Tạo Voucher Mới
+          </button>
         </div>
-        <div className="bg-white border border-[#D0C5AF]/20 p-4 mb-6 flex flex-wrap gap-3">
-          <div className="flex items-center border border-[#D0C5AF]/40 flex-1 min-w-48">
-            <span className="material-symbols-outlined text-[#2A2421]/40 text-[18px] pl-3">search</span>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm theo mã voucher..." className="flex-1 pl-2 pr-4 py-2 text-sm outline-none bg-transparent" />
+
+        <div className="mb-6 flex flex-wrap gap-3 border border-[#D0C5AF]/20 bg-white p-4">
+          <div className="flex min-w-48 flex-1 items-center border border-[#D0C5AF]/40">
+            <span className="material-symbols-outlined pl-3 text-[18px] text-[#2A2421]/40">search</span>
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm theo mã voucher..." className="flex-1 bg-transparent py-2 pl-2 pr-4 text-sm outline-none" />
           </div>
-          <select value={status} onChange={(e) => setStatus(e.target.value as VoucherStatus | 'all')} className="px-4 py-2 border border-[#D0C5AF]/40 text-sm outline-none bg-white">
-            {['all','draft','pending_approval','rejected','upcoming','active','inactive'].map((key) => <option key={key} value={key}>{key === 'all' ? 'Tất cả trạng thái' : VOUCHER_STATUS_LABEL[key as VoucherStatus]}</option>)}
+          <select value={status} onChange={(event) => setStatus(event.target.value as VoucherStatus | 'all')} className="border border-[#D0C5AF]/40 bg-white px-4 py-2 text-sm outline-none">
+            <option value="all">Tất cả trạng thái</option>
+            {Object.entries(VOUCHER_STATUS_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
           </select>
         </div>
-        <div className="bg-white border border-[#D0C5AF]/20 shadow-sm overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[980px]">
+
+        <div className="overflow-x-auto border border-[#D0C5AF]/20 bg-white shadow-sm">
+          <table className="w-full min-w-[980px] border-collapse text-left">
             <thead>
-              <tr className="bg-[#FAFAF5] border-b border-[#D0C5AF]/30">
-                <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">Mã Code</th>
-                <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">Loại</th>
-                <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">Giá trị</th>
-                <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">Thời gian áp dụng</th>
-                <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">Áp dụng</th>
-                <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">Tour áp dụng</th>
-                <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">Trạng thái</th>
-                <th className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold text-right">Thao tác</th>
+              <tr className="border-b border-[#D0C5AF]/30 bg-[#FAFAF5]">
+                {['Mã Code', 'Loại', 'Giá trị', 'Thời gian áp dụng', 'Áp dụng', 'Tour áp dụng', 'Trạng thái', 'Thao tác'].map((header) => (
+                  <th key={header} className="px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-[#2A2421]">{header}</th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#D0C5AF]/15">
-              {filtered.length === 0 && <tr><td colSpan={8} className="px-5 py-16 text-center text-sm text-[#2A2421]/40">Không tìm thấy voucher</td></tr>}
-              {filtered.map((v) => {
-                const sendEnabled = canSend(v.startDate);
-                return (
-                  <tr key={v.id} className="hover:bg-[#FAFAF5] transition-colors cursor-pointer" onClick={() => nav(`/sales/vouchers/${v.id}`)}>
-                    <td className="px-5 py-4 font-medium text-sm font-['Noto_Serif'] text-[#2A2421]">{v.code}</td>
-                    <td className="px-5 py-4 text-sm text-[#2A2421]/70">{v.type === 'percent' ? 'Phần trăm (%)' : 'Tiền mặt'}</td>
-                    <td className="px-5 py-4 text-sm font-bold text-[#D4AF37]">{formatVoucherValue(v)}</td>
-                    <td className="px-5 py-4 text-sm text-[#2A2421]/70">
-                      <div>{v.startDate && v.endDate ? `${v.startDate} → ${v.endDate}` : '-'}</div>
-                      {v.status === 'draft' && warnDraft(v.startDate) && <div className="mt-1"><WarningIcon title={SALES_DRAFT_WARNING} /></div>}
-                    </td>
-                    <td className="px-5 py-4 text-sm text-[#2A2421]/70">{v.used} / {v.limit}</td>
-                    <td className="px-5 py-4">{v.applicableTours.length > 0 ? <div className="flex flex-wrap gap-1">{v.applicableTours.slice(0,2).map((tourId) => <span key={tourId} className="px-1.5 py-0.5 bg-[#D4AF37]/10 text-[#D4AF37] text-[10px] font-bold rounded">{tourName(tourId)}</span>)}</div> : <span className="text-[11px] text-[#2A2421]/40">Tất cả</span>}</td>
-                    <td className="px-5 py-4"><span className={`inline-block px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded ${VOUCHER_STATUS_STYLE[v.status]}`}>{VOUCHER_STATUS_LABEL[v.status]}</span></td>
-                    <td className="px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1">
-                        {(v.status === 'draft' || v.status === 'rejected') && <button onClick={() => onEdit(v)} className="p-1.5 border border-[#2A2421]/20 text-[#2A2421]/60 hover:text-[#D4AF37] hover:border-[#D4AF37]/50" title="Chỉnh sửa" aria-label="Chỉnh sửa"><span className="material-symbols-outlined text-[18px]">edit</span></button>}
-                        {v.status === 'draft' && <button onClick={() => onSend(v)} disabled={!sendEnabled} title={!sendEnabled ? 'Voucher phải được gửi phê duyệt trước ngày bắt đầu ít nhất 7 ngày.' : undefined} className={`px-2 py-1 text-[10px] font-bold ${sendEnabled ? 'bg-[#D4AF37] text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>Gửi phê duyệt</button>}
-                        {['draft','rejected','inactive'].includes(v.status) && <button onClick={() => onDelete(v)} className="p-1.5 text-[#2A2421]/30" title="Xóa"><span className="material-symbols-outlined text-[18px]">delete</span></button>}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+            <tbody className="divide-y divide-[#D0C5AF]/20">
+              {filtered.length === 0 && (
+                <tr><td colSpan={8} className="px-5 py-10 text-center text-sm text-[#2A2421]/50">Không có voucher phù hợp với bộ lọc hiện tại</td></tr>
+              )}
+              {filtered.map((voucher) => (
+                <tr key={voucher.id} onClick={() => navigate(`/sales/vouchers/${voucher.id}`)} className="cursor-pointer hover:bg-[#FAFAF5]">
+                  <td className="px-5 py-4 font-mono text-sm font-bold">{voucher.code}</td>
+                  <td className="px-5 py-4 text-sm">{voucher.type === 'percent' ? 'Phần trăm (%)' : 'Tiền mặt'}</td>
+                  <td className="px-5 py-4 text-sm font-semibold">{formatVoucherValue(voucher)}</td>
+                  <td className="px-5 py-4 text-xs">{voucher.startDate} → {voucher.endDate}</td>
+                  <td className="px-5 py-4 text-sm">{voucher.used} / {voucher.limit}</td>
+                  <td className="px-5 py-4 text-sm">{voucher.applicableTours.length ? voucher.applicableTours.map(getTourName).join(', ') : 'Tất cả'}</td>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-2">
+                      {voucher.status === 'draft' && hasSalesDraftWarning(voucher.startDate) && <WarningIcon title={SALES_DRAFT_WARNING} />}
+                      <span className={`inline-block rounded px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${VOUCHER_STATUS_STYLE[voucher.status]}`}>{VOUCHER_STATUS_LABEL[voucher.status]}</span>
+                    </div>
+                  </td>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center justify-end gap-2" onClick={(event) => event.stopPropagation()}>
+                      {['draft', 'rejected'].includes(voucher.status) && (
+                        <button onClick={() => onEdit(voucher)} className="text-xs font-bold text-[#D4AF37]">Chỉnh sửa</button>
+                      )}
+                      {voucher.status === 'draft' && (
+                        <button onClick={() => onSend(voucher)} className="text-xs font-bold text-[#2A2421]">Gửi phê duyệt</button>
+                      )}
+                      {['draft', 'rejected', 'inactive'].includes(voucher.status) && (
+                        <button onClick={() => onDelete(voucher)} title="Xóa" aria-label="Xóa"><span className="material-symbols-outlined text-[18px] text-red-500">delete</span></button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -286,82 +342,132 @@ function ListPage({ vouchers, onCreate, onEdit, onDelete, onSend }: { vouchers: 
   );
 }
 
-function DetailPage({ voucher, onEdit, onDelete, onSend }: { voucher: Voucher; onEdit: (voucher: Voucher) => void; onDelete: (voucher: Voucher) => void; onSend: (voucher: Voucher) => void; }) {
-  const canDelete = ['draft','rejected','inactive'].includes(voucher.status);
-  const canEdit = ['draft','rejected'].includes(voucher.status);
-  const canShowSend = voucher.status === 'draft';
-  const sendEnabled = canSend(voucher.startDate);
-  const hasActions = canEdit || canShowSend || canDelete;
+function DetailPage({ voucher, onBack, onEdit, onDelete, getTourName }: { voucher: Voucher; onBack: () => void; onEdit: (voucher: Voucher) => void; onDelete: (voucher: Voucher) => void; getTourName: (id: string) => string }) {
+  const readOnly = !['draft', 'rejected'].includes(voucher.status);
 
   return (
-    <div className="w-full bg-[#F3F3F3] min-h-full">
-      <div className="p-6 md:p-10 space-y-6">
-        <div className="flex items-center gap-2 text-xs text-[#2A2421]/50">
-          <Link to="/sales/vouchers" className="text-[#D4AF37] hover:underline">Voucher</Link>
-          <span>/</span>
-          <span>Chi tiết</span>
-        </div>
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+    <div className="min-h-full w-full bg-[#F3F3F3] p-6 md:p-10">
+      <div className="mb-6 flex items-center gap-2 text-sm">
+        <Link to="/sales/vouchers" className="text-[#D4AF37]">Voucher</Link>
+        <span>/</span>
+        <span>{voucher.code}</span>
+      </div>
+      <div className="border border-[#D0C5AF]/20 bg-white p-8">
+        <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-start">
           <div>
-            <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold">Chi tiết Voucher</p>
+            <p className="font-['Inter'] text-[10px] font-bold uppercase tracking-[0.2em] text-[#D4AF37]">Chi tiết voucher</p>
             <h1 className="font-['Noto_Serif'] text-3xl text-[#2A2421]">{voucher.code}</h1>
+            <span className={`mt-3 inline-block rounded px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${VOUCHER_STATUS_STYLE[voucher.status]}`}>{VOUCHER_STATUS_LABEL[voucher.status]}</span>
           </div>
-          {hasActions && (
-            <div className="flex flex-wrap gap-2">
-              {canEdit && <button onClick={() => onEdit(voucher)} className="px-4 py-2 text-xs font-bold uppercase tracking-widest border border-[#2A2421]/20">Chỉnh sửa</button>}
-              {canShowSend && <button onClick={() => onSend(voucher)} disabled={!sendEnabled} title={!sendEnabled ? 'Voucher phải được gửi phê duyệt trước ngày bắt đầu ít nhất 7 ngày.' : undefined} className={`px-4 py-2 text-xs font-bold uppercase tracking-widest ${sendEnabled ? 'bg-[#D4AF37] text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>Gửi phê duyệt</button>}
-              {canDelete && <button onClick={() => onDelete(voucher)} className="px-4 py-2 text-xs font-bold uppercase tracking-widest border border-red-300 text-red-600">Xóa</button>}
+          {!readOnly && (
+            <div className="flex gap-2">
+              <button onClick={() => onEdit(voucher)} className="border border-[#D0C5AF]/40 px-4 py-2 text-xs font-bold uppercase tracking-widest">Chỉnh sửa</button>
+              <button onClick={() => onDelete(voucher)} className="border border-red-200 px-4 py-2 text-xs font-bold uppercase tracking-widest text-red-600">Xóa</button>
             </div>
           )}
         </div>
-        <div className="bg-white border border-[#D0C5AF]/20 p-6">
-          {voucher.status === 'rejected' && voucher.rejectionReason && <div className="mb-6 p-3 border border-red-200 bg-red-50 text-sm text-red-700">Lý do: {voucher.rejectionReason}</div>}
-          <div className="flex items-center justify-between mb-6">
-            <span className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded ${VOUCHER_STATUS_STYLE[voucher.status]}`}>{VOUCHER_STATUS_LABEL[voucher.status]}</span>
-            {voucher.status === 'draft' && warnDraft(voucher.startDate) && <WarningIcon title={SALES_DRAFT_WARNING} />}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {[
-              { label: 'Loại giảm giá', value: voucher.type === 'percent' ? 'Phần trăm (%)' : 'Tiền mặt' },
-              { label: 'Giá trị', value: formatVoucherValue(voucher) },
-              { label: 'Số lượng được dùng', value: `${voucher.used} / ${voucher.limit}` },
-              { label: 'Thời gian áp dụng', value: voucher.startDate && voucher.endDate ? `${voucher.startDate} → ${voucher.endDate}` : '-' },
-              { label: 'Người tạo', value: voucher.createdBy ?? 'Nhân viên kinh doanh' },
-              { label: 'Ngày tạo', value: voucher.createdAt ?? '-' },
-            ].map((item) => <div key={item.label}><p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold mb-1">{item.label}</p><p className="text-sm font-medium text-[#2A2421]">{item.value}</p></div>)}
-          </div>
-          <div className="mt-6">
-            <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold mb-2">Chương trình tour áp dụng</p>
-            {voucher.applicableTours.length > 0 ? <div className="flex flex-wrap gap-2">{voucher.applicableTours.map((id) => <span key={id} className="px-3 py-1 bg-[#D4AF37]/10 text-[#D4AF37] text-xs font-bold rounded-full border border-[#D4AF37]/20">{tourName(id)}</span>)}</div> : <p className="text-sm text-[#2A2421]/50">Áp dụng cho tất cả chương trình tour</p>}
-          </div>
-          {voucher.description && <div className="mt-6"><p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold mb-2">Ghi chú</p><p className="text-sm text-[#2A2421]/70 bg-[#FAFAF5] p-3 border border-[#D0C5AF]/20">{voucher.description}</p></div>}
-        </div>
+        {voucher.rejectionReason && <div className="mb-6 border border-red-200 bg-red-50 p-4 text-sm text-red-700">Lý do: {voucher.rejectionReason}</div>}
+        <dl className="grid gap-6 md:grid-cols-2">
+          <div><dt className="text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/50">Loại</dt><dd className="mt-1">{voucher.type === 'percent' ? 'Phần trăm (%)' : 'Tiền mặt'}</dd></div>
+          <div><dt className="text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/50">Giá trị</dt><dd className="mt-1">{formatVoucherValue(voucher)}</dd></div>
+          <div><dt className="text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/50">Thời gian áp dụng</dt><dd className="mt-1">{voucher.startDate} → {voucher.endDate}</dd></div>
+          <div><dt className="text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/50">Tour áp dụng</dt><dd className="mt-1">{voucher.applicableTours.length ? voucher.applicableTours.map(getTourName).join(', ') : 'Tất cả'}</dd></div>
+          <div><dt className="text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/50">Số lượt dùng</dt><dd className="mt-1">{voucher.used} / {voucher.limit}</dd></div>
+          <div><dt className="text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/50">Ghi chú</dt><dd className="mt-1">{voucher.description ?? '—'}</dd></div>
+        </dl>
       </div>
+      <button onClick={onBack} className="mt-6 text-sm font-bold text-[#D4AF37]">Quay lại danh sách</button>
     </div>
   );
 }
 
 export default function SalesVoucherManagement() {
-  const { id } = useParams<{ id?: string }>(); const nav = useNavigate(); const user = useAuthStore((state) => state.user);
-  const [vouchers, setVouchers] = useState<Voucher[]>(() => loadVouchers()); const [form, setForm] = useState<FormState | null>(null);
-  useEffect(() => { localStorage.setItem(STORE_KEY, JSON.stringify(vouchers)); }, [vouchers]);
-  const selected = useMemo(() => vouchers.find((voucher) => voucher.id === id), [id, vouchers]);
-  const upsert = (voucher: Voucher) => setVouchers((prev) => prev.some((item) => item.id === voucher.id) ? prev.map((item) => item.id === voucher.id ? normalize(voucher) : item) : [...prev, normalize(voucher)]);
-  const nextVoucherId = () => `VOU-${String(vouchers.length + 1).padStart(2, '0')}`;
-  const save = () => { if (!form) return; const next = fromForm({ ...form, status: form.status === 'rejected' ? 'draft' : form.status }, nextVoucherId()); upsert(next); setForm(null); message.success('Lưu voucher thành công!'); if (id) nav(`/sales/vouchers/${next.id}`); };
-  const send = (source: Voucher | FormState) => {
-    const next: Voucher = isFormState(source) ? { ...fromForm(source, nextVoucherId()), status: 'pending_approval' } : { ...source, status: 'pending_approval' };
-    if (!isValidVoucherLimit(next.limit)) {
-      message.error('Số lượng được dùng phải là số nguyên dương trước khi gửi phê duyệt.');
-      return;
-    }
-    if (!canSend(next.startDate)) {
-      message.error('Voucher phải được gửi phê duyệt trước ngày bắt đầu ít nhất 7 ngày.');
-      return;
-    }
-    Modal.confirm({ title: 'Gửi phê duyệt voucher', content: `Bạn có chắc muốn gửi voucher "${next.code}" lên quản lý phê duyệt không?`, okText: 'Gửi phê duyệt', cancelText: 'Hủy', onOk: () => { upsert(next); setForm(null); message.success('Đã gửi phê duyệt thành công!'); if (id) nav(`/sales/vouchers/${next.id}`); } });
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const token = useAuthStore((state) => state.accessToken);
+  const user = useAuthStore((state) => state.user);
+  const tourPrograms = useAppDataStore((state) => state.tourPrograms);
+  const storeVouchers = useAppDataStore((state) => state.vouchers);
+  const upsertVoucher = useAppDataStore((state) => state.upsertVoucher);
+  const removeVoucher = useAppDataStore((state) => state.removeVoucher);
+  const [form, setForm] = useState<FormState | null>(null);
+  const vouchers = useMemo(() => storeVouchers.map((voucher) => normalizeVoucherLifecycle(voucher)), [storeVouchers]);
+  const current = useMemo(() => vouchers.find((voucher) => voucher.id === id), [id, vouchers]);
+  const getTourName = (tourId: string) => tourPrograms.find((tour) => tour.id === tourId)?.name ?? tourId;
+
+  const persist = async (next: Voucher) => {
+    upsertVoucher(next);
+    if (!token) return;
+    const response = next.id.startsWith('tmp-')
+      ? await createVoucher(token, next)
+      : await updateVoucher(token, next.id, next);
+    upsertVoucher(response.voucher);
   };
-  const remove = (voucher: Voucher) => Modal.confirm({ title: 'Xóa Voucher', content: `Bạn có chắc muốn xóa voucher "${voucher.code}" không?`, okText: 'Xóa', cancelText: 'Hủy', okButtonProps: { danger: true }, onOk: () => { setVouchers((prev) => prev.filter((item) => item.id !== voucher.id)); if (id === voucher.id) nav('/sales/vouchers'); message.success('Đã xóa voucher thành công!'); } });
-  if (id && !selected) return <div className="p-10"><p className="text-sm text-[#2A2421]/50">Không tìm thấy voucher.</p><Link to="/sales/vouchers" className="text-sm text-[#D4AF37] hover:underline">Quay về danh sách</Link></div>;
-  return <>{selected ? <DetailPage voucher={selected} onEdit={(voucher) => setForm(toForm(voucher))} onDelete={remove} onSend={send} /> : <ListPage vouchers={vouchers} onCreate={() => setForm(emptyForm(user?.name ?? 'Nhân viên kinh doanh'))} onEdit={(voucher) => setForm(toForm(voucher))} onDelete={remove} onSend={send} />}{form && <FormDrawer form={form} setForm={setForm} onClose={() => setForm(null)} onSave={save} onSend={() => send(form)} />}</>;
+
+  const handleSave = () => {
+    if (!form) return;
+    void persist(fromForm(form, `tmp-${Date.now()}`)).then(() => setForm(null));
+  };
+
+  const handleSend = () => {
+    if (!form) return;
+    const next = { ...fromForm(form, `tmp-${Date.now()}`), status: 'pending_approval' as VoucherStatus };
+    Modal.confirm({
+      title: 'Gửi phê duyệt voucher',
+      content: `Gửi voucher ${next.code} cho quản lý phê duyệt?`,
+      okText: 'Gửi phê duyệt',
+      cancelText: 'Hủy',
+      onOk: () => persist(next).then(() => setForm(null)),
+    });
+  };
+
+  const handleDelete = (voucher: Voucher) => {
+    removeVoucher(voucher.id);
+    if (token) void deleteVoucher(token, voucher.id).catch(() => null);
+    if (id === voucher.id) navigate('/sales/vouchers');
+  };
+
+  const handleSendExisting = (voucher: Voucher) => {
+    const next = { ...voucher, status: 'pending_approval' as VoucherStatus };
+    Modal.confirm({
+      title: 'Gửi phê duyệt voucher',
+      content: `Gửi voucher ${voucher.code} cho quản lý phê duyệt?`,
+      okText: 'Gửi phê duyệt',
+      cancelText: 'Hủy',
+      onOk: () => persist(next),
+    });
+  };
+
+  return (
+    <>
+      {current ? (
+        <DetailPage
+          voucher={current}
+          onBack={() => navigate('/sales/vouchers')}
+          onEdit={(voucher) => setForm(toForm(voucher))}
+          onDelete={handleDelete}
+          getTourName={getTourName}
+        />
+      ) : (
+        <ListPage
+          vouchers={vouchers}
+          onCreate={() => setForm(emptyForm(user?.name ?? 'Nhân viên kinh doanh'))}
+          onEdit={(voucher) => setForm(toForm(voucher))}
+          onDelete={handleDelete}
+          onSend={handleSendExisting}
+          getTourName={getTourName}
+        />
+      )}
+      {form && (
+        <FormDrawer
+          form={form}
+          setForm={setForm}
+          onClose={() => setForm(null)}
+          onSave={handleSave}
+          onSend={handleSend}
+          tourPrograms={tourPrograms}
+        />
+      )}
+    </>
+  );
 }

@@ -14,7 +14,7 @@ export interface SpecialDay {
 
 // ── Mock ────────────────────────────────────────────────────────────────────────
 
-const mockSpecialDays: SpecialDay[] = [
+const initialSpecialDays: SpecialDay[] = [
   {
     id: 'SD001',
     name: 'Tết Dương lịch 2026',
@@ -50,7 +50,7 @@ function fmtDate(iso: string) {
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function SpecialDays() {
-  const [items, setItems] = useState<SpecialDay[]>(mockSpecialDays);
+  const [items, setItems] = useState<SpecialDay[]>(initialSpecialDays);
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<SpecialDay | null>(null);
   const [form, setForm] = useState<Partial<SpecialDay>>({});

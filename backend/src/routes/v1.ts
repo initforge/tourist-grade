@@ -1,25 +1,16 @@
 import { Router } from 'express';
-
-const moduleNames = [
-  'auth',
-  'users',
-  'tour-programs',
-  'tour-instances',
-  'bookings',
-  'vouchers',
-  'suppliers',
-  'tour-guides',
-  'reports',
-  'blogs',
-] as const;
-
-function notImplemented(moduleName: string) {
-  return {
-    success: false,
-    message: `Module "${moduleName}" has not been implemented yet.`,
-    nextStep: 'Follow docs/05-API-CONTRACT.md and docs/09-IMPLEMENTATION-ROADMAP.md',
-  };
-}
+import { createAuthRouter } from './auth.js';
+import { createBootstrapRouter } from './bootstrap.js';
+import { createBookingsRouter } from './bookings.js';
+import { createDevRouter } from './dev.js';
+import { createPaymentsRouter } from './payments.js';
+import { createPublicRouter } from './public.js';
+import { createServicesRouter } from './services.js';
+import { createSuppliersRouter } from './suppliers.js';
+import { createTourInstancesRouter } from './tour-instances.js';
+import { createTourProgramsRouter } from './tour-programs.js';
+import { createUsersRouter } from './users.js';
+import { createVouchersRouter } from './vouchers.js';
 
 export function createV1Router() {
   const router = Router();
@@ -27,21 +18,36 @@ export function createV1Router() {
   router.get('/meta', (_req, res) => {
     res.json({
       success: true,
-      service: 'travela-api',
+      service: 'travela-backend',
       version: 'v1',
-      modules: moduleNames,
+      modules: [
+        'auth',
+        'bootstrap',
+        'public',
+        'users',
+        'tour-programs',
+        'tour-instances',
+        'bookings',
+        'payments',
+        'services',
+        'suppliers',
+        'vouchers',
+      ],
     });
   });
 
-  moduleNames.forEach((moduleName) => {
-    router.all(`/${moduleName}`, (_req, res) => {
-      res.status(501).json(notImplemented(moduleName));
-    });
-
-    router.all(`/${moduleName}/*`, (_req, res) => {
-      res.status(501).json(notImplemented(moduleName));
-    });
-  });
+  router.use('/auth', createAuthRouter());
+  router.use('/bootstrap', createBootstrapRouter());
+  router.use('/public', createPublicRouter());
+  router.use('/users', createUsersRouter());
+  router.use('/tour-programs', createTourProgramsRouter());
+  router.use('/tour-instances', createTourInstancesRouter());
+  router.use('/bookings', createBookingsRouter());
+  router.use('/payments', createPaymentsRouter());
+  router.use('/services', createServicesRouter());
+  router.use('/suppliers', createSuppliersRouter());
+  router.use('/vouchers', createVouchersRouter());
+  router.use('/dev', createDevRouter());
 
   return router;
 }

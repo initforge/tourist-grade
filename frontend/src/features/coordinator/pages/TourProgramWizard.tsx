@@ -5,7 +5,7 @@ import {
   PROVINCES_WITH_AIRPORT,
   WEEKDAYS,
   MEAL_LABELS,
-  mockHolidays,
+  HOLIDAYS,
 } from '@entities/tour-program/data/tourProgram';
 import type { TourProgram } from '@entities/tour-program/data/tourProgram';
 import TourProgramPricingTables from '@features/coordinator/components/TourProgramPricingTables';
@@ -236,7 +236,7 @@ export default function AdminTourProgramWizard({
   }));
   const [holidayMonthAnchor, setHolidayMonthAnchor] = useState(() => {
     if (initialProgram?.holiday) {
-      const holiday = mockHolidays?.find(item => item.name === initialProgram.holiday);
+      const holiday = HOLIDAYS?.find(item => item.name === initialProgram.holiday);
       if (holiday) return toDateKey(startOfMonth(new Date(holiday.date)));
     }
     return toDateKey(startOfMonth(new Date()));
@@ -314,7 +314,7 @@ export default function AdminTourProgramWizard({
     navigate('/coordinator/tour-programs');
   };
 
-  const selectedHoliday = mockHolidays?.find(holiday => holiday.name === form?.holiday);
+  const selectedHoliday = HOLIDAYS?.find(holiday => holiday.name === form?.holiday);
 
   const displayMonth = startOfMonth(new Date(holidayMonthAnchor));
   const holidayStart = selectedHoliday ? new Date(selectedHoliday?.date) : null;
@@ -702,7 +702,7 @@ export default function AdminTourProgramWizard({
                       aria-label="Dịp lễ"
                       value={form?.holiday}
                       onChange={e => {
-                        const nextHoliday = mockHolidays?.find(holiday => holiday.name === e?.target?.value);
+                        const nextHoliday = HOLIDAYS?.find(holiday => holiday.name === e?.target?.value);
                         updateForm('holiday', e?.target?.value);
                         updateForm('selectedDates', []);
                         if (nextHoliday) {
@@ -712,7 +712,7 @@ export default function AdminTourProgramWizard({
                       className="w-full border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none max-w-sm"
                     >
                       <option value="">Chọn dịp lễ</option>
-                      {mockHolidays?.map(h => (
+                      {HOLIDAYS?.map(h => (
                         <option key={h?.id} value={h?.name}>{h?.name} ({new Date(h?.date)?.toLocaleDateString('vi-VN')})</option>
                       ))}
                     </select>

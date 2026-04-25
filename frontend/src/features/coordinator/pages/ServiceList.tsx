@@ -11,6 +11,8 @@ type PriceMode = 'Báo giá' | 'Giá niêm yết';
 type PriceSetup = 'Giá chung' | 'Theo độ tuổi' | '-';
 type ServiceStatus = 'Hoạt động' | 'Dừng hoạt động';
 type Province = 'Đà Nẵng' | 'Hà Nội' | 'Quảng Ninh' | 'Lào Cai' | 'Ninh Bình';
+type CountFormulaOption = 'Theo ngày' | 'Giá trị mặc định' | 'Nhập tay';
+type QuantityFormulaOption = 'Theo số người' | 'Giá trị mặc định' | 'Nhập tay';
 
 interface PriceRow {
   id: string;
@@ -30,9 +32,13 @@ interface ServiceRow {
   setup: PriceSetup;
   status: ServiceStatus;
   description: string;
+  supplierName?: string;
+  contactInfo?: string;
   province?: Province;
-  formulaCount?: string;
-  formulaQuantity?: string;
+  formulaCount?: CountFormulaOption;
+  formulaCountDefault?: string;
+  formulaQuantity?: QuantityFormulaOption;
+  formulaQuantityDefault?: string;
   prices: PriceRow[];
 }
 
@@ -45,13 +51,20 @@ interface ServiceDraft {
   setup: PriceSetup;
   status: ServiceStatus;
   description: string;
+  supplierName: string;
+  contactInfo: string;
+  unitPrice: string;
   province: Province;
-  formulaCount: string;
-  formulaQuantity: string;
+  formulaCount: CountFormulaOption;
+  formulaCountDefault: string;
+  formulaQuantity: QuantityFormulaOption;
+  formulaQuantityDefault: string;
 }
 
 const provinceOptions: Province[] = ['Đà Nẵng', 'Hà Nội', 'Quảng Ninh', 'Lào Cai', 'Ninh Bình'];
 const lockedCategories = new Set<Category>(['Vận chuyển', 'Lưu trú', 'Hướng dẫn viên']);
+const countFormulaOptions: CountFormulaOption[] = ['Theo ngày', 'Giá trị mặc định', 'Nhập tay'];
+const quantityFormulaOptions: QuantityFormulaOption[] = ['Theo số người', 'Giá trị mặc định', 'Nhập tay'];
 
 const createPrice = (
   id: string,
@@ -105,6 +118,8 @@ const initialServices: ServiceRow[] = [
     setup: 'Theo độ tuổi',
     status: 'Hoạt động',
     description: 'Áp dụng cho các chương trình tham quan tại Đà Nẵng.',
+    supplierName: 'Sun World Hạ Long',
+    contactInfo: '024 3936 6666',
     province: 'Đà Nẵng',
     prices: [
       createPrice('SV-TKT-P1', 250000, '2026-01-01', '2026-06-30', 'Người lớn', 'Trưởng phòng điều phối'),
@@ -120,8 +135,11 @@ const initialServices: ServiceRow[] = [
     setup: 'Giá chung',
     status: 'Hoạt động',
     description: 'Áp dụng trực tiếp vào chi phí khác.',
+    supplierName: 'Bảo Việt Travel Care',
+    contactInfo: 'hotro@baoviet.example',
     formulaCount: 'Giá trị mặc định',
-    formulaQuantity: 'Theo người',
+    formulaCountDefault: '1',
+    formulaQuantity: 'Theo số người',
     prices: [
       createPrice('SV-INS-P1', 40000, '2026-01-01', '2026-12-31', 'Bảo hiểm nội địa'),
       createPrice('SV-INS-P2', 50000, '2026-07-01', '2026-12-31', 'Điều chỉnh mùa cao điểm', 'Admin hệ thống'),
@@ -137,12 +155,25 @@ const emptyDraft = (category: AddCategory): ServiceDraft => ({
   setup: category === 'Vé tham quan' ? 'Theo độ tuổi' : 'Giá chung',
   status: 'Hoạt động',
   description: '',
+  supplierName: '',
+  contactInfo: '',
+  unitPrice: '',
   province: 'Đà Nẵng',
-  formulaCount: 'Không có',
-  formulaQuantity: 'Không có',
+  formulaCount: 'Theo ngày',
+  formulaCountDefault: '',
+  formulaQuantity: 'Theo số người',
+  formulaQuantityDefault: '',
 });
 
 const formatCurrency = (value: number) => `${value.toLocaleString('vi-VN')} đ`;
+
+function describeFormula(option?: CountFormulaOption | QuantityFormulaOption, defaultValue?: string) {
+  if (!option) return '-';
+  if (option === 'Giá trị mặc định' && defaultValue?.trim()) {
+    return `${option}: ${defaultValue}`;
+  }
+  return option;
+}
 
 function Modal({
   title,
@@ -295,7 +326,7 @@ export default function ServiceList() {
     const keyword = searchQuery.trim().toLowerCase();
     if (!keyword) return serviceRows;
     return serviceRows.filter(service =>
-      [service.id, service.name, service.category, service.unit, service.priceMode, service.setup, service.status]
+      [service.id, service.name, service.category, service.unit, service.priceMode, service.setup, service.status, service.supplierName, service.contactInfo]
         .join(' ')
         .toLowerCase()
         .includes(keyword)
@@ -322,12 +353,43 @@ export default function ServiceList() {
       setup: service.setup,
       status: service.status,
       description: service.description,
+      supplierName: service.supplierName ?? '',
+      contactInfo: service.contactInfo ?? '',
+      unitPrice: String(service.prices.at(-1)?.unitPrice ?? ''),
       province: service.province ?? 'Đà Nẵng',
-      formulaCount: service.formulaCount ?? 'Không có',
-      formulaQuantity: service.formulaQuantity ?? 'Không có',
+      formulaCount: service.formulaCount ?? 'Theo ngày',
+      formulaCountDefault: service.formulaCountDefault ?? '',
+      formulaQuantity: service.formulaQuantity ?? 'Theo số người',
+      formulaQuantityDefault: service.formulaQuantityDefault ?? '',
     });
     setSelectedServiceId(null);
     setEditingServiceId(service.id);
+  };
+
+  const buildDraftPrices = (existingPrices: PriceRow[] = []) => {
+    const nextUnitPrice = Number(draft.unitPrice || 0);
+    const hasUnitPrice = draft.unitPrice.trim() !== '';
+
+    if (existingPrices.length > 0) {
+      if (!hasUnitPrice) return existingPrices;
+      return existingPrices.map((price, index) => (
+        index === existingPrices.length - 1
+          ? { ...price, unitPrice: nextUnitPrice }
+          : price
+      ));
+    }
+
+    if (!hasUnitPrice) return [];
+
+    return [
+      createPrice(
+        `PRICE-${Date.now()}`,
+        nextUnitPrice,
+        '2026-01-01',
+        '2026-12-31',
+        draft.supplierName ? `Bảng giá khởi tạo - ${draft.supplierName}` : 'Bảng giá khởi tạo',
+      ),
+    ];
   };
 
   const saveDraft = () => {
@@ -342,9 +404,18 @@ export default function ServiceList() {
               setup: draft.setup,
               status: draft.status,
               description: draft.description,
+              supplierName: draft.supplierName.trim() || undefined,
+              contactInfo: draft.contactInfo.trim() || undefined,
               province: draft.category === 'Vé tham quan' ? draft.province : undefined,
               formulaCount: draft.category === 'Các dịch vụ khác' ? draft.formulaCount : undefined,
+              formulaCountDefault: draft.category === 'Các dịch vụ khác' && draft.formulaCount === 'Giá trị mặc định'
+                ? draft.formulaCountDefault
+                : undefined,
               formulaQuantity: draft.category === 'Các dịch vụ khác' ? draft.formulaQuantity : undefined,
+              formulaQuantityDefault: draft.category === 'Các dịch vụ khác' && draft.formulaQuantity === 'Giá trị mặc định'
+                ? draft.formulaQuantityDefault
+                : undefined,
+              prices: buildDraftPrices(service.prices),
             }
           : service
       )));
@@ -363,15 +434,23 @@ export default function ServiceList() {
         setup: draft.setup,
         status: draft.status,
         description: draft.description || 'Chưa có mô tả.',
+        supplierName: draft.supplierName.trim() || undefined,
+        contactInfo: draft.contactInfo.trim() || undefined,
         province: draft.category === 'Vé tham quan' ? draft.province : undefined,
         formulaCount: draft.category === 'Các dịch vụ khác' ? draft.formulaCount : undefined,
+        formulaCountDefault: draft.category === 'Các dịch vụ khác' && draft.formulaCount === 'Giá trị mặc định'
+          ? draft.formulaCountDefault
+          : undefined,
         formulaQuantity: draft.category === 'Các dịch vụ khác' ? draft.formulaQuantity : undefined,
-        prices: [],
+        formulaQuantityDefault: draft.category === 'Các dịch vụ khác' && draft.formulaQuantity === 'Giá trị mặc định'
+          ? draft.formulaQuantityDefault
+          : undefined,
+        prices: buildDraftPrices(),
       },
       ...previous,
     ]);
     setIsCreateOpen(false);
-    setSelectedServiceId(nextId);
+    setSelectedServiceId(null);
   };
 
   const removeService = (serviceId: string) => {
@@ -496,6 +575,18 @@ export default function ServiceList() {
                 <span>Đơn vị</span>
                 <input value={draft.unit} onChange={event => updateDraft('unit', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
               </label>
+              <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                <span>Tên nhà cung cấp</span>
+                <input value={draft.supplierName} onChange={event => updateDraft('supplierName', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+              </label>
+              <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                <span>Thông tin liên hệ</span>
+                <input value={draft.contactInfo} onChange={event => updateDraft('contactInfo', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" placeholder="Không bắt buộc" />
+              </label>
+              <label className="space-y-2 text-sm font-medium text-[#2A2421] md:col-span-2">
+                <span>Đơn giá</span>
+                <input value={draft.unitPrice} onChange={event => updateDraft('unitPrice', event.target.value)} type="number" className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+              </label>
             </div>
 
             <label className="block space-y-2 text-sm font-medium text-[#2A2421]">
@@ -523,12 +614,36 @@ export default function ServiceList() {
               <div className="grid grid-cols-1 gap-4 rounded-sm border border-stone-200 p-4 md:grid-cols-2">
                 <label className="space-y-2 text-sm font-medium text-[#2A2421]">
                   <span>Công thức tính số lần</span>
-                  <input value={draft.formulaCount} onChange={event => updateDraft('formulaCount', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+                  <select
+                    value={draft.formulaCount}
+                    onChange={event => updateDraft('formulaCount', event.target.value as CountFormulaOption)}
+                    className="w-full border border-stone-200 px-4 py-3 text-sm outline-none bg-white"
+                  >
+                    {countFormulaOptions.map(option => <option key={option}>{option}</option>)}
+                  </select>
                 </label>
                 <label className="space-y-2 text-sm font-medium text-[#2A2421]">
                   <span>Công thức tính số lượng</span>
-                  <input value={draft.formulaQuantity} onChange={event => updateDraft('formulaQuantity', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+                  <select
+                    value={draft.formulaQuantity}
+                    onChange={event => updateDraft('formulaQuantity', event.target.value as QuantityFormulaOption)}
+                    className="w-full border border-stone-200 px-4 py-3 text-sm outline-none bg-white"
+                  >
+                    {quantityFormulaOptions.map(option => <option key={option}>{option}</option>)}
+                  </select>
                 </label>
+                {draft.formulaCount === 'Giá trị mặc định' && (
+                  <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                    <span>Số lần mặc định</span>
+                    <input value={draft.formulaCountDefault} onChange={event => updateDraft('formulaCountDefault', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+                  </label>
+                )}
+                {draft.formulaQuantity === 'Giá trị mặc định' && (
+                  <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                    <span>Số lượng mặc định</span>
+                    <input value={draft.formulaQuantityDefault} onChange={event => updateDraft('formulaQuantityDefault', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+                  </label>
+                )}
               </div>
             )}
 
@@ -570,6 +685,14 @@ export default function ServiceList() {
               <Field label="Thiết lập giá" value={selectedService.setup} />
               <Field label="Trạng thái" value={<StatusToggle value={selectedService.status} />} />
               {!lockedCategories.has(selectedService.category) && <Field label="Mã dịch vụ" value={selectedService.id} />}
+              {!lockedCategories.has(selectedService.category) && <Field label="Nhà cung cấp" value={selectedService.supplierName || '-'} />}
+              {!lockedCategories.has(selectedService.category) && <Field label="Thông tin liên hệ" value={selectedService.contactInfo || '-'} />}
+              {selectedService.category === 'Các dịch vụ khác' && (
+                <Field label="Công thức tính số lần" value={describeFormula(selectedService.formulaCount, selectedService.formulaCountDefault)} />
+              )}
+              {selectedService.category === 'Các dịch vụ khác' && (
+                <Field label="Công thức tính số lượng" value={describeFormula(selectedService.formulaQuantity, selectedService.formulaQuantityDefault)} />
+              )}
             </div>
 
             {!lockedCategories.has(selectedService.category) && (
@@ -623,12 +746,69 @@ export default function ServiceList() {
                   />
                 </div>
               </label>
+              <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                <span>Tên nhà cung cấp</span>
+                <input value={draft.supplierName} onChange={event => updateDraft('supplierName', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+              </label>
+              <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                <span>Thông tin liên hệ</span>
+                <input value={draft.contactInfo} onChange={event => updateDraft('contactInfo', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+              </label>
+              <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                <span>Đơn giá hiện hành</span>
+                <input value={draft.unitPrice} onChange={event => updateDraft('unitPrice', event.target.value)} type="number" className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+              </label>
+              {draft.category === 'Vé tham quan' && (
+                <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                  <span>Tỉnh thành</span>
+                  <select value={draft.province} onChange={event => updateDraft('province', event.target.value as Province)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none bg-white">
+                    {provinceOptions.map(option => <option key={option}>{option}</option>)}
+                  </select>
+                </label>
+              )}
             </div>
 
             <label className="block space-y-2 text-sm font-medium text-[#2A2421]">
               <span>Mô tả</span>
               <textarea value={draft.description} onChange={event => updateDraft('description', event.target.value)} rows={3} className="w-full resize-none border border-stone-200 px-4 py-3 text-sm outline-none" />
             </label>
+
+            {draft.category === 'Các dịch vụ khác' && (
+              <div className="grid grid-cols-1 gap-4 rounded-sm border border-stone-200 p-4 md:grid-cols-2">
+                <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                  <span>Công thức tính số lần</span>
+                  <select
+                    value={draft.formulaCount}
+                    onChange={event => updateDraft('formulaCount', event.target.value as CountFormulaOption)}
+                    className="w-full border border-stone-200 px-4 py-3 text-sm outline-none bg-white"
+                  >
+                    {countFormulaOptions.map(option => <option key={option}>{option}</option>)}
+                  </select>
+                </label>
+                <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                  <span>Công thức tính số lượng</span>
+                  <select
+                    value={draft.formulaQuantity}
+                    onChange={event => updateDraft('formulaQuantity', event.target.value as QuantityFormulaOption)}
+                    className="w-full border border-stone-200 px-4 py-3 text-sm outline-none bg-white"
+                  >
+                    {quantityFormulaOptions.map(option => <option key={option}>{option}</option>)}
+                  </select>
+                </label>
+                {draft.formulaCount === 'Giá trị mặc định' && (
+                  <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                    <span>Số lần mặc định</span>
+                    <input value={draft.formulaCountDefault} onChange={event => updateDraft('formulaCountDefault', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+                  </label>
+                )}
+                {draft.formulaQuantity === 'Giá trị mặc định' && (
+                  <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                    <span>Số lượng mặc định</span>
+                    <input value={draft.formulaQuantityDefault} onChange={event => updateDraft('formulaQuantityDefault', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+                  </label>
+                )}
+              </div>
+            )}
 
             <PriceTable rows={editingService.prices} showAction onEdit={priceId => setPriceEditor({ serviceId: editingService.id, priceId })} />
 

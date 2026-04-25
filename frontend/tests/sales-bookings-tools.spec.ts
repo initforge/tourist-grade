@@ -1,15 +1,8 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { loginAs } from './support/app';
 
-async function loginAsSales(page: any) {
-  await page?.goto('/');
-  await page?.waitForLoadState('domcontentloaded');
-  await page?.evaluate(() => {
-    localStorage?.removeItem('__travela_bookings');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any)?.__authLogin('sales');
-  });
-  await page?.goto('/sales/bookings');
-  await page?.waitForLoadState('domcontentloaded');
+async function loginAsSales(page: Page) {
+  await loginAs(page, 'sales', '/sales/bookings', { clearBookings: true });
 }
 
 test?.describe('Sales Booking Tools Verification', () => {

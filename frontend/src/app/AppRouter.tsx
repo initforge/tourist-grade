@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import {
   AdminLayout,
@@ -53,8 +54,33 @@ import {
   SalesDashboard,
   Vouchers as SalesVouchers,
 } from '@features/sales/pages';
+import { useAuthStore } from '@shared/store/useAuthStore';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
 
 export default function AppRouter() {
+  const initialize = useAuthStore((state) => state.initialize);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const initializePublic = useAppDataStore((state) => state.initializePublic);
+  const initializeProtected = useAppDataStore((state) => state.initializeProtected);
+  const clearProtected = useAppDataStore((state) => state.clearProtected);
+
+  useEffect(() => {
+    void initialize();
+  }, [initialize]);
+
+  useEffect(() => {
+    void initializePublic();
+  }, [initializePublic]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      void initializeProtected();
+      return;
+    }
+
+    clearProtected();
+  }, [clearProtected, initializeProtected, isAuthenticated]);
+
   return (
     <BrowserRouter>
       <Routes>

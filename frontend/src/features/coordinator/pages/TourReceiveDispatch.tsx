@@ -1,14 +1,11 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Breadcrumb } from 'antd';
-import {
-  mockTourInstances,
-  mockTourPrograms,
-  type TourInstance,
-} from '@entities/tour-program/data/tourProgram';
-import { mockBookings } from '@entities/booking/data/bookings';
-import { mockUsers } from '@entities/user/data/users';
+import { type TourInstance } from '@entities/tour-program/data/tourProgram';
 import type { Booking } from '@entities/booking/data/bookings';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
+import { useAuthStore } from '@shared/store/useAuthStore';
+import { updateTourInstanceCommand } from '@shared/lib/api/tourInstances';
 
 type Tab = 'tong_quan' | 'ds_kh' | 'lichtrinh' | 'dutoan';
 
@@ -56,11 +53,16 @@ export default function TourReceiveDispatch() {
   const [activeTab, setActiveTab] = useState<Tab>('tong_quan');
   const [isReceived, setIsReceived] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  const token = useAuthStore(state => state.accessToken);
+  const upsertTourInstance = useAppDataStore(state => state.upsertTourInstance);
+  const tourInstances = useAppDataStore(state => state.tourInstances);
+  const tourPrograms = useAppDataStore(state => state.tourPrograms);
+  const allBookings = useAppDataStore(state => state.bookings);
 
-  const instance: TourInstance | undefined = mockTourInstances?.find(i => i.id === id);
-  const program = instance ? mockTourPrograms?.find(p => p.id === instance?.programId) : undefined;
-  const bookings = mockBookings?.filter((b: Booking) => b?.tourName?.includes(instance?.programName ?? ''));
-  const createdByName = mockUsers?.find(u => u.id === program?.createdBy)?.name ?? program?.createdBy ?? '-';
+  const instance: TourInstance | undefined = tourInstances?.find(i => i.id === id);
+  const program = instance ? tourPrograms?.find(p => p.id === instance?.programId) : undefined;
+  const bookings = allBookings?.filter((b: Booking) => b?.tourName?.includes(instance?.programName ?? ''));
+  const createdByName = program?.createdBy ?? '-';
 
   if (!instance) {
     return (
@@ -147,7 +149,11 @@ export default function TourReceiveDispatch() {
           {/* Receive button — only show if not yet received */}
           {!isReceived && (
             <button
-              onClick={() => {
+              onClick={async () => {
+                if (token && instance) {
+                  const response = await updateTourInstanceCommand(token, instance.id, 'receive');
+                  upsertTourInstance(response.tourInstance);
+                }
                 setIsReceived(true);
                 navigate('/coordinator/tours', { state: { tab: 'cho_du_toan' } });
               }}

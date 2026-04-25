@@ -1,129 +1,95 @@
 # 07. Infra, Docker, Env
 
-Tài liệu này mô tả môi trường chuẩn để chạy repo trên `localhost`.
+## Standard local stack
 
-## 7.1 Services local
-
-`docker-compose.yml` hiện định nghĩa:
+`docker-compose.yml` defines:
 
 - `db`: PostgreSQL 16
-- `api`: Express API scaffold
-- `frontend`: build Vite app và serve bằng Nginx
+- `backend`: Express + Prisma API
+- `frontend`: built Vite app served by Nginx
 
-## 7.2 Port mapping
+## Ports
 
 - Frontend: `http://localhost:8080`
-- API: `http://localhost:4000`
+- Backend: `http://localhost:4000`
 - Postgres: `localhost:5432`
 
-## 7.3 Env backend
+## Backend env
 
-File mẫu:
+Primary file:
+
+- `backend/.env`
+
+Template:
 
 - `backend/.env.example`
 
-Biến chính:
+Main variables:
 
-- `PORT`
 - `DATABASE_URL`
 - `CORS_ORIGIN`
 - `JWT_ACCESS_SECRET`
 - `JWT_REFRESH_SECRET`
+- `JWT_ACCESS_EXPIRES_IN`
+- `JWT_REFRESH_EXPIRES_IN`
+- `PAYOS_CLIENT_ID`
+- `PAYOS_API_KEY`
+- `PAYOS_CHECKSUM_KEY`
+- `PAYOS_RETURN_URL`
+- `PAYOS_CANCEL_URL`
+- `PAYOS_WEBHOOK_URL`
 
-## 7.4 Env frontend
+## Frontend env
 
-File mẫu:
+Primary file:
 
-- `frontend/.env.example`
+- `frontend/.env`
 
-Biến chính:
+Main variable:
 
-- `VITE_API_BASE_URL`
-- `VITE_AUTH_TOKEN_KEY`
-- feature flags
+- `VITE_API_BASE_URL=http://localhost:4000/api/v1`
 
-## 7.5 Docker files
+## Expected startup flow
 
-- `backend/Dockerfile`
-- `frontend/Dockerfile`
-- `frontend/nginx.conf`
-- `.dockerignore`
+Backend container startup now does:
 
-## 7.6 Cách chạy chuẩn
+1. `prisma db push`
+2. `prisma seed`
+3. `npm run dev`
 
-### Chạy full local stack
+This keeps local Docker bootstrap close to one-command usage.
+
+## Commands
+
+Full stack:
 
 ```bash
 docker compose up --build
 ```
 
-### Chạy nền
+Background:
 
 ```bash
 docker compose up -d --build
 ```
 
-### Dừng stack
-
-```bash
-docker compose down
-```
-
-### Xem logs
+Logs:
 
 ```bash
 docker compose logs -f
 ```
 
-## 7.7 Chạy tách service khi cần
-
-### Frontend riêng
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### Backend riêng
-
-```bash
-cd backend
-npm install
-npm run dev
-```
-
-### Prisma
-
-```bash
-cd backend
-npm run prisma:generate
-npm run prisma:migrate
-```
-
-## 7.8 Checklist local sau khi boot stack
-
-Tối thiểu cần verify:
-
-1. `docker compose up --build` chạy được full stack local.
-2. Frontend mở được ở `http://localhost:8080`.
-3. API trả được `http://localhost:4000/health` nếu route đã có.
-4. Frontend đọc đúng `VITE_API_BASE_URL=http://localhost:4000/api/v1`.
-5. Postgres lên được và container `db` ở trạng thái healthy.
-
-## 7.9 Reset dữ liệu local
-
-Khi cần reset sạch toàn bộ local stack:
+Reset local data:
 
 ```bash
 docker compose down -v
 docker compose up --build
 ```
 
-Chỉ dùng lệnh này khi chấp nhận xóa volume Postgres local.
+## Current verification constraint
 
-## 7.10 Quy ước hạ tầng hiện tại
+The repository is wired for Docker-first local run, but actual end-to-end verification still requires:
 
-- Local Docker là môi trường vận hành mặc định của repo.
-- Nếu có staging/production về sau thì phải tách docs riêng hoặc ghi rõ là tham chiếu tương lai.
-- Seed không được trộn vào startup mặc định nếu sau này cần state local ổn định hơn.
+- Docker Desktop daemon running
+- PostgreSQL container healthy
+- optional Cloudflare Tunnel for PayOS webhook callbacks

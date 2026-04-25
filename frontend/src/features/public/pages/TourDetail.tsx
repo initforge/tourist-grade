@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '@shared/store/useAuthStore';
-import { mockTours, type DepartureScheduleEntry } from '@entities/tour/data/tours';
+import { type DepartureScheduleEntry } from '@entities/tour/data/tours';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
 
 const MONTH_NAMES: Record<number, string> = {
   1: 'Tháng 1',
@@ -25,14 +26,14 @@ interface ScheduleRow {
 }
 
 function buildScheduleRows(schedules: DepartureScheduleEntry[]): ScheduleRow[] {
-  const sorted = [...schedules]?.sort((a, b) => a?.date?.localeCompare(b?.date));
+  const sorted = [...schedules].sort((a, b) => a.date.localeCompare(b.date));
   const seen = new Set<number>();
 
-  return sorted?.map(schedule => {
-    const parsed = new Date(schedule?.date);
-    const month = parsed?.getMonth() + 1;
-    const monthLabel = seen?.has(month) ? '' : MONTH_NAMES[month];
-    seen?.add(month);
+  return sorted.map((schedule) => {
+    const parsed = new Date(schedule.date);
+    const month = parsed.getMonth() + 1;
+    const monthLabel = seen.has(month) ? '' : MONTH_NAMES[month];
+    seen.add(month);
     return { month, monthLabel, date: schedule };
   });
 }
@@ -40,21 +41,31 @@ function buildScheduleRows(schedules: DepartureScheduleEntry[]): ScheduleRow[] {
 export default function TourDetail() {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
-  const user = useAuthStore(s => s?.user);
+  const user = useAuthStore((state) => state.user);
+  const publicTours = useAppDataStore((state) => state.publicTours);
+  const publicLoading = useAppDataStore((state) => state.publicLoading);
   const isCustomer = user?.role === 'customer';
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<DepartureScheduleEntry | null>(null);
   const [expandedAccordion, setExpandedAccordion] = useState<string | null>(null);
   const [collapsedItineraryDays, setCollapsedItineraryDays] = useState<number[]>([]);
 
-  const tour = mockTours?.find(item => item.slug === slug);
+  const tour = publicTours.find((item) => item.slug === slug);
+
+  if (!tour && publicLoading) {
+    return (
+      <div className="public-page min-h-screen flex items-center justify-center pt-20">
+        <p className="text-lg text-[#2A2421]/60">Đang tải chi tiết tour...</p>
+      </div>
+    );
+  }
 
   if (!tour) {
     return (
       <div className="public-page min-h-screen flex items-center justify-center pt-20">
         <div className="text-center space-y-4">
           <span className="material-symbols-outlined text-5xl text-[#D0C5AF]">search_off</span>
-          <p className="text-lg text-[#2A2421]/60">Khàng tìm thấy tour này</p>
+          <p className="text-lg text-[#2A2421]/60">Không tìm thấy tour này</p>
           <button onClick={() => navigate('/tours')} className="text-[#D4AF37] hover:underline text-sm">
             Quay lại danh sách tour
           </button>
@@ -63,14 +74,14 @@ export default function TourDetail() {
     );
   }
 
-  const relatedTours = mockTours?.filter(item => item?.id !== tour?.id && item.category === 'domestic')?.slice(0, 3);
-  const scheduleRows = buildScheduleRows(tour?.departureSchedule);
-  const fallbackSchedule = scheduleRows?.find(row => row?.date.status === 'open' || row?.date.status === 'filling')?.date ?? scheduleRows[0]?.date ?? null;
+  const relatedTours = publicTours.filter((item) => item.id !== tour.id && item.category === 'domestic').slice(0, 3);
+  const scheduleRows = buildScheduleRows(tour.departureSchedule);
+  const fallbackSchedule = scheduleRows.find((row) => row.date.status === 'open' || row.date.status === 'filling')?.date ?? scheduleRows[0]?.date ?? null;
   const activeSchedule = selectedSchedule ?? fallbackSchedule;
-  const activeAdultPrice = activeSchedule?.priceAdult ?? tour?.price?.adult;
-  const galleryImages = [tour?.image, ...tour?.gallery]?.slice(0, 4);
-  const sideTopImage = galleryImages[1] ?? tour?.image;
-  const sideBottomImages = [galleryImages[2] ?? tour?.image, galleryImages[3] ?? sideTopImage];
+  const activeAdultPrice = activeSchedule?.priceAdult ?? tour.price.adult;
+  const galleryImages = [tour.image, ...tour.gallery].slice(0, 4);
+  const sideTopImage = galleryImages[1] ?? tour.image;
+  const sideBottomImages = [galleryImages[2] ?? tour.image, galleryImages[3] ?? sideTopImage];
   const reviewItems = [
     { name: 'Minh Anh', date: '12/03/2026', rating: 5, comment: 'Lịch trình hợp lý, hướng dẫn viên theo sát đoàn và du thuyền sạch.' },
     { name: 'Gia Huy', date: '28/02/2026', rating: 5, comment: 'Khâu đặt tour nhanh, thông tin trước ngày đi rõ ràng, bữa ăn trên tàu ổn.' },
@@ -78,31 +89,32 @@ export default function TourDetail() {
   ];
 
   const toggleWishlist = (event: React.MouseEvent) => {
-    event?.preventDefault();
+    event.preventDefault();
     if (!isCustomer) {
       navigate('/login');
       return;
     }
-    setIsWishlisted(current => !current);
+    setIsWishlisted((current) => !current);
   };
 
   const handleBook = () => {
     if (!activeSchedule) return;
-    navigate(`/tours/${slug}/book?scheduleId=${activeSchedule?.id}`);
+    navigate(`/tours/${slug}/book?scheduleId=${activeSchedule.id}`);
   };
 
   const toggleAccordion = (key: string) => {
-    setExpandedAccordion(current => current === key ? null : key);
+    setExpandedAccordion((current) => (current === key ? null : key));
   };
 
   const toggleItineraryDay = (day: number) => {
-    setCollapsedItineraryDays(current =>
-      current?.includes(day) ? current?.filter(item => item !== day) : [...current, day]
-    );
+    setCollapsedItineraryDays((current) => (
+      current.includes(day) ? current.filter((item) => item !== day) : [...current, day]
+    ));
   };
 
-  const mealLabel = (meal: string) =>
-    meal === 'breakfast' ? 'sáng' : meal === 'lunch' ? 'trưa' : 'chiều';
+  const mealLabel = (meal: string) => (
+    meal === 'breakfast' ? 'sáng' : meal === 'lunch' ? 'trưa' : 'chiều'
+  );
 
   const AccordionItem = ({
     title,
@@ -137,7 +149,7 @@ export default function TourDetail() {
         <section className="mb-6 md:mb-8">
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.85fr)]">
             <button type="button" className="public-media-frame relative aspect-[16/11] md:aspect-[16/10] lg:min-h-[420px] group text-left">
-              <img alt={tour?.title} className="w-full h-full object-cover" src={galleryImages[0]} />
+              <img alt={tour.title} className="w-full h-full object-cover" src={galleryImages[0]} />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all" />
               <div className="absolute bottom-4 left-4 bg-white/90 px-3 py-1 text-[10px] tracking-[0.2em] uppercase font-medium text-primary">
                 {tour.category === 'domestic' ? 'Trong nước' : 'Quốc tế'}
@@ -146,16 +158,16 @@ export default function TourDetail() {
 
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-1 lg:grid-rows-[minmax(0,1fr)_minmax(0,1fr)]">
               <div className="public-media-frame aspect-[16/10] md:aspect-[4/3] lg:min-h-[204px] overflow-hidden">
-                <img alt={`${tour?.title} 2`} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" src={sideTopImage} />
+                <img alt={`${tour.title} 2`} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" src={sideTopImage} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="public-media-frame aspect-square overflow-hidden">
-                  <img alt={`${tour?.title} 3`} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" src={sideBottomImages[0]} />
+                  <img alt={`${tour.title} 3`} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" src={sideBottomImages[0]} />
                 </div>
                 <div className="public-media-frame relative aspect-square overflow-hidden">
-                  <img alt={`${tour?.title} 4`} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" src={sideBottomImages[1]} />
+                  <img alt={`${tour.title} 4`} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" src={sideBottomImages[1]} />
                   <div className="absolute inset-0 bg-primary/45 flex items-center justify-center">
-                    <span className="text-white font-label text-xs tracking-widest">+{galleryImages?.length}</span>
+                    <span className="text-white font-label text-xs tracking-widest">+{galleryImages.length}</span>
                   </div>
                 </div>
               </div>
@@ -175,26 +187,26 @@ export default function TourDetail() {
             )}
           </div>
           <h1 className="font-headline text-3xl md:text-4xl leading-tight tracking-tight text-primary mb-4 max-w-4xl">
-            {tour?.title}
+            {tour.title}
           </h1>
           <div className="flex items-center gap-x-4 gap-y-2 flex-wrap text-sm text-primary/70">
-            {tour?.rating && (
+            {tour.rating && (
               <div className="flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[16px] text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>
                   star
                 </span>
-                <span>{tour?.rating} ({tour?.reviewCount} đánh giá)</span>
+                <span>{tour.rating} ({tour.reviewCount} đánh giá)</span>
               </div>
             )}
             <div className="hidden md:block w-px h-3 bg-outline-variant/40" />
             <div className="flex items-center gap-1.5">
               <span className="material-symbols-outlined text-[16px]">location_on</span>
-              <span>{tour?.departurePoint} → {tour?.sightseeingSpots?.join(', ')}</span>
+              <span>{tour.departurePoint} → {tour.sightseeingSpots.join(', ')}</span>
             </div>
             <div className="hidden md:block w-px h-3 bg-outline-variant/40" />
             <div className="flex items-center gap-1.5">
               <span className="material-symbols-outlined text-[16px]">schedule</span>
-              <span>{tour?.duration?.days}N{tour?.duration?.nights}Đ</span>
+              <span>{tour.duration.days}N{tour.duration.nights}Đ</span>
             </div>
           </div>
         </section>
@@ -222,17 +234,17 @@ export default function TourDetail() {
                       </tr>
                     </thead>
                     <tbody>
-                      {scheduleRows?.map(row => {
-                        const schedule = row?.date;
-                        const isSelected = selectedSchedule?.id === schedule?.id;
-                        const isSelectable = schedule?.status !== 'full' && schedule?.status !== 'closed';
-                        const adultPrice = schedule?.priceAdult ?? tour?.price?.adult;
-                        const childPrice = schedule?.priceChild ?? tour?.price?.child;
-                        const infantPrice = schedule?.priceInfant ?? (tour?.price?.infant ?? 0);
+                      {scheduleRows.map((row) => {
+                        const schedule = row.date;
+                        const isSelected = selectedSchedule?.id === schedule.id;
+                        const isSelectable = schedule.status !== 'full' && schedule.status !== 'closed';
+                        const adultPrice = schedule.priceAdult ?? tour.price.adult;
+                        const childPrice = schedule.priceChild ?? tour.price.child;
+                        const infantPrice = schedule.priceInfant ?? (tour.price.infant ?? 0);
 
                         return (
                           <tr
-                            key={schedule?.id}
+                            key={schedule.id}
                             onClick={() => isSelectable && setSelectedSchedule(isSelected ? null : schedule)}
                             className={`border-b border-[var(--color-primary)]/10 last:border-0 cursor-pointer transition-colors ${
                               isSelected
@@ -242,20 +254,20 @@ export default function TourDetail() {
                                   : 'opacity-50 cursor-default'
                             }`}
                           >
-                            <td className="px-4 py-3.5 text-center text-sm font-semibold text-[var(--color-secondary)]">{row?.monthLabel}</td>
+                            <td className="px-4 py-3.5 text-center text-sm font-semibold text-[var(--color-secondary)]">{row.monthLabel}</td>
                             <td className="px-4 py-3.5 text-sm font-medium text-primary">
-                              {new Date(schedule?.date)?.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                              {new Date(schedule.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                             </td>
-                            <td className="px-4 py-3.5 text-right text-sm font-bold text-primary">{adultPrice?.toLocaleString('vi-VN')}đ</td>
-                            <td className="px-4 py-3.5 text-right text-sm text-primary/70">{childPrice?.toLocaleString('vi-VN')}đ</td>
-                            <td className="px-4 py-3.5 text-right text-sm text-primary/70">{infantPrice?.toLocaleString('vi-VN')}đ</td>
+                            <td className="px-4 py-3.5 text-right text-sm font-bold text-primary">{adultPrice.toLocaleString('vi-VN')}đ</td>
+                            <td className="px-4 py-3.5 text-right text-sm text-primary/70">{childPrice.toLocaleString('vi-VN')}đ</td>
+                            <td className="px-4 py-3.5 text-right text-sm text-primary/70">{infantPrice.toLocaleString('vi-VN')}đ</td>
                             <td className="px-4 py-3.5 text-right text-sm text-primary/60">
-                              {schedule?.singleRoomSurcharge ? `+${schedule?.singleRoomSurcharge?.toLocaleString('vi-VN')}đ` : '—'}
+                              {schedule.singleRoomSurcharge ? `+${schedule.singleRoomSurcharge.toLocaleString('vi-VN')}đ` : '—'}
                             </td>
                             <td className="px-4 py-3.5 text-center">
-                              {schedule?.availableSeats > 0 ? (
-                                <span className={`font-bold text-sm ${schedule?.availableSeats <= 5 ? 'text-red-500' : 'text-primary'}`}>
-                                  {schedule?.availableSeats}
+                              {schedule.availableSeats > 0 ? (
+                                <span className={`font-bold text-sm ${schedule.availableSeats <= 5 ? 'text-red-500' : 'text-primary'}`}>
+                                  {schedule.availableSeats}
                                 </span>
                               ) : (
                                 <span className="text-red-500 text-sm font-bold">Hết chỗ</span>
@@ -282,18 +294,18 @@ export default function TourDetail() {
                   <div className="flex-grow h-px bg-outline-variant/30" />
                 </div>
                 <div className="space-y-5">
-                  {tour?.itinerary?.map(day => {
-                    const isCollapsed = collapsedItineraryDays?.includes(day?.day);
-                    const meals = day?.meals?.map(mealLabel)?.join(', ');
+                  {tour.itinerary.map((day) => {
+                    const isCollapsed = collapsedItineraryDays.includes(day.day);
+                    const meals = day.meals.map(mealLabel).join(', ');
                     return (
-                      <article key={day?.day} className="bg-white border border-outline-variant/20 shadow-sm px-5 py-5 md:px-6 md:py-6">
+                      <article key={day.day} className="bg-white border border-outline-variant/20 shadow-sm px-5 py-5 md:px-6 md:py-6">
                         <button
                           type="button"
-                          onClick={() => toggleItineraryDay(day?.day)}
+                          onClick={() => toggleItineraryDay(day.day)}
                           className="w-full flex items-start justify-between gap-4 text-left"
                         >
                           <h4 className="font-headline text-base md:text-lg font-bold leading-snug text-primary tracking-wide">
-                            Ngày {String(day?.day)?.padStart(2, '0')}: {day?.title?.toUpperCase()}
+                            Ngày {String(day.day).padStart(2, '0')}: {day.title.toUpperCase()}
                             {meals && <span className="font-sans text-sm font-semibold normal-case"> (Ăn {meals})</span>}
                           </h4>
                           <span className={`material-symbols-outlined shrink-0 mt-0.5 h-9 w-9 rounded-full bg-sky-50 text-sky-600 flex items-center justify-center transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}>
@@ -302,10 +314,10 @@ export default function TourDetail() {
                         </button>
                         {!isCollapsed && (
                           <div className="mt-5 space-y-4">
-                            <p className="text-sm md:text-base text-primary/75 leading-7">{day?.description}</p>
-                            {day?.activities?.length > 0 && (
+                            <p className="text-sm md:text-base text-primary/75 leading-7">{day.description}</p>
+                            {day.activities.length > 0 && (
                               <div className="flex flex-wrap gap-2">
-                                {day?.activities?.map((activity, activityIndex) => (
+                                {day.activities.map((activity, activityIndex) => (
                                   <span key={activityIndex} className="px-3 py-1 bg-[var(--color-surface)] text-xs text-primary/60">
                                     {activity}
                                   </span>
@@ -328,7 +340,7 @@ export default function TourDetail() {
                 <div className="bg-white border border-[var(--color-primary)]/20 p-5 space-y-0">
                   <AccordionItem title="Giá tour bao gồm" keyName="inclusions">
                     <ul className="space-y-2">
-                      {tour?.inclusions?.map((item, index) => (
+                      {tour.inclusions.map((item, index) => (
                         <li key={index} className="flex items-start gap-2">
                           <span className="material-symbols-outlined text-emerald-500 text-base shrink-0">check</span>
                           <span>{item}</span>
@@ -339,7 +351,7 @@ export default function TourDetail() {
 
                   <AccordionItem title="Giá tour không bao gồm" keyName="exclusions">
                     <ul className="space-y-2">
-                      {tour?.exclusions?.map((item, index) => (
+                      {tour.exclusions.map((item, index) => (
                         <li key={index} className="flex items-start gap-2">
                           <span className="material-symbols-outlined text-red-400 text-base shrink-0">close</span>
                           <span>{item}</span>
@@ -349,18 +361,18 @@ export default function TourDetail() {
                   </AccordionItem>
 
                   <AccordionItem title="Giá trẻ em" keyName="child">
-                    <p>{tour?.childPolicy}</p>
+                    <p>{tour.childPolicy}</p>
                   </AccordionItem>
 
                   <AccordionItem title="Chính sách hủy tour" keyName="cancel">
                     <div className="space-y-3">
-                      {tour?.cancellationPolicy?.map((tier, index) => (
+                      {tour.cancellationPolicy.map((tier, index) => (
                         <div key={index} className="flex items-center gap-3 flex-wrap">
                           <span className="text-xs font-medium bg-[var(--color-surface)] px-3 py-1.5 text-primary/80 min-w-[140px]">
-                            {tier?.daysBefore} ngày trước
+                            {tier.daysBefore} ngày trước
                           </span>
                           <span className="text-sm">
-                            → Hoàn <strong className="text-[var(--color-secondary)]">{tier?.refundPercent}%</strong> giá tour
+                            → Hoàn <strong className="text-[var(--color-secondary)]">{tier.refundPercent}%</strong> giá tour
                           </span>
                         </div>
                       ))}
@@ -373,22 +385,22 @@ export default function TourDetail() {
                         <span className="material-symbols-outlined text-primary/40 text-base shrink-0">directions_bus</span>
                         <div>
                           <p className="font-medium text-primary text-sm">Phương tiện</p>
-                          <p className="text-primary/70 text-xs">{tour.transport === 'xe' ? 'Xe du lịch' : 'Máy bay'} {tour?.arrivalPoint && `→ ${tour?.arrivalPoint}`}</p>
+                          <p className="text-primary/70 text-xs">{tour.transport === 'xe' ? 'Xe du lịch' : 'Máy bay'} {tour.arrivalPoint && `→ ${tour.arrivalPoint}`}</p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
                         <span className="material-symbols-outlined text-primary/40 text-base shrink-0">location_on</span>
                         <div>
                           <p className="font-medium text-primary text-sm">Khởi hành</p>
-                          <p className="text-primary/70 text-xs">{tour?.departurePoint}</p>
+                          <p className="text-primary/70 text-xs">{tour.departurePoint}</p>
                         </div>
                       </div>
-                      {tour.tourType === 'mua_le' && tour?.holiday && (
+                      {tour.tourType === 'mua_le' && tour.holiday && (
                         <div className="flex items-start gap-3">
                           <span className="material-symbols-outlined text-primary/40 text-base shrink-0">celebration</span>
                           <div>
                             <p className="font-medium text-primary text-sm">Dịp lễ</p>
-                            <p className="text-primary/70 text-xs">{tour?.holiday}</p>
+                            <p className="text-primary/70 text-xs">{tour.holiday}</p>
                           </div>
                         </div>
                       )}
@@ -405,13 +417,13 @@ export default function TourDetail() {
                     <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label mb-2">Giá</p>
                     <div className="flex items-end gap-2 flex-wrap">
                       <span className="font-headline text-3xl font-bold text-[var(--color-secondary)]">
-                        {activeAdultPrice?.toLocaleString('vi-VN')}đ
+                        {activeAdultPrice.toLocaleString('vi-VN')}đ
                       </span>
                       <span className="text-sm text-primary/60 mb-1">/ khách</span>
                     </div>
-                    {tour?.originalPrice && (
+                    {tour.originalPrice && (
                       <p className="text-xs text-primary/35 line-through mt-1">
-                        {tour?.originalPrice?.toLocaleString('vi-VN')}đ
+                        {tour.originalPrice.toLocaleString('vi-VN')}đ
                       </p>
                     )}
                   </div>
@@ -421,14 +433,14 @@ export default function TourDetail() {
                       <span className="material-symbols-outlined text-primary/45 text-[18px] mt-0.5">confirmation_number</span>
                       <div>
                         <p className="text-[10px] uppercase tracking-wider text-primary/45 font-label mb-0.5">Mã tour</p>
-                        <p className="font-semibold text-primary">{tour?.id}</p>
+                        <p className="font-semibold text-primary">{tour.id}</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3 text-sm">
                       <span className="material-symbols-outlined text-primary/45 text-[18px] mt-0.5">location_on</span>
                       <div>
                         <p className="text-[10px] uppercase tracking-wider text-primary/45 font-label mb-0.5">Khởi hành</p>
-                        <p className="font-semibold text-primary">{tour?.departurePoint}</p>
+                        <p className="font-semibold text-primary">{tour.departurePoint}</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3 text-sm">
@@ -437,7 +449,7 @@ export default function TourDetail() {
                         <p className="text-[10px] uppercase tracking-wider text-primary/45 font-label mb-0.5">Ngày khởi hành</p>
                         <p className="font-semibold text-primary">
                           {activeSchedule
-                            ? new Date(activeSchedule?.date)?.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                            ? new Date(activeSchedule.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
                             : 'Chọn trong bảng lịch'}
                         </p>
                       </div>
@@ -446,14 +458,14 @@ export default function TourDetail() {
                       <span className="material-symbols-outlined text-primary/45 text-[18px] mt-0.5">schedule</span>
                       <div>
                         <p className="text-[10px] uppercase tracking-wider text-primary/45 font-label mb-0.5">Thời gian</p>
-                        <p className="font-semibold text-primary">{tour?.duration?.days}N{tour?.duration?.nights}Đ</p>
+                        <p className="font-semibold text-primary">{tour.duration.days}N{tour.duration.nights}Đ</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3 text-sm">
                       <span className="material-symbols-outlined text-primary/45 text-[18px] mt-0.5">event_seat</span>
                       <div>
                         <p className="text-[10px] uppercase tracking-wider text-primary/45 font-label mb-0.5">Số chỗ còn</p>
-                        <p className="font-semibold text-primary">{activeSchedule?.availableSeats ?? tour?.availableSeats}</p>
+                        <p className="font-semibold text-primary">{activeSchedule?.availableSeats ?? tour.availableSeats}</p>
                       </div>
                     </div>
                   </div>
@@ -461,7 +473,7 @@ export default function TourDetail() {
                   <div className="grid grid-cols-[minmax(0,112px)_1fr] gap-2">
                     <button
                       type="button"
-                      onClick={() => document?.getElementById('tour-schedule-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                      onClick={() => document.getElementById('tour-schedule-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                       className="py-3 border border-primary/20 text-primary font-sans uppercase tracking-[0.12em] text-[10px] font-bold hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] transition-all"
                     >
                       Ngày khác
@@ -481,7 +493,7 @@ export default function TourDetail() {
 
                   {!selectedSchedule && activeSchedule && (
                     <p className="text-center text-[11px] text-primary/45 italic">
-                      Đang hiển thị lịch gần nhất?. Bạn có thể đổi ở bảng lịch phóa trái?.
+                      Đang hiển thị lịch gần nhất. Bạn có thể đổi ở bảng lịch phía trái.
                     </p>
                   )}
                 </div>
@@ -507,63 +519,63 @@ export default function TourDetail() {
           </div>
         </section>
 
-        <section className="mt-12 md:mt-14">
+        <section id="reviews" className="mt-12 md:mt-14">
           <div className="flex items-center gap-4 mb-6">
             <h3 className="font-headline text-xl text-primary">Đánh giá tour</h3>
             <div className="flex-grow h-px bg-outline-variant/30" />
           </div>
           <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
             <div className="bg-white border border-outline-variant/20 p-6">
-              <p className="font-headline text-4xl text-primary leading-none">{tour?.rating?.toFixed(1) ?? '4.8'}</p>
+              <p className="font-headline text-4xl text-primary leading-none">{tour.rating?.toFixed(1) ?? '4.8'}</p>
               <div className="flex gap-1 mt-3 text-secondary">
-                {[1, 2, 3, 4, 5]?.map(star => (
+                {[1, 2, 3, 4, 5].map((star) => (
                   <span key={star} className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>
                     star
                   </span>
                 ))}
               </div>
-              <p className="text-sm text-primary/60 mt-3">{tour?.reviewCount ?? reviewItems?.length} lượt đánh giá</p>
+              <p className="text-sm text-primary/60 mt-3">{tour.reviewCount ?? reviewItems.length} lượt đánh giá</p>
             </div>
             <div className="grid gap-4 md:grid-cols-3">
-              {reviewItems?.map(review => (
-                <article key={review?.name} className="bg-white border border-outline-variant/20 p-5">
+              {reviewItems.map((review) => (
+                <article key={review.name} className="bg-white border border-outline-variant/20 p-5">
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div>
-                      <p className="font-semibold text-primary">{review?.name}</p>
-                      <p className="text-xs text-primary/45">{review?.date}</p>
+                      <p className="font-semibold text-primary">{review.name}</p>
+                      <p className="text-xs text-primary/45">{review.date}</p>
                     </div>
                     <div className="flex text-secondary">
-                      {Array.from({ length: review?.rating })?.map((_, index) => (
+                      {Array.from({ length: review.rating }).map((_, index) => (
                         <span key={index} className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
                           star
                         </span>
                       ))}
                     </div>
                   </div>
-                  <p className="text-sm text-primary/70 leading-relaxed">{review?.comment}</p>
+                  <p className="text-sm text-primary/70 leading-relaxed">{review.comment}</p>
                 </article>
               ))}
             </div>
           </div>
         </section>
 
-        {relatedTours?.length > 0 && (
+        {relatedTours.length > 0 && (
           <section className="mt-14 md:mt-16">
             <div className="flex items-center gap-4 mb-6">
               <h3 className="font-headline text-xl text-primary">Tour liên quan</h3>
               <div className="flex-grow h-px bg-outline-variant/30" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {relatedTours?.map(item => (
+              {relatedTours.map((item) => (
                 <div
-                  key={item?.id}
-                  onClick={() => navigate(`/tours/${item?.slug}`)}
+                  key={item.id}
+                  onClick={() => navigate(`/tours/${item.slug}`)}
                   className="public-floating-card overflow-hidden cursor-pointer group hover:border-[var(--color-secondary)] transition-all"
                 >
                   <div className="aspect-[16/10] overflow-hidden">
                     <img
-                      alt={item?.title}
-                      src={item?.image}
+                      alt={item.title}
+                      src={item.image}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                     />
                   </div>
@@ -572,11 +584,11 @@ export default function TourDetail() {
                       {item.category === 'domestic' ? 'Trong nước' : 'Quốc tế'}
                     </p>
                     <h4 className="font-headline text-sm text-primary leading-snug mb-2 line-clamp-2 group-hover:text-[var(--color-secondary)] transition-colors">
-                      {item?.title}
+                      {item.title}
                     </h4>
                     <div className="flex items-center justify-between gap-4">
-                      <span className="text-xs text-primary/60">{item?.duration?.days}N{item?.duration?.nights}Đ</span>
-                      <span className="text-sm font-bold text-[var(--color-secondary)]">{item?.price?.adult?.toLocaleString('vi-VN')}đ</span>
+                      <span className="text-xs text-primary/60">{item.duration.days}N{item.duration.nights}Đ</span>
+                      <span className="text-sm font-bold text-[var(--color-secondary)]">{item.price.adult.toLocaleString('vi-VN')}đ</span>
                     </div>
                   </div>
                 </div>
@@ -588,4 +600,3 @@ export default function TourDetail() {
     </div>
   );
 }
-

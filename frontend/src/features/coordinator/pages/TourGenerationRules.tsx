@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Breadcrumb } from 'antd';
-import { mockTourPrograms, mockTourInstances, type TourInstance } from '@entities/tour-program/data/tourProgram';
+import { type TourInstance, type TourProgram } from '@entities/tour-program/data/tourProgram';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
 import { PageSearchInput } from '@shared/ui/PageSearchInput';
 
 type SubTab = 'quy_tac' | 'cho_duyet_ban';
@@ -66,12 +67,12 @@ function monthCoverage(start?: string | null, end?: string | null) {
   return `${months?.toFixed(1)} thàng`;
 }
 
-function buildPreviewRows(programId: string): PreviewRow[] {
-  const program = mockTourPrograms?.find(item => item.id === programId);
+function buildPreviewRows(programId: string, programs: TourProgram[], instances: TourInstance[]): PreviewRow[] {
+  const program = programs?.find(item => item.id === programId);
   if (!program) {
     return [];
   }
-  const existingRows = mockTourInstances?.filter(item => item.programId === programId && OPEN_SELLING_STATUSES?.has(item?.status));
+  const existingRows = instances?.filter(item => item.programId === programId && OPEN_SELLING_STATUSES?.has(item?.status));
   const offsets = [7, 14, 21, 28, 35, 42];
 
   return offsets?.map((offset, index) => {
@@ -110,8 +111,8 @@ function buildPreviewRows(programId: string): PreviewRow[] {
   });
 }
 
-function buildPreviewRowsForRange(programId: string, startDate: string, endDate: string, existingRows: PreviewRow[] = []): PreviewRow[] {
-  const program = mockTourPrograms?.find(item => item.id === programId);
+function buildPreviewRowsForRange(programId: string, startDate: string, endDate: string, programs: TourProgram[], instances: TourInstance[], existingRows: PreviewRow[] = []): PreviewRow[] {
+  const program = programs?.find(item => item.id === programId);
   if (!program || !startDate || !endDate) {
     return existingRows;
   }
@@ -123,7 +124,7 @@ function buildPreviewRowsForRange(programId: string, startDate: string, endDate:
   }
 
   const existingByDeparture = new Map(existingRows.map(row => [row.departureDate, row]));
-  const sellingRows = mockTourInstances?.filter(item => item.programId === programId && OPEN_SELLING_STATUSES?.has(item?.status));
+  const sellingRows = instances?.filter(item => item.programId === programId && OPEN_SELLING_STATUSES?.has(item?.status));
   const rows: PreviewRow[] = [];
   const cursor = new Date(start);
   let index = 0;
@@ -173,8 +174,8 @@ function buildPreviewRowsForRange(programId: string, startDate: string, endDate:
   return rows.length > 0 ? rows : existingRows;
 }
 
-function buildPendingApprovalEditState(instance: TourInstance): PendingApprovalEditState {
-  const program = mockTourPrograms?.find(item => item.id === instance.programId);
+function buildPendingApprovalEditState(instance: TourInstance, programs: TourProgram[], instances: TourInstance[]): PendingApprovalEditState {
+  const program = programs?.find(item => item.id === instance.programId);
   const sellPrice = Math.max(instance.priceAdult, program?.pricingConfig?.sellPriceAdult ?? 0);
   const costPerAdult = Math.round(sellPrice * 0.68);
   const profitPercent = sellPrice > 0 ? Number((((sellPrice - costPerAdult) / sellPrice) * 100).toFixed(1)) : 0;
@@ -193,7 +194,7 @@ function buildPendingApprovalEditState(instance: TourInstance): PendingApprovalE
     conflictDetails: [],
     checked: true,
   };
-  const rows = buildPreviewRowsForRange(instance.programId, instance.departureDate, windowEndDate, [instanceRow]);
+  const rows = buildPreviewRowsForRange(instance.programId, instance.departureDate, windowEndDate, programs, instances, [instanceRow]);
 
   return {
     requestId: instance.id,
@@ -210,21 +211,23 @@ function buildPendingApprovalEditState(instance: TourInstance): PendingApprovalE
 }
 
 export default function TourGenerationRules() {
+  const tourPrograms = useAppDataStore(state => state.tourPrograms);
+  const tourInstances = useAppDataStore(state => state.tourInstances);
   const [subTab, setSubTab] = useState<SubTab>('quy_tac');
   const [searchQuery, setSearchQuery] = useState('');
   const [generateModal, setGenerateModal] = useState<GenerateModalState | null>(null);
   const [viewModal, setViewModal] = useState<TourInstance | null>(null);
   const [pendingApprovalItems, setPendingApprovalItems] = useState<TourInstance[]>(
-    () => mockTourInstances?.filter(instance => instance.status === 'cho_duyet_ban'),
+    () => tourInstances?.filter(instance => instance.status === 'cho_duyet_ban'),
   );
   const [editingPendingInstance, setEditingPendingInstance] = useState<PendingApprovalEditState | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TourInstance | null>(null);
 
   const activePrograms = useMemo(() => {
-    return mockTourPrograms
+    return tourPrograms
       ?.filter(program => program.status === 'active')
       ?.map(program => {
-        const rows = mockTourInstances?.filter(instance => instance.programId === program?.id);
+        const rows = tourInstances?.filter(instance => instance.programId === program?.id);
         const sellingRows = rows?.filter(instance => OPEN_SELLING_STATUSES?.has(instance?.status));
         const deployedRows = rows?.filter(instance => DEPLOYED_STATUSES?.has(instance?.status));
         const farthestSelling = sellingRows?.sort((a, b) => new Date(b?.departureDate)?.getTime() - new Date(a?.departureDate)?.getTime())[0];
@@ -254,7 +257,7 @@ export default function TourGenerationRules() {
         }
         return left?.program?.name?.localeCompare(right?.program?.name);
       });
-  }, []);
+  }, [tourPrograms, tourInstances]);
 
   const pendingApprovalInstances = pendingApprovalItems;
 
@@ -276,7 +279,7 @@ export default function TourGenerationRules() {
     const keyword = searchQuery?.trim()?.toLowerCase();
     if (!keyword) return pendingApprovalInstances;
     return pendingApprovalInstances?.filter(instance => {
-      const program = mockTourPrograms?.find(item => item.id === instance?.programId);
+      const program = tourPrograms?.find(item => item.id === instance?.programId);
       return [
         instance?.id,
         instance?.programName,
@@ -285,7 +288,7 @@ export default function TourGenerationRules() {
         program?.tourType,
       ]?.join(' ')?.toLowerCase()?.includes(keyword);
     });
-  }, [pendingApprovalInstances, searchQuery]);
+  }, [pendingApprovalInstances, searchQuery, tourPrograms]);
 
   const selectedCount = generateModal?.rows?.filter(row => row?.checked)?.length ?? 0;
   const unselectedCount = generateModal ? generateModal?.rows?.length - selectedCount : 0;
@@ -407,7 +410,7 @@ export default function TourGenerationRules() {
                             programId: row?.program?.id,
                             programName: row?.program?.name,
                             type: row?.program?.tourType,
-                            rows: buildPreviewRows(row?.program?.id),
+                            rows: buildPreviewRows(row?.program?.id, tourPrograms, tourInstances),
                           })}
                           className="px-4 py-2 bg-primary text-white text-[10px] font-bold uppercase tracking-wider hover:bg-[var(--color-secondary)] transition-colors"
                         >
@@ -443,7 +446,7 @@ export default function TourGenerationRules() {
                   </thead>
                   <tbody>
                     {filteredPendingApprovalInstances?.map((instance, index) => {
-                      const program = mockTourPrograms?.find(item => item.id === instance?.programId);
+                      const program = tourPrograms?.find(item => item.id === instance?.programId);
                       return (
                         <tr key={instance?.id} className={`border-b border-outline-variant/20 last:border-0 ${index % 2 === 0 ? 'bg-white' : 'bg-[var(--color-surface)]/30'}`}>
                           <td className="px-5 py-4 font-mono text-xs">{instance?.id}</td>
@@ -463,7 +466,7 @@ export default function TourGenerationRules() {
                               <button onClick={() => setViewModal(instance)} className="px-3 py-1.5 border border-outline-variant/50 text-primary/60 text-[10px] uppercase tracking-wider hover:bg-surface transition-colors">
                                 Xem
                               </button>
-                              <button onClick={() => setEditingPendingInstance(buildPendingApprovalEditState(instance))} className="px-3 py-1.5 bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-blue-700 transition-colors">
+                              <button onClick={() => setEditingPendingInstance(buildPendingApprovalEditState(instance, tourPrograms, tourInstances))} className="px-3 py-1.5 bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-blue-700 transition-colors">
                                 Sửa
                               </button>
                               <button onClick={() => setDeleteTarget(instance)} className="px-3 py-1.5 border border-red-300 text-red-500 text-[10px] font-bold uppercase tracking-wider hover:bg-red-50 transition-colors">
@@ -497,7 +500,7 @@ export default function TourGenerationRules() {
               <div className="p-8 space-y-6">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   {(() => {
-                    const program = mockTourPrograms?.find(item => item.id === viewModal?.programId);
+                    const program = tourPrograms?.find(item => item.id === viewModal?.programId);
                     return [
                       { label: 'Tên chương trình', value: viewModal?.programName },
                       { label: 'Loại tour', value: program?.tourType === 'mua_le' ? 'Mùa lễ' : 'Quanh năm' },
@@ -525,7 +528,7 @@ export default function TourGenerationRules() {
                       </tr>
                     </thead>
                     <tbody>
-                      {buildPreviewRows(viewModal?.programId)?.map(row => (
+                      {buildPreviewRows(viewModal?.programId, tourPrograms, tourInstances)?.map(row => (
                         <tr key={row?.id} className="border-b border-outline-variant/20 last:border-0">
                           <td className="px-4 py-3 font-mono text-xs">{row?.id}</td>
                           <td className="px-4 py-3 text-sm">{formatDate(row?.departureDate)}</td>
@@ -586,7 +589,7 @@ export default function TourGenerationRules() {
                         return {
                           ...current,
                           startDate,
-                          rows: buildPreviewRowsForRange(current.programId, startDate, current.endDate, current.rows),
+                          rows: buildPreviewRowsForRange(current.programId, startDate, current.endDate, tourPrograms, tourInstances, current.rows),
                         };
                       })}
                       className="w-full border border-outline-variant/50 px-4 py-2.5 outline-none"
@@ -603,7 +606,7 @@ export default function TourGenerationRules() {
                         return {
                           ...current,
                           endDate,
-                          rows: buildPreviewRowsForRange(current.programId, current.startDate, endDate, current.rows),
+                          rows: buildPreviewRowsForRange(current.programId, current.startDate, endDate, tourPrograms, tourInstances, current.rows),
                         };
                       })}
                       className="w-full border border-outline-variant/50 px-4 py-2.5 outline-none"

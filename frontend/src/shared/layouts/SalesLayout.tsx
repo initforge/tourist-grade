@@ -5,10 +5,15 @@ import { useAuthStore } from '@shared/store/useAuthStore';
 export function SalesLayout() {
   const location = useLocation();
   const user = useAuthStore(s => s?.user);
+  const isBootstrapping = useAuthStore(s => s?.isBootstrapping);
   const [collapsed, setCollapsed] = useState(false);
 
   const isActive = (path: string) => location.pathname === path || location?.pathname?.startsWith(path + '/');
   const role = user?.role || 'guest';
+
+  if (isBootstrapping) {
+    return null;
+  }
 
   if (role !== 'sales') {
     return <Navigate to="/" replace />;

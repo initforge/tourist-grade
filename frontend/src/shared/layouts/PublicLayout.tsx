@@ -1,5 +1,6 @@
-﻿import React from 'react';
+import React from 'react';
 import { Outlet, Link, useNavigate } from 'react-router-dom';
+import { createLocalAvatar } from '@entities/user/data/users';
 import { useAuthStore } from '@shared/store/useAuthStore';
 
 const roleRedirects: Record<string, string> = {
@@ -14,16 +15,11 @@ export function PublicLayout() {
   const user = useAuthStore(s => s?.user);
   const isAuthenticated = useAuthStore(s => s?.isAuthenticated);
   const logout = useAuthStore(s => s?.logout);
-  const login = useAuthStore(s => s?.login);
   const navigate = useNavigate();
+  const avatarSrc = user?.avatar || createLocalAvatar(user?.name || 'Travela');
 
-  const handleSetRole = (role: 'admin' | 'manager' | 'coordinator' | 'sales' | 'customer') => {
-    login(role);
-    navigate(roleRedirects[role]);
-  };
-
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/');
   };
 
@@ -44,15 +40,7 @@ export function PublicLayout() {
           <span className="font-sans uppercase tracking-widest font-bold text-[10px] opacity-80 border-r border-white/20 pr-4">
             Tiếng Việt
           </span>
-          {!isAuthenticated ? (
-            <div className="flex gap-2 text-white/50">
-              <span className="cursor-pointer hover:text-white" onClick={() => handleSetRole('customer')}>[Set: Cus]</span>
-              <span className="cursor-pointer hover:text-white" onClick={() => handleSetRole('sales')}>[Set: Sales]</span>
-              <span className="cursor-pointer hover:text-white" onClick={() => handleSetRole('coordinator')}>[Set: Coord]</span>
-              <span className="cursor-pointer hover:text-white" onClick={() => handleSetRole('manager')}>[Set: Mng]</span>
-              <span className="cursor-pointer hover:text-white" onClick={() => handleSetRole('admin')}>[Set: Admin]</span>
-            </div>
-          ) : (
+          {isAuthenticated && (
             <span className="text-[var(--color-secondary)]">Xin chào, {user?.name} ({user?.role})</span>
           )}
         </div>
@@ -106,7 +94,7 @@ export function PublicLayout() {
                 <button onClick={handleLogout} className="text-sm font-medium text-red-500 hover:text-red-700 whitespace-nowrap">
                   Đăng Xuất
                 </button>
-                <img src={user?.avatar} alt="avatar" className="w-9 h-9 md:w-10 md:h-10 rounded-full border border-[var(--color-surface)] bg-gray-100 shrink-0" />
+                <img src={avatarSrc} alt="avatar" className="w-9 h-9 md:w-10 md:h-10 rounded-full border border-[var(--color-surface)] bg-gray-100 shrink-0" />
               </div>
             )}
           </div>

@@ -1,12 +1,21 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { blogPosts } from '@entities/blog/data/blogs';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
 
 export default function BlogList() {
   const navigate = useNavigate();
+  const blogs = useAppDataStore((state) => state.publicBlogs);
+  const publicReady = useAppDataStore((state) => state.publicReady);
 
-  const featuredBlog = blogPosts[0];
-  const blogs = blogPosts?.slice(1);
+  const featuredBlog = blogs[0];
+  const remainingBlogs = blogs.slice(1);
+
+  if (!publicReady) {
+    return (
+      <div className="public-container py-24 md:py-32 text-center text-sm text-[var(--color-primary)]/60">
+        Đang tải bài viết...
+      </div>
+    );
+  }
 
   return (
     <div className="public-page min-h-screen">
@@ -43,7 +52,7 @@ export default function BlogList() {
 
           <section className="public-section-tight">
             <div className="public-container">
-              <div className="group cursor-pointer" onClick={() => navigate(`/blog/${featuredBlog?.id}`)}>
+              <div className="group cursor-pointer" onClick={() => navigate(`/blog/${featuredBlog?.slug ?? featuredBlog?.id}`)}>
                 <div className="relative aspect-[16/11] lg:aspect-[16/9] w-full overflow-hidden border sm:border-2 border-[var(--color-primary)]">
                   <img src={featuredBlog?.image} alt={featuredBlog?.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-[2s] ease-in-out grayscale-[20%]" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
@@ -70,8 +79,8 @@ export default function BlogList() {
           <section className="public-section border-t border-[#D0C5AF]/30">
             <div className="public-container">
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 md:gap-10">
-                {blogs?.map(blog => (
-                  <article key={blog?.id} className="group cursor-pointer public-floating-card overflow-hidden" onClick={() => navigate(`/blog/${blog?.id}`)}>
+                {remainingBlogs?.map(blog => (
+                  <article key={blog?.id} className="group cursor-pointer public-floating-card overflow-hidden" onClick={() => navigate(`/blog/${blog?.slug ?? blog?.id}`)}>
                     <div className="aspect-[16/11] overflow-hidden">
                       <img src={blog?.image} alt={blog?.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-[1.5s]" />
                     </div>

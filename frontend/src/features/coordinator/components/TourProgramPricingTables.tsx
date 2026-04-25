@@ -20,6 +20,7 @@ interface Props {
   itinerary: DayFormLike[];
   guideUnitPrice: number;
   onGuideUnitPriceChange: (value: number) => void;
+  hideActionColumn?: boolean;
 }
 
 interface TransportQuoteRow {
@@ -176,6 +177,7 @@ export default function TourProgramPricingTables({
   itinerary,
   guideUnitPrice,
   onGuideUnitPriceChange,
+  hideActionColumn = false,
 }: Props) {
   const [transportQuotes, setTransportQuotes] = useState<TransportQuoteRow[]>(() => [
     buildTransportQuoteRow(0, true),
@@ -317,6 +319,9 @@ export default function TourProgramPricingTables({
     />
   );
 
+  const showActionColumn = !hideActionColumn;
+  const withActionHeader = (headers: string[]) => showActionColumn ? [...headers, 'Thao tác'] : headers;
+
   return (
     <div className="min-w-[900px] space-y-7">
       <div>
@@ -324,7 +329,7 @@ export default function TourProgramPricingTables({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-[var(--color-surface)] text-left">
-              {['Nhà cung cấp', 'Dịch vụ', 'Báo giá', 'Ghi chú', 'Mặc định', 'Thao tác'].map(header => (
+              {withActionHeader(['Nhà cung cấp', 'Dịch vụ', 'Báo giá', 'Ghi chú', 'Mặc định']).map(header => (
                 <th key={header} className="border border-outline-variant/20 px-3 py-2 font-medium">{header}</th>
               ))}
             </tr>
@@ -334,9 +339,11 @@ export default function TourProgramPricingTables({
               <td className="border border-outline-variant/20 px-3 py-2 font-medium" colSpan={2}>Xe tham quan</td>
               <td className="border border-outline-variant/20 px-3 py-2 text-right" colSpan={2}>Đơn giá áp dụng: {formatMoney(selectedTransportQuote?.price ?? 0)}</td>
               <td className="border border-outline-variant/20 px-3 py-2" />
-              <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50 text-secondary font-medium">
-                <button type="button" onClick={() => setTransportQuotes(rows => [...rows, buildTransportQuoteRow(rows.length)])} className="hover:underline" aria-label="Thêm mới NCC xe tham quan">Thêm mới NCC +</button>
-              </td>
+              {showActionColumn && (
+                <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50 text-secondary font-medium">
+                  <button type="button" onClick={() => setTransportQuotes(rows => [...rows, buildTransportQuoteRow(rows.length)])} className="hover:underline" aria-label="Thêm mới NCC xe tham quan">Thêm mới NCC +</button>
+                </td>
+              )}
             </tr>
             {transportQuotes.map(row => (
               <tr key={row.id}>
@@ -345,7 +352,9 @@ export default function TourProgramPricingTables({
                 <td className="border border-outline-variant/20 px-3 py-2"><input type="number" value={row.price || ''} onChange={e => setTransportQuotes(rows => rows.map(item => item.id === row.id ? { ...item, price: parseInt(e.target.value) || 0 } : item))} className="w-full border-0 bg-transparent outline-none text-right" /></td>
                 <td className="border border-outline-variant/20 px-3 py-2"><input value={row.note} onChange={e => setTransportQuotes(rows => rows.map(item => item.id === row.id ? { ...item, note: e.target.value } : item))} placeholder="Nhập ghi chú" className="w-full border-0 bg-transparent outline-none" /></td>
                 <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderDefaultCheckbox(row.isDefault, () => setTransportQuotes(rows => rows.map(item => ({ ...item, isDefault: item.id === row.id }))), `Mặc định ${row.supplierName}`)}</td>
-                <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderDeleteButton(`Xóa ${row.supplierName}`, () => setTransportQuotes(rows => normalizeDefaultRows(rows.filter(item => item.id !== row.id))), transportQuotes.length === 1)}</td>
+                {showActionColumn && (
+                  <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderDeleteButton(`Xóa ${row.supplierName}`, () => setTransportQuotes(rows => normalizeDefaultRows(rows.filter(item => item.id !== row.id))), transportQuotes.length === 1)}</td>
+                )}
               </tr>
             ))}
             {transport === 'maybay' && (
@@ -354,9 +363,11 @@ export default function TourProgramPricingTables({
                   <td className="border border-outline-variant/20 px-3 py-2 font-medium" colSpan={2}>Vé máy bay từ {departurePoint || 'Hà Nội'} đến {arrivalPoint || 'Đà Nẵng'}</td>
                   <td className="border border-outline-variant/20 px-3 py-2 text-right" colSpan={2}>Đơn giá áp dụng: {formatMoney(selectedFlightQuote?.adultPrice ?? 0)}</td>
                   <td className="border border-outline-variant/20 px-3 py-2" />
-                  <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50 text-secondary font-medium">
-                    <button type="button" onClick={() => setFlightQuotes(rows => [...rows, buildFlightQuoteRow(rows.length)])} className="hover:underline" aria-label="Thêm mới NCC vé máy bay">Thêm mới NCC +</button>
-                  </td>
+                  {showActionColumn && (
+                    <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50 text-secondary font-medium">
+                      <button type="button" onClick={() => setFlightQuotes(rows => [...rows, buildFlightQuoteRow(rows.length)])} className="hover:underline" aria-label="Thêm mới NCC vé máy bay">Thêm mới NCC +</button>
+                    </td>
+                  )}
                 </tr>
                 {flightQuotes.flatMap(row => ([
                   <tr key={`${row.id}-adult`}>
@@ -365,7 +376,9 @@ export default function TourProgramPricingTables({
                     <td className="border border-outline-variant/20 px-3 py-2"><input type="number" value={row.adultPrice || ''} onChange={e => setFlightQuotes(rows => rows.map(item => item.id === row.id ? { ...item, adultPrice: parseInt(e.target.value) || 0 } : item))} className="w-full border-0 bg-transparent outline-none text-right" /></td>
                     <td className="border border-outline-variant/20 px-3 py-2"><input value={row.note} onChange={e => setFlightQuotes(rows => rows.map(item => item.id === row.id ? { ...item, note: e.target.value } : item))} placeholder="Nhập ghi chú" className="w-full border-0 bg-transparent outline-none" /></td>
                     <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderDefaultCheckbox(row.isDefault, () => setFlightQuotes(rows => rows.map(item => ({ ...item, isDefault: item.id === row.id }))), `Mặc định ${row.supplierName}`)}</td>
-                    <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderDeleteButton(`Xóa ${row.supplierName}`, () => setFlightQuotes(rows => normalizeDefaultRows(rows.filter(item => item.id !== row.id))), flightQuotes.length === 1)}</td>
+                    {showActionColumn && (
+                      <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderDeleteButton(`Xóa ${row.supplierName}`, () => setFlightQuotes(rows => normalizeDefaultRows(rows.filter(item => item.id !== row.id))), flightQuotes.length === 1)}</td>
+                    )}
                   </tr>,
                   <tr key={`${row.id}-child`}>
                     <td className="border border-outline-variant/20 px-3 py-2 text-primary/30">Theo cùng NCC</td>
@@ -373,7 +386,7 @@ export default function TourProgramPricingTables({
                     <td className="border border-outline-variant/20 px-3 py-2"><input type="number" value={row.childPrice || ''} onChange={e => setFlightQuotes(rows => rows.map(item => item.id === row.id ? { ...item, childPrice: parseInt(e.target.value) || 0 } : item))} className="w-full border-0 bg-transparent outline-none text-right" /></td>
                     <td className="border border-outline-variant/20 px-3 py-2 text-primary/30">Theo cùng NCC</td>
                     <td className="border border-outline-variant/20 px-3 py-2" />
-                    <td className="border border-outline-variant/20 px-3 py-2" />
+                    {showActionColumn && <td className="border border-outline-variant/20 px-3 py-2" />}
                   </tr>,
                   <tr key={`${row.id}-infant`}>
                     <td className="border border-outline-variant/20 px-3 py-2 text-primary/30">Theo cùng NCC</td>
@@ -381,7 +394,7 @@ export default function TourProgramPricingTables({
                     <td className="border border-outline-variant/20 px-3 py-2"><input type="number" value={row.infantPrice || ''} onChange={e => setFlightQuotes(rows => rows.map(item => item.id === row.id ? { ...item, infantPrice: parseInt(e.target.value) || 0 } : item))} className="w-full border-0 bg-transparent outline-none text-right" /></td>
                     <td className="border border-outline-variant/20 px-3 py-2 text-primary/30">Theo cùng NCC</td>
                     <td className="border border-outline-variant/20 px-3 py-2" />
-                    <td className="border border-outline-variant/20 px-3 py-2" />
+                    {showActionColumn && <td className="border border-outline-variant/20 px-3 py-2" />}
                   </tr>,
                 ]))}
               </>
@@ -395,7 +408,7 @@ export default function TourProgramPricingTables({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-[var(--color-surface)] text-left">
-              {['Nhà cung cấp', 'Địa chỉ', 'Dịch vụ', 'Đơn giá', 'Mặc định', 'Thao tác'].map(header => (
+              {withActionHeader(['Nhà cung cấp', 'Địa chỉ', 'Dịch vụ', 'Đơn giá', 'Mặc định']).map(header => (
                 <th key={header} className="border border-outline-variant/20 px-3 py-2 font-medium">{header}</th>
               ))}
             </tr>
@@ -403,7 +416,7 @@ export default function TourProgramPricingTables({
           <tbody>
             {hotelGroups.length === 0 ? (
               <tr>
-                <td colSpan={6} className="border border-outline-variant/20 px-3 py-4 text-primary/45 italic">Chọn Địa điểm lưu trú ở Lịch trình trước khi thêm nhà cung cấp.</td>
+                <td colSpan={showActionColumn ? 6 : 5} className="border border-outline-variant/20 px-3 py-4 text-primary/45 italic">Chọn Địa điểm lưu trú ở Lịch trình trước khi thêm nhà cung cấp.</td>
               </tr>
             ) : hotelGroups.map(group => {
               const providerRows = hotelQuotesByGroup[group.id] ?? [];
@@ -415,9 +428,11 @@ export default function TourProgramPricingTables({
                   <td className="border border-outline-variant/20 px-3 py-2 text-primary/45">Phòng đôi đang áp dụng</td>
                   <td className="border border-outline-variant/20 px-3 py-2 text-right">Thành tiền: {formatMoney((selectedProvider?.doublePrice ?? 0) * group.nights)}</td>
                   <td className="border border-outline-variant/20 px-3 py-2" />
-                  <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50 text-secondary font-medium">
-                    <button type="button" onClick={() => setHotelQuotesByGroup(prev => ({ ...prev, [group.id]: [...(prev[group.id] ?? []), buildHotelQuoteRow((prev[group.id] ?? []).length, group.city)] }))} className="hover:underline" aria-label={`Thêm mới NCC ${group.label}`}>Thêm mới NCC +</button>
-                  </td>
+                  {showActionColumn && (
+                    <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50 text-secondary font-medium">
+                      <button type="button" onClick={() => setHotelQuotesByGroup(prev => ({ ...prev, [group.id]: [...(prev[group.id] ?? []), buildHotelQuoteRow((prev[group.id] ?? []).length, group.city)] }))} className="hover:underline" aria-label={`Thêm mới NCC ${group.label}`}>Thêm mới NCC +</button>
+                    </td>
+                  )}
                 </tr>,
                 ...providerRows.flatMap(provider => ([
                   <tr key={`${provider.id}-single`}>
@@ -426,7 +441,9 @@ export default function TourProgramPricingTables({
                     <td className="border border-outline-variant/20 px-3 py-2">Phòng đơn</td>
                     <td className="border border-outline-variant/20 px-3 py-2"><input type="number" value={provider.singlePrice || ''} onChange={e => setHotelQuotesByGroup(prev => ({ ...prev, [group.id]: (prev[group.id] ?? []).map(item => item.id === provider.id ? { ...item, singlePrice: parseInt(e.target.value) || 0 } : item) }))} className="w-full border-0 bg-transparent outline-none text-right" /></td>
                     <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderDefaultCheckbox(provider.isDefault, () => setHotelQuotesByGroup(prev => ({ ...prev, [group.id]: (prev[group.id] ?? []).map(item => ({ ...item, isDefault: item.id === provider.id })) })), `Mặc định ${provider.supplierName}`)}</td>
-                    <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderDeleteButton(`Xóa ${provider.supplierName}`, () => setHotelQuotesByGroup(prev => ({ ...prev, [group.id]: normalizeDefaultRows((prev[group.id] ?? []).filter(item => item.id !== provider.id)) })), providerRows.length === 1)}</td>
+                    {showActionColumn && (
+                      <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderDeleteButton(`Xóa ${provider.supplierName}`, () => setHotelQuotesByGroup(prev => ({ ...prev, [group.id]: normalizeDefaultRows((prev[group.id] ?? []).filter(item => item.id !== provider.id)) })), providerRows.length === 1)}</td>
+                    )}
                   </tr>,
                   <tr key={`${provider.id}-double`}>
                     <td className="border border-outline-variant/20 px-3 py-2 text-primary/30">Theo cùng NCC</td>
@@ -434,7 +451,7 @@ export default function TourProgramPricingTables({
                     <td className="border border-outline-variant/20 px-3 py-2">Phòng đôi</td>
                     <td className="border border-outline-variant/20 px-3 py-2"><input type="number" value={provider.doublePrice || ''} onChange={e => setHotelQuotesByGroup(prev => ({ ...prev, [group.id]: (prev[group.id] ?? []).map(item => item.id === provider.id ? { ...item, doublePrice: parseInt(e.target.value) || 0 } : item) }))} className="w-full border-0 bg-transparent outline-none text-right" /></td>
                     <td className="border border-outline-variant/20 px-3 py-2" />
-                    <td className="border border-outline-variant/20 px-3 py-2" />
+                    {showActionColumn && <td className="border border-outline-variant/20 px-3 py-2" />}
                   </tr>,
                   <tr key={`${provider.id}-triple`}>
                     <td className="border border-outline-variant/20 px-3 py-2 text-primary/30">Theo cùng NCC</td>
@@ -442,7 +459,7 @@ export default function TourProgramPricingTables({
                     <td className="border border-outline-variant/20 px-3 py-2">Phòng ba</td>
                     <td className="border border-outline-variant/20 px-3 py-2"><input type="number" value={provider.triplePrice || ''} onChange={e => setHotelQuotesByGroup(prev => ({ ...prev, [group.id]: (prev[group.id] ?? []).map(item => item.id === provider.id ? { ...item, triplePrice: parseInt(e.target.value) || 0 } : item) }))} className="w-full border-0 bg-transparent outline-none text-right" /></td>
                     <td className="border border-outline-variant/20 px-3 py-2" />
-                    <td className="border border-outline-variant/20 px-3 py-2" />
+                    {showActionColumn && <td className="border border-outline-variant/20 px-3 py-2" />}
                   </tr>,
                 ])),
               ];
@@ -456,7 +473,7 @@ export default function TourProgramPricingTables({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-[var(--color-surface)] text-left">
-              {['Nhà cung cấp', 'Địa chỉ', 'Tên dịch vụ', 'Đơn giá', 'Mặc định', 'Thao tác'].map(header => (
+              {withActionHeader(['Nhà cung cấp', 'Địa chỉ', 'Tên dịch vụ', 'Đơn giá', 'Mặc định']).map(header => (
                 <th key={header} className="border border-outline-variant/20 px-3 py-2 font-medium">{header}</th>
               ))}
             </tr>
@@ -464,7 +481,7 @@ export default function TourProgramPricingTables({
           <tbody>
             {mealRows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="border border-outline-variant/20 px-3 py-4 text-primary/45 italic">Chọn bữa ăn ở Lịch trình để sinh dòng chi phí ăn.</td>
+                <td colSpan={showActionColumn ? 6 : 5} className="border border-outline-variant/20 px-3 py-4 text-primary/45 italic">Chọn bữa ăn ở Lịch trình để sinh dòng chi phí ăn.</td>
               </tr>
             ) : mealRows.map(meal => {
               const providerRows = mealQuotesBySection[meal.id] ?? [];
@@ -476,9 +493,11 @@ export default function TourProgramPricingTables({
                   <td className="border border-outline-variant/20 px-3 py-2" />
                   <td className="border border-outline-variant/20 px-3 py-2 text-right">Đơn giá áp dụng: {formatMoney(selectedProvider?.price ?? meal.price)}</td>
                   <td className="border border-outline-variant/20 px-3 py-2" />
-                  <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50 text-secondary font-medium">
-                    <button type="button" onClick={() => setMealQuotesBySection(prev => ({ ...prev, [meal.id]: [...(prev[meal.id] ?? []), buildMealQuoteRow(meal.label, (prev[meal.id] ?? []).length)] }))} className="hover:underline" aria-label={`Thêm mới dịch vụ ${meal.label}`}>Thêm DV +</button>
-                  </td>
+                  {showActionColumn && (
+                    <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50 text-secondary font-medium">
+                      <button type="button" onClick={() => setMealQuotesBySection(prev => ({ ...prev, [meal.id]: [...(prev[meal.id] ?? []), buildMealQuoteRow(meal.label, (prev[meal.id] ?? []).length)] }))} className="hover:underline" aria-label={`Thêm mới dịch vụ ${meal.label}`}>Thêm DV +</button>
+                    </td>
+                  )}
                 </tr>,
                 ...providerRows.map(row => (
                   <tr key={row.id}>
@@ -487,7 +506,9 @@ export default function TourProgramPricingTables({
                     <td className="border border-outline-variant/20 px-3 py-2"><input value={row.serviceName} onChange={e => setMealQuotesBySection(prev => ({ ...prev, [meal.id]: (prev[meal.id] ?? []).map(item => item.id === row.id ? { ...item, serviceName: e.target.value } : item) }))} className="w-full border-0 bg-transparent outline-none" /></td>
                     <td className="border border-outline-variant/20 px-3 py-2"><input type="number" value={row.price || ''} onChange={e => setMealQuotesBySection(prev => ({ ...prev, [meal.id]: (prev[meal.id] ?? []).map(item => item.id === row.id ? { ...item, price: parseInt(e.target.value) || 0 } : item) }))} className="w-full border-0 bg-transparent outline-none text-right" /></td>
                     <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderDefaultCheckbox(row.isDefault, () => setMealQuotesBySection(prev => ({ ...prev, [meal.id]: (prev[meal.id] ?? []).map(item => ({ ...item, isDefault: item.id === row.id })) })), `Mặc định ${row.supplierName}`)}</td>
-                    <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderDeleteButton(`Xóa ${row.supplierName}`, () => setMealQuotesBySection(prev => ({ ...prev, [meal.id]: normalizeDefaultRows((prev[meal.id] ?? []).filter(item => item.id !== row.id)) })), providerRows.length === 1)}</td>
+                    {showActionColumn && (
+                      <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderDeleteButton(`Xóa ${row.supplierName}`, () => setMealQuotesBySection(prev => ({ ...prev, [meal.id]: normalizeDefaultRows((prev[meal.id] ?? []).filter(item => item.id !== row.id)) })), providerRows.length === 1)}</td>
+                    )}
                   </tr>
                 )),
               ];
@@ -501,7 +522,7 @@ export default function TourProgramPricingTables({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-[var(--color-surface)] text-left">
-              {['Nhà cung cấp', 'Địa chỉ', 'Tên dịch vụ', 'Đơn giá người lớn', 'Đơn giá trẻ em', 'Thao tác'].map(header => (
+              {withActionHeader(['Nhà cung cấp', 'Địa chỉ', 'Tên dịch vụ', 'Đơn giá người lớn', 'Đơn giá trẻ em']).map(header => (
                 <th key={header} className="border border-outline-variant/20 px-3 py-2 font-medium">{header}</th>
               ))}
             </tr>
@@ -514,9 +535,11 @@ export default function TourProgramPricingTables({
                 <td className="border border-outline-variant/20 px-3 py-2" />
                 <td className="border border-outline-variant/20 px-3 py-2" />
                 <td className="border border-outline-variant/20 px-3 py-2" />
-                <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50 text-secondary font-medium">
-                  <button type="button" onClick={() => setAttractionQuotesBySection(prev => ({ ...prev, [section.id]: [...(prev[section.id] ?? []), buildAttractionQuoteRow(section.serviceName)] }))} className="hover:underline" aria-label={`Thêm mới dịch vụ ${section.label}`}>Thêm mới DV +</button>
-                </td>
+                {showActionColumn && (
+                  <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50 text-secondary font-medium">
+                    <button type="button" onClick={() => setAttractionQuotesBySection(prev => ({ ...prev, [section.id]: [...(prev[section.id] ?? []), buildAttractionQuoteRow(section.serviceName)] }))} className="hover:underline" aria-label={`Thêm mới dịch vụ ${section.label}`}>Thêm mới DV +</button>
+                  </td>
+                )}
               </tr>,
               ...(attractionQuotesBySection[section.id] ?? []).map(row => (
                 <tr key={row.id}>
@@ -525,7 +548,9 @@ export default function TourProgramPricingTables({
                   <td className="border border-outline-variant/20 px-3 py-2"><input value={row.serviceName} onChange={e => setAttractionQuotesBySection(prev => ({ ...prev, [section.id]: (prev[section.id] ?? []).map(item => item.id === row.id ? { ...item, serviceName: e.target.value } : item) }))} className="w-full border-0 bg-transparent outline-none" /></td>
                   <td className="border border-outline-variant/20 px-3 py-2"><input type="number" value={row.adultPrice || ''} onChange={e => setAttractionQuotesBySection(prev => ({ ...prev, [section.id]: (prev[section.id] ?? []).map(item => item.id === row.id ? { ...item, adultPrice: parseInt(e.target.value) || 0 } : item) }))} className="w-full border-0 bg-transparent outline-none text-right" /></td>
                   <td className="border border-outline-variant/20 px-3 py-2"><input type="number" value={row.childPrice || ''} onChange={e => setAttractionQuotesBySection(prev => ({ ...prev, [section.id]: (prev[section.id] ?? []).map(item => item.id === row.id ? { ...item, childPrice: parseInt(e.target.value) || 0 } : item) }))} className="w-full border-0 bg-transparent outline-none text-right" /></td>
-                  <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderDeleteButton(`Xóa ${row.serviceName}`, () => setAttractionQuotesBySection(prev => ({ ...prev, [section.id]: (prev[section.id] ?? []).filter(item => item.id !== row.id) })), (attractionQuotesBySection[section.id] ?? []).length === 1)}</td>
+                  {showActionColumn && (
+                    <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderDeleteButton(`Xóa ${row.serviceName}`, () => setAttractionQuotesBySection(prev => ({ ...prev, [section.id]: (prev[section.id] ?? []).filter(item => item.id !== row.id) })), (attractionQuotesBySection[section.id] ?? []).length === 1)}</td>
+                  )}
                 </tr>
               )),
             ])}
@@ -554,7 +579,7 @@ export default function TourProgramPricingTables({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-[var(--color-surface)] text-left">
-              {['Nhà cung cấp', 'Tên dịch vụ', 'Đơn giá', 'Đơn vị', 'Ghi chú', 'Thao tác'].map(header => (
+              {withActionHeader(['Nhà cung cấp', 'Tên dịch vụ', 'Đơn giá', 'Đơn vị', 'Ghi chú']).map(header => (
                 <th key={header} className="border border-outline-variant/20 px-3 py-2 font-medium">{header}</th>
               ))}
             </tr>
@@ -567,15 +592,19 @@ export default function TourProgramPricingTables({
                 <td className="border border-outline-variant/20 px-3 py-2"><input type="number" value={row.price || ''} onChange={e => setOtherCostRows(rows => rows.map(item => item.id === row.id ? { ...item, price: parseInt(e.target.value) || 0 } : item))} className="w-full border-0 bg-transparent outline-none text-right" /></td>
                 <td className="border border-outline-variant/20 px-3 py-2"><input value={row.unit} onChange={e => setOtherCostRows(rows => rows.map(item => item.id === row.id ? { ...item, unit: e.target.value } : item))} className="w-full border-0 bg-transparent outline-none" /></td>
                 <td className="border border-outline-variant/20 px-3 py-2"><input value={row.note} onChange={e => setOtherCostRows(rows => rows.map(item => item.id === row.id ? { ...item, note: e.target.value } : item))} placeholder="Nhập ghi chú" className="w-full border-0 bg-transparent outline-none" /></td>
-                <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderDeleteButton(`Xóa ${row.serviceName}`, () => setOtherCostRows(rows => rows.filter(item => item.id !== row.id)), otherCostRows.length === 1)}</td>
+                {showActionColumn && (
+                  <td className="border border-outline-variant/20 px-3 py-2 text-center">{renderDeleteButton(`Xóa ${row.serviceName}`, () => setOtherCostRows(rows => rows.filter(item => item.id !== row.id)), otherCostRows.length === 1)}</td>
+                )}
               </tr>
             ))}
-            <tr className="bg-gray-50">
-              <td className="border border-outline-variant/20 px-3 py-2" colSpan={5} />
-              <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50 text-secondary font-medium">
-                <button type="button" onClick={() => setOtherCostRows(rows => [...rows, buildOtherCostQuoteRow(rows.length)])} className="hover:underline" aria-label="Thêm mới dịch vụ chi phí khác">Thêm mới DV +</button>
-              </td>
-            </tr>
+            {showActionColumn && (
+              <tr className="bg-gray-50">
+                <td className="border border-outline-variant/20 px-3 py-2" colSpan={5} />
+                <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50 text-secondary font-medium">
+                  <button type="button" onClick={() => setOtherCostRows(rows => [...rows, buildOtherCostQuoteRow(rows.length)])} className="hover:underline" aria-label="Thêm mới dịch vụ chi phí khác">Thêm mới DV +</button>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

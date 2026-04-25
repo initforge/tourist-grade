@@ -1,11 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Button, Checkbox, Modal } from 'antd';
-import { mockBookings } from '@entities/booking/data/bookings';
-import { mockTourInstances, mockTourPrograms } from '@entities/tour-program/data/tourProgram';
-import { mockVouchers } from '@entities/voucher/data/vouchers';
 import { buildDailyRevenueRows } from '@shared/lib/bookingReports';
 import { normalizeVoucherLifecycle } from '@entities/voucher/lib/voucherRules';
 import DailyRevenueLineChart from '@shared/ui/DailyRevenueLineChart';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
 
 type ManagerReportType = 'approval_summary' | 'tour_performance' | 'voucher_pipeline';
 
@@ -83,16 +81,20 @@ function TaskColumn({ group }: { group: TaskGroup }) {
 }
 
 export default function ManagerDashboard() {
+  const bookings = useAppDataStore((state) => state.bookings);
+  const tourInstances = useAppDataStore((state) => state.tourInstances);
+  const tourPrograms = useAppDataStore((state) => state.tourPrograms);
+  const vouchers = useAppDataStore((state) => state.vouchers);
   const [dateFrom, setDateFrom] = useState('2026-03-01');
   const [dateTo, setDateTo] = useState('2026-04-30');
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportTypes, setExportTypes] = useState<ManagerReportType[]>([]);
 
   const filteredBookings = useMemo(
-    () => mockBookings.filter((booking) => inRange(booking.createdAt, dateFrom, dateTo)),
-    [dateFrom, dateTo],
+    () => bookings.filter((booking) => inRange(booking.createdAt, dateFrom, dateTo)),
+    [bookings, dateFrom, dateTo],
   );
-  const normalizedVouchers = useMemo(() => mockVouchers.map((voucher) => normalizeVoucherLifecycle(voucher)), []);
+  const normalizedVouchers = useMemo(() => vouchers.map((voucher) => normalizeVoucherLifecycle(voucher)), [vouchers]);
   const dailyRevenue = useMemo(() => buildDailyRevenueRows(filteredBookings), [filteredBookings]);
 
   const taskGroups = useMemo<TaskGroup[]>(() => {
@@ -107,7 +109,7 @@ export default function ManagerDashboard() {
         action: 'Phê duyệt voucher',
       }));
 
-    const programApprovals = mockTourPrograms
+    const programApprovals = tourPrograms
       .filter((program) => program.status === 'draft')
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
       .slice(0, 3)
@@ -118,7 +120,7 @@ export default function ManagerDashboard() {
         action: 'Phê duyệt chương trình tour',
       }));
 
-    const saleApprovals = mockTourInstances
+    const saleApprovals = tourInstances
       .filter((tour) => tour.status === 'cho_duyet_ban')
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
       .slice(0, 3)
@@ -129,7 +131,7 @@ export default function ManagerDashboard() {
         action: 'Phê duyệt yêu cầu bán',
       }));
 
-    const estimateApprovals = mockTourInstances
+    const estimateApprovals = tourInstances
       .filter((tour) => tour.status === 'cho_duyet_du_toan')
       .sort((left, right) => left.departureDate.localeCompare(right.departureDate))
       .slice(0, 3)
@@ -140,7 +142,7 @@ export default function ManagerDashboard() {
         action: 'Phê duyệt dự toán',
       }));
 
-    const underfilledTours = mockTourInstances
+    const underfilledTours = tourInstances
       .filter((tour) => tour.status === 'chua_du_kien')
       .sort((left, right) => left.bookingDeadline.localeCompare(right.bookingDeadline))
       .slice(0, 3)
@@ -151,7 +153,7 @@ export default function ManagerDashboard() {
         action: 'Xử lý tour không đủ điều kiện',
       }));
 
-    const settlementReviews = mockTourInstances
+    const settlementReviews = tourInstances
       .filter((tour) => tour.status === 'cho_quyet_toan')
       .sort((left, right) => (left.settledAt ?? left.endedAt ?? left.departureDate).localeCompare(right.settledAt ?? right.endedAt ?? right.departureDate))
       .slice(0, 3)
@@ -170,7 +172,7 @@ export default function ManagerDashboard() {
       { label: 'Xử lý tour không đủ điều kiện khởi hành', count: underfilledTours.length, tone: 'bg-red-500', items: underfilledTours },
       { label: 'Xem quyết toán mới tạo', count: settlementReviews.length, tone: 'bg-purple-500', items: settlementReviews },
     ];
-  }, [normalizedVouchers]);
+  }, [normalizedVouchers, tourInstances, tourPrograms]);
 
   const reportStats = useMemo(
     () => [
@@ -182,7 +184,7 @@ export default function ManagerDashboard() {
       },
       {
         label: 'Tour đang mở bán',
-        value: mockTourInstances.filter((tour) => tour.status === 'dang_mo_ban').length.toString(),
+        value: tourInstances.filter((tour) => tour.status === 'dang_mo_ban').length.toString(),
         icon: 'tour',
         color: 'bg-blue-50 text-blue-700',
       },
@@ -199,7 +201,7 @@ export default function ManagerDashboard() {
         color: 'bg-emerald-50 text-emerald-700',
       },
     ],
-    [filteredBookings, normalizedVouchers],
+    [filteredBookings, normalizedVouchers, tourInstances],
   );
 
   const topRevenuePrograms = useMemo(() => {

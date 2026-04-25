@@ -70,6 +70,7 @@ enum RefundStatus {
 enum PaymentMethod {
   VNPAY
   STRIPE
+  PAYOS
 }
 
 enum PaymentType {
@@ -115,6 +116,33 @@ enum SupplierType {
   ATTRACTION
   GUIDE
   OTHER
+}
+
+enum ServiceCategory {
+  ATTRACTION_TICKET
+  OTHER
+}
+
+enum ServicePriceMode {
+  QUOTED
+  LISTED
+}
+
+enum ServicePriceSetup {
+  COMMON
+  BY_AGE
+  NONE
+}
+
+enum ServiceStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum FormulaOption {
+  BY_DAY
+  DEFAULT_VALUE
+  MANUAL
 }
 
 model User {
@@ -174,6 +202,7 @@ model TourProgram {
   status            TourProgramStatus @default(DRAFT)
   itineraryJson     Json
   pricingConfigJson Json
+  publicContentJson Json?
   createdById       String
   updatedById       String?
   createdAt         DateTime          @default(now())
@@ -251,6 +280,7 @@ model Booking {
   contactEmail           String
   contactPhone           String
   contactNote            String?
+  payloadJson            Json?
   bankInfoJson           Json?
   roomCountsJson         Json?
   totalAmount            Decimal        @db.Decimal(12, 2)
@@ -303,6 +333,7 @@ model PaymentTransaction {
   method          PaymentMethod
   status          PaymentStatus
   paidAt          DateTime?
+  orderCode       String?
   transactionRef  String?
   payloadJson     Json?
   createdAt       DateTime      @default(now())
@@ -352,8 +383,13 @@ model Supplier {
   id                String                  @id @default(cuid())
   name              String
   phone             String
+  email             String?
   address           String?
   type              SupplierType
+  serviceSummary    String?
+  operatingArea     String?
+  establishedYear   Int?
+  description       String?
   rating            Decimal?                @db.Decimal(3, 2)
   coverageJson      Json?
   standardsJson     Json?
@@ -371,13 +407,95 @@ model SupplierServiceVariant {
   unit             String
   description      String?
   basePrice        Decimal   @db.Decimal(12, 2)
+  quantity         Int?
+  capacity         Int?
+  transportType    TourTransport?
+  priceMode        ServicePriceMode?
+  menu             String?
+  note             String?
+  isMealService    Boolean   @default(false)
   isActive         Boolean   @default(true)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
   supplier         Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  prices           SupplierServicePrice[]
 
   @@index([supplierId])
+}
+
+model SupplierServicePrice {
+  id               String                 @id @default(cuid())
+  serviceVariantId String
+  unitPrice        Decimal                @db.Decimal(12, 2)
+  fromDate         DateTime
+  toDate           DateTime
+  note             String?
+  createdByName    String
+  createdAt        DateTime               @default(now())
+
+  serviceVariant   SupplierServiceVariant @relation(fields: [serviceVariantId], references: [id], onDelete: Cascade)
+
+  @@index([serviceVariantId])
+}
+
+model Service {
+  id                   String           @id @default(cuid())
+  code                 String           @unique
+  name                 String
+  category             ServiceCategory
+  unit                 String
+  priceMode            ServicePriceMode
+  priceSetup           ServicePriceSetup
+  status               ServiceStatus    @default(ACTIVE)
+  description          String?
+  supplierName         String?
+  contactInfo          String?
+  province             String?
+  formulaCount         FormulaOption?
+  formulaCountDefault  String?
+  formulaQuantity      FormulaOption?
+  formulaQuantityDefault String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  prices               ServicePrice[]
+}
+
+model ServicePrice {
+  id             String    @id @default(cuid())
+  serviceId      String
+  unitPrice      Decimal   @db.Decimal(12, 2)
+  note           String?
+  effectiveDate  DateTime
+  endDate        DateTime
+  createdByName  String
+  createdAt      DateTime  @default(now())
+
+  service        Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId])
+}
+
+model TourGuide {
+  id               String   @id @default(cuid())
+  code             String   @unique
+  fullName         String
+  gender           Gender
+  dateOfBirth      DateTime
+  phone            String
+  email            String?
+  address          String?
+  operatingArea    String?
+  guideCardNumber  String
+  issueDate        DateTime?
+  expiryDate       DateTime?
+  issuePlace       String?
+  note             String?
+  languagesJson    Json
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model BlogPost {

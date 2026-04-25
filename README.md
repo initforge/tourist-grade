@@ -1,52 +1,46 @@
 # Travela
 
-Travela hiện được chuẩn hóa theo hướng `localhost-first`.
-Môi trường chuẩn để chạy và verify repo là `docker compose` trên máy local, không phải deploy public URL.
+Travela is now being moved from a frontend-only mock setup to a real local stack:
 
-Điểm bắt đầu nên đọc:
+- `frontend/`: React 19 + Vite
+- `backend/`: Express + Prisma + PostgreSQL
+- `docker-compose.yml`: local `frontend + backend + postgres`
 
-1. [docs/00-INDEX.md](docs/00-INDEX.md)
-2. [docs/07-INFRA-DOCKER-ENV.md](docs/07-INFRA-DOCKER-ENV.md)
-3. [docs/10-SETUP-TO-PRODUCTION.md](docs/10-SETUP-TO-PRODUCTION.md)
-4. [docs/04-BACKEND-ARCHITECTURE.md](docs/04-BACKEND-ARCHITECTURE.md)
-5. [docs/05-API-CONTRACT.md](docs/05-API-CONTRACT.md)
-6. [docs/06-DATABASE-DESIGN.md](docs/06-DATABASE-DESIGN.md)
+## Current local target
 
-## Repo Layout
-
-- `frontend/`: React 19 + Vite UI.
-- `backend/`: Express + Prisma scaffold cho API.
-- `docs/`: bộ tài liệu nguồn đọc chính.
-- `docker-compose.yml`: stack local chuẩn cho `frontend + api + postgres`.
-
-## Cách chạy chuẩn
+The intended local flow is:
 
 ```bash
 docker compose up --build
 ```
 
-Sau khi lên stack:
+Services:
 
 - Frontend: `http://localhost:8080`
-- API: `http://localhost:4000/api/v1`
+- Backend API: `http://localhost:4000/api/v1`
+- Health check: `http://localhost:4000/health`
 - Postgres: `localhost:5432`
 
-## Chạy tách service khi cần
+## Local credentials
 
-Frontend:
+Seed accounts created by `backend/prisma/seed.ts`:
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+- `admin@travela.vn / 123456aA@`
+- `manager@travela.vn / 123456aA@`
+- `coordinator@travela.vn / 123456aA@`
+- `sales@travela.vn / 123456aA@`
+- `customer@travela.vn / 123456aA@`
 
-Backend:
+## PayOS local notes
 
-```bash
-cd backend
-npm install
-npm run dev
-```
+- Backend reads PayOS keys from `backend/.env`
+- Webhook URL must be public even when API runs on localhost
+- Use a Cloudflare Tunnel and set `PAYOS_WEBHOOK_URL` to:
+  `https://<your-tunnel>/api/v1/payments/payos/webhook`
 
-Frontend mặc định đọc `VITE_API_BASE_URL=http://localhost:4000/api/v1`.
+See:
+
+1. [docs/07-INFRA-DOCKER-ENV.md](docs/07-INFRA-DOCKER-ENV.md)
+2. [docs/14-CLOUDFLARE-PAGES.md](docs/14-CLOUDFLARE-PAGES.md)
+3. [docs/04-BACKEND-ARCHITECTURE.md](docs/04-BACKEND-ARCHITECTURE.md)
+4. [docs/05-API-CONTRACT.md](docs/05-API-CONTRACT.md)

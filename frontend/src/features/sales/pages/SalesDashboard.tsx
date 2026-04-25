@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Button, Checkbox, Modal } from 'antd';
-import { mockBookings } from '@entities/booking/data/bookings';
 import { bookingNoteLabel, buildDailyRevenueRows, passengerCountLabel } from '@shared/lib/bookingReports';
 import DailyRevenueLineChart from '@shared/ui/DailyRevenueLineChart';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
 
 type SalesReportType = 'booking_summary' | 'top_programs' | 'refund_followup';
 
@@ -109,20 +109,21 @@ function TaskPanel({
 }
 
 export default function SalesDashboard() {
+  const bookings = useAppDataStore((state) => state.bookings);
   const [dateFrom, setDateFrom] = useState('2026-03-01');
   const [dateTo, setDateTo] = useState('2026-04-30');
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportTypes, setExportTypes] = useState<SalesReportType[]>([]);
 
   const bookingsInRange = useMemo(
-    () => mockBookings.filter((booking) => inRange(booking.createdAt, dateFrom, dateTo)),
-    [dateFrom, dateTo],
+    () => bookings.filter((booking) => inRange(booking.createdAt, dateFrom, dateTo)),
+    [bookings, dateFrom, dateTo],
   );
   const dailyRevenue = useMemo(() => buildDailyRevenueRows(bookingsInRange), [bookingsInRange]);
 
   const pendingBookingTasks = useMemo(
     () =>
-      mockBookings
+      bookings
         .filter((booking) => booking.status === 'pending')
         .sort((left, right) => left.tourDate.localeCompare(right.tourDate))
         .slice(0, 5)
@@ -136,12 +137,12 @@ export default function SalesDashboard() {
           badge: 'Xác nhận đơn đặt',
           badgeClassName: 'bg-amber-100 text-amber-700',
         })),
-    [],
+    [bookings],
   );
 
   const pendingCancelTasks = useMemo(
     () =>
-      mockBookings
+      bookings
         .filter((booking) => booking.status === 'pending_cancel')
         .sort((left, right) => (left.cancelledAt ?? left.createdAt).localeCompare(right.cancelledAt ?? right.createdAt))
         .slice(0, 5)
@@ -155,12 +156,12 @@ export default function SalesDashboard() {
           badge: 'Xác nhận hủy',
           badgeClassName: 'bg-orange-100 text-orange-700',
         })),
-    [],
+    [bookings],
   );
 
   const refundTasks = useMemo(
     () =>
-      mockBookings
+      bookings
         .filter((booking) => booking.status === 'cancelled' && booking.refundStatus === 'pending')
         .sort((left, right) => (left.cancelledConfirmedAt ?? left.cancelledAt ?? left.createdAt).localeCompare(right.cancelledConfirmedAt ?? right.cancelledAt ?? right.createdAt))
         .slice(0, 5)
@@ -174,7 +175,7 @@ export default function SalesDashboard() {
           badge: 'Hoàn tiền',
           badgeClassName: 'bg-red-100 text-red-700',
         })),
-    [],
+    [bookings],
   );
 
   const topPrograms = useMemo(() => {

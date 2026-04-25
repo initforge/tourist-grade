@@ -1,7 +1,8 @@
-﻿import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Pagination } from 'antd';
-import { loadBookings, saveBookings, type Booking } from '@entities/booking/data/bookings';
+import type { Booking } from '@entities/booking/data/bookings';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -124,12 +125,7 @@ export default function BookingManagement() {
   const [searchInput,      setSearchInput]       = useState('');
   const [currentPage,     setCurrentPage]       = useState(1);
 
-  // Live bookings state (mutable for demo)
-  const [bookings, setBookings] = useState<Booking[]>(() => loadBookings());
-
-  useEffect(() => {
-    saveBookings(bookings);
-  }, [bookings]);
+  const bookings = useAppDataStore((state) => state.bookings);
 
   // ── Tab change ────────────────────────────────────────────────────────────
   const handleTabChange = (tab: BookingTab) => {

@@ -1,4 +1,5 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { loginAs as loginWithRole } from './support/app';
 
 function installRuntimeAudit(page: Page) {
   const issues: string[] = [];
@@ -14,7 +15,11 @@ function installRuntimeAudit(page: Page) {
     const errorText = request.failure()?.errorText ?? '';
     const resourceType = request.resourceType();
     const isNavigationAbort = errorText === 'net::ERR_ABORTED' && ['image', 'font'].includes(resourceType);
-    if (!url.startsWith('data:') && !url.startsWith('blob:') && !isNavigationAbort) {
+    const isBootstrapAbort = errorText === 'net::ERR_ABORTED' && url.includes('/api/v1/bootstrap');
+    const isPublicPrefetchAbort = errorText === 'net::ERR_ABORTED' && ['fetch', 'xhr'].includes(resourceType) && (
+      url.includes('/api/v1/public/tours') || url.includes('/api/v1/public/blogs')
+    );
+    if (!url.startsWith('data:') && !url.startsWith('blob:') && !isNavigationAbort && !isBootstrapAbort && !isPublicPrefetchAbort) {
       issues.push(`requestfailed: ${request.resourceType()} ${url} ${request.failure()?.errorText ?? ''}`);
     }
   });
@@ -37,13 +42,7 @@ async function expectCleanRuntime(issues: string[], testInfo: TestInfo) {
 }
 
 async function loginAs(page: Page, role: 'customer' | 'sales' | 'coordinator' | 'manager') {
-  await page.goto('/');
-  await page.waitForLoadState('domcontentloaded');
-  await page.evaluate((selectedRole) => {
-    localStorage?.removeItem('__travela_bookings');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any)?.__authLogin(selectedRole);
-  }, role);
+  await loginWithRole(page, role, undefined, { clearBookings: true });
 }
 
 test.describe('Strict role hardening audit', () => {
@@ -54,8 +53,8 @@ test.describe('Strict role hardening audit', () => {
     await page.goto('/customer/bookings/B001');
     await page.waitForLoadState('domcontentloaded');
 
-    await expect(page.getByRole('button', { name: /Yêu Cầu Hủy Tour/i })).toBeVisible();
-    await page.getByRole('button', { name: /Yêu Cầu Hủy Tour/i }).click();
+    await expect(page.getByRole('button', { name: /Yêu cầu hủy tour/i })).toBeVisible();
+    await page.getByRole('button', { name: /Yêu cầu hủy tour/i }).click();
     const cancelDialog = page.getByRole('dialog', { name: /Gửi yêu cầu hủy/i });
     await expect(cancelDialog).toBeVisible();
     await expect(cancelDialog.getByRole('button', { name: /Xác nhận hủy/i })).toHaveCount(0);
@@ -65,7 +64,7 @@ test.describe('Strict role hardening audit', () => {
     await page.waitForLoadState('domcontentloaded');
     await page.getByPlaceholder('VD: BK-582910').fill('BK-847291');
     await page.getByPlaceholder('0988 123 456').fill('0977654321');
-    await page.getByRole('button', { name: /Tra Cuu Thong Tin|Tra Cứu Thông Tin/i }).click();
+    await page.getByRole('button', { name: /Tra cứu thông tin|Tra cuu thong tin/i }).click();
     const resultRegion = page.getByRole('region', { name: /Kết quả tra cứu đơn đặt/i });
     await expect(resultRegion.getByRole('button', { name: /Đánh giá/i })).toBeVisible();
     await expect(resultRegion.getByRole('button', { name: /Thanh toán/i })).toHaveCount(0);

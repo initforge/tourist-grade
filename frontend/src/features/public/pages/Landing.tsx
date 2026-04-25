@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 
 const promoCards = [
   ['Hội An Tuyệt Tác Di Sản', '3 Ngày 2 Đêm', '5.500.000 VND', '4.500.000 VND', '-25%'],

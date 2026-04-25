@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Button, Checkbox, Modal } from 'antd';
-import { mockBookings } from '@entities/booking/data/bookings';
-import { mockSuppliers, mockTourInstances, mockTourPrograms } from '@entities/tour-program/data/tourProgram';
 import { buildDailyRevenueRows } from '@shared/lib/bookingReports';
 import DailyRevenueLineChart from '@shared/ui/DailyRevenueLineChart';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
 
 type CoordinatorReportType = 'operations_summary' | 'tour_volume' | 'supplier_snapshot';
 
@@ -80,19 +79,23 @@ function TaskCard({ group }: { group: CoordinatorTaskGroup }) {
 }
 
 export default function CoordinatorDashboard() {
+  const bookings = useAppDataStore((state) => state.bookings);
+  const suppliers = useAppDataStore((state) => state.suppliers);
+  const tourInstances = useAppDataStore((state) => state.tourInstances);
+  const tourPrograms = useAppDataStore((state) => state.tourPrograms);
   const [dateFrom, setDateFrom] = useState('2026-03-01');
   const [dateTo, setDateTo] = useState('2026-04-30');
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportTypes, setExportTypes] = useState<CoordinatorReportType[]>([]);
 
   const filteredBookings = useMemo(
-    () => mockBookings.filter((booking) => inRange(booking.createdAt, dateFrom, dateTo)),
-    [dateFrom, dateTo],
+    () => bookings.filter((booking) => inRange(booking.createdAt, dateFrom, dateTo)),
+    [bookings, dateFrom, dateTo],
   );
   const dailyRevenue = useMemo(() => buildDailyRevenueRows(filteredBookings), [filteredBookings]);
 
   const taskGroups = useMemo<CoordinatorTaskGroup[]>(() => {
-    const receiveDispatch = mockTourInstances
+    const receiveDispatch = tourInstances
       .filter((tour) => tour.status === 'cho_nhan_dieu_hanh')
       .sort((left, right) => left.departureDate.localeCompare(right.departureDate))
       .slice(0, 3)
@@ -103,7 +106,7 @@ export default function CoordinatorDashboard() {
         action: 'Nhận điều hành',
       }));
 
-    const estimateTasks = mockTourInstances
+    const estimateTasks = tourInstances
       .filter((tour) => tour.status === 'cho_du_toan')
       .sort((left, right) => left.departureDate.localeCompare(right.departureDate))
       .slice(0, 3)
@@ -114,7 +117,7 @@ export default function CoordinatorDashboard() {
         action: 'Lập dự toán',
       }));
 
-    const guideDispatch = mockTourInstances
+    const guideDispatch = tourInstances
       .filter((tour) => tour.status === 'san_sang_trien_khai' || (tour.status === 'dang_trien_khai' && !tour.assignedGuide))
       .sort((left, right) => left.departureDate.localeCompare(right.departureDate))
       .slice(0, 3)
@@ -125,7 +128,7 @@ export default function CoordinatorDashboard() {
         action: 'Phân công HDV',
       }));
 
-    const settlementTasks = mockTourInstances
+    const settlementTasks = tourInstances
       .filter((tour) => tour.status === 'cho_quyet_toan')
       .sort((left, right) => left.departureDate.localeCompare(right.departureDate))
       .slice(0, 3)
@@ -136,7 +139,7 @@ export default function CoordinatorDashboard() {
         action: 'Làm quyết toán',
       }));
 
-    const saleEditTasks = mockTourInstances
+    const saleEditTasks = tourInstances
       .filter((tour) => tour.status === 'yeu_cau_chinh_sua' || tour.status === 'cho_duyet_ban')
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
       .slice(0, 3)
@@ -147,7 +150,7 @@ export default function CoordinatorDashboard() {
         action: tour.status === 'cho_duyet_ban' ? 'Cảnh báo cần tạo tour' : 'Chỉnh sửa yêu cầu bán',
       }));
 
-    const draftPrograms = mockTourPrograms
+    const draftPrograms = tourPrograms
       .filter((program) => program.status === 'draft')
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
       .slice(0, 3)
@@ -166,19 +169,19 @@ export default function CoordinatorDashboard() {
       { label: 'Cảnh báo cần tạo tour và chỉnh sửa yêu cầu bán', tone: 'bg-red-500', items: saleEditTasks },
       { label: 'Hoàn thiện bản nháp chương trình tour', tone: 'bg-stone-500', items: draftPrograms },
     ];
-  }, []);
+  }, [tourInstances, tourPrograms]);
 
   const reportStats = useMemo(
     () => [
       {
         label: 'Tour đang triển khai',
-        value: mockTourInstances.filter((tour) => tour.status === 'dang_trien_khai').length.toString(),
+        value: tourInstances.filter((tour) => tour.status === 'dang_trien_khai').length.toString(),
         icon: 'tour',
         color: 'bg-emerald-50 text-emerald-700',
       },
       {
         label: 'Tour chờ điều phối',
-        value: mockTourInstances.filter((tour) => tour.status === 'cho_nhan_dieu_hanh' || tour.status === 'cho_du_toan').length.toString(),
+        value: tourInstances.filter((tour) => tour.status === 'cho_nhan_dieu_hanh' || tour.status === 'cho_du_toan').length.toString(),
         icon: 'checklist',
         color: 'bg-blue-50 text-blue-700',
       },
@@ -190,12 +193,12 @@ export default function CoordinatorDashboard() {
       },
       {
         label: 'NCC hợp tác',
-        value: mockSuppliers.length.toString(),
+        value: suppliers.length.toString(),
         icon: 'handshake',
         color: 'bg-stone-100 text-stone-700',
       },
     ],
-    [filteredBookings],
+    [filteredBookings, suppliers.length, tourInstances],
   );
 
   const topToursByVolume = useMemo(() => {
@@ -244,7 +247,7 @@ export default function CoordinatorDashboard() {
           'BÁO CÁO NHÀ CUNG CẤP',
           [
             ['Tên NCC', 'Loại', 'Số biến thể dịch vụ'],
-            ...mockSuppliers.map((supplier) => [supplier.name, supplier.type, String(supplier.serviceVariants.length)]),
+            ...suppliers.map((supplier) => [supplier.name, supplier.category, String(supplier.services.length + supplier.mealServices.length)]),
           ],
         );
       }

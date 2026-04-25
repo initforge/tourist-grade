@@ -31,13 +31,13 @@ export function canSendVoucherApproval(startDate?: string, today = voucherTodayI
 }
 
 export function hasSalesDraftWarning(startDate?: string, today = voucherTodayIso()) {
-  const remainingDays = voucherDaysUntil(startDate, today);
-  return remainingDays >= 7 && remainingDays <= 8;
+  const days = voucherDaysUntil(startDate, today);
+  return days >= 7 && days <= 8;
 }
 
 export function hasManagerApprovalWarning(startDate?: string, today = voucherTodayIso()) {
-  const remainingDays = voucherDaysUntil(startDate, today);
-  return remainingDays >= 1 && remainingDays <= 2;
+  const days = voucherDaysUntil(startDate, today);
+  return days >= 1 && days <= 2;
 }
 
 export function approvedVoucherStatus(startDate: string, today = voucherTodayIso()): VoucherStatus {
@@ -51,6 +51,10 @@ export function normalizeVoucherLifecycle(voucher: Voucher, today = voucherToday
       status: 'rejected',
       rejectionReason: voucher.rejectionReason ?? VOUCHER_OVERDUE_REJECTION_REASON,
     };
+  }
+
+  if (voucher.status === 'active' && voucher.startDate > today) {
+    return { ...voucher, status: 'upcoming' };
   }
 
   return voucher;

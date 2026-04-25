@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 
 export default function AboutUs() {
   return (
@@ -11,14 +11,14 @@ export default function AboutUs() {
         />
         <div className="absolute inset-0 bg-black/45" />
         <div className="public-container relative z-10 text-center text-white">
-          <span className="text-[10px] uppercase tracking-[0.3em] font-medium mb-4 block text-[var(--color-secondary)]">Triết L? Của Chúng Tôi</span>
+          <span className="text-[10px] uppercase tracking-[0.3em] font-medium mb-4 block text-[var(--color-secondary)]">Triết Lý Của Chúng Tôi</span>
           <h1 className="font-serif text-4xl md:text-6xl mb-6 tracking-tight">
             Vẻ Đẹp Đích Thực
             <br />
             Của Đông Dương
           </h1>
           <p className="text-base md:text-lg font-light opacity-90 leading-relaxed max-w-2xl mx-auto">
-            Tại Travela, chúng tôi không chỉ tạo ra những chuyến đi, mà kiến tạo những trải nghiệm tinh tế, rõ ràng và đậm dấu ấn có nhân?.
+            Tại Travela, chúng tôi không chỉ tạo ra những chuyến đi, mà kiến tạo những trải nghiệm tinh tế, rõ ràng và đậm dấu ấn cá nhân.
           </p>
         </div>
       </section>
@@ -34,10 +34,10 @@ export default function AboutUs() {
               </h2>
               <div className="w-12 h-[1px] bg-[var(--color-secondary)]" />
               <p className="text-[var(--color-primary)]/70 leading-relaxed text-sm">
-                Được thành lập từ năm 2010 bởi những tìm hồn đam mê xê dịch và am hiểu văn hóa sâu sắc, Travela ra đời với sứ mệnh định nghĩa lại chuẩn mực du lịch cao cấp tại Việt Nam?.
+                Được thành lập từ năm 2010 bởi những tâm hồn đam mê xê dịch và am hiểu văn hóa sâu sắc, Travela ra đời với sứ mệnh định nghĩa lại chuẩn mực du lịch cao cấp tại Việt Nam.
               </p>
               <p className="text-[var(--color-primary)]/70 leading-relaxed text-sm">
-                Chúng tôi tin rằng sự sang trọng không chỉ nằm ở khách sạn 5 sao hay dịch vụ xa xỉ, mà còn nằm ở cảm xác chọn thực, sự tỉ mỉ trong từng chi tiết và khả năng chạm đến giá trị nguyên bản của mỗi vùng đất?.
+                Chúng tôi tin rằng sự sang trọng không chỉ nằm ở khách sạn 5 sao hay dịch vụ xa xỉ, mà còn nằm ở cảm xúc chân thực, sự tỉ mỉ trong từng chi tiết và khả năng chạm đến giá trị nguyên bản của mỗi vùng đất.
               </p>
             </div>
             <div className="relative">
@@ -67,14 +67,14 @@ export default function AboutUs() {
               <span className="material-symbols-outlined text-4xl text-[var(--color-secondary)] mb-6">workspace_premium</span>
               <h3 className="font-serif text-xl text-[var(--color-primary)] mb-4">Chuyên Gia Bản Địa</h3>
               <p className="text-sm text-[var(--color-primary)]/60 leading-relaxed">
-                Đội ngũ chuyên gia không chỉ là hướng dẫn viên, mà còn là những người đồng hành truyền cảm hứng?.
+                Đội ngũ chuyên gia không chỉ là hướng dẫn viên, mà còn là những người đồng hành truyền cảm hứng.
               </p>
             </div>
             <div className="bg-white p-8 md:p-10 border border-[#D0C5AF]/30 shadow-sm relative overflow-hidden group hover:-translate-y-2 transition-transform duration-300">
               <span className="material-symbols-outlined text-4xl text-[var(--color-secondary)] mb-6">nature_people</span>
-              <h3 className="font-serif text-xl text-[var(--color-primary)] mb-4">Phút Triển Bền Vững</h3>
+              <h3 className="font-serif text-xl text-[var(--color-primary)] mb-4">Phát Triển Bền Vững</h3>
               <p className="text-sm text-[var(--color-primary)]/60 leading-relaxed">
-                Cam kết bảo tồn văn hóa di sản và thiên nhiên, mang lại tác động tích cực và lâu dài cho cộng đồng địa phương?.
+                Cam kết bảo tồn văn hóa di sản và thiên nhiên, mang lại tác động tích cực và lâu dài cho cộng đồng địa phương.
               </p>
             </div>
           </div>

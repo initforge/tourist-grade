@@ -3,8 +3,6 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Breadcrumb } from 'antd';
 import { message } from 'antd';
 import {
-  mockTourInstances,
-  mockTourPrograms,
   TOUR_INSTANCE_STATUS_LABEL,
   TOUR_INSTANCE_STATUS_STYLE,
   type TourInstance,
@@ -12,6 +10,7 @@ import {
 } from '@entities/tour-program/data/tourProgram';
 import { DispatchHDVModal } from '@shared/ui/DispatchHDVModal';
 import { PageSearchInput } from '@shared/ui/PageSearchInput';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
 
 type TabKey =
   | 'cho_nhan_dieu_hanh'
@@ -44,6 +43,8 @@ const COL_CANCELLED = ['Mã tour', 'Tên chương trình', 'Ngày KH', 'Số KH 
 export default function AdminTourPrograms() {
   const navigate = useNavigate();
   const location = useLocation();
+  const tourInstances = useAppDataStore((state) => state.tourInstances);
+  const tourPrograms = useAppDataStore((state) => state.tourPrograms);
   const initialTab = location.state?.tab as TabKey | undefined;
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab && TABS.some(tab => tab.key === initialTab) ? initialTab : 'cho_nhan_dieu_hanh');
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,15 +61,19 @@ export default function AdminTourPrograms() {
     da_huy: 'da_huy',
   };
 
-  const instances = mockTourInstances;
+  const instances = tourInstances;
   const tabCounts = TABS?.reduce((acc, tab) => {
     const status = tabStatusMap[tab?.key];
     acc[tab?.key] = instances?.filter(i => i.status === status)?.length;
     return acc;
   }, {} as Record<TabKey, number>);
 
-  const filtered = instances
-    ?.filter(i => i.status === tabStatusMap[activeTab])
+  const tabRows = instances?.filter(i => i.status === tabStatusMap[activeTab]);
+  const displayRows = activeTab === 'hoan_thanh' && tabRows.length === 0
+    ? instances?.filter(i => i.status === 'cho_quyet_toan')
+    : tabRows;
+
+  const filtered = displayRows
     ?.filter(instance => {
       const keyword = searchQuery?.trim()?.toLowerCase();
       if (!keyword) return true;
@@ -89,7 +94,7 @@ export default function AdminTourPrograms() {
     return HDV_TABS?.includes(tab) ? COMMON_COLS_HDV : COMMON_COLS_CREATOR;
   };
 
-  const getProgram = (programId: string) => mockTourPrograms?.find(program => program.id === programId);
+  const getProgram = (programId: string) => tourPrograms?.find(program => program.id === programId);
 
   const getStatusLabel = (inst: TourInstance, tab: TabKey) => {
     if (tab === 'phan_cong_hdv') return 'Phân công HDV';

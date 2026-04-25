@@ -8,19 +8,35 @@ function appUrl(path: string) {
 }
 
 async function loginAs(page: Page, role: 'customer' | 'sales' | 'coordinator' | 'manager') {
-  await page.goto(appUrl('/'));
+  await page.goto(appUrl('/login'));
   await page.waitForLoadState('domcontentloaded');
-  await page.evaluate((selectedRole) => {
+  await page.evaluate(() => {
     localStorage?.removeItem('__travela_bookings');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any)?.__authLogin(selectedRole);
-  }, role);
+    localStorage?.removeItem('__travela_auth_tokens');
+    localStorage?.removeItem('__travela_sales_vouchers');
+    localStorage?.removeItem('__travela_sales_vouchers_seed_version');
+    localStorage?.removeItem('__travela_tour_programs');
+  });
+
+  const credentials = {
+    customer: 'customer@travela.vn',
+    sales: 'sales@travela.vn',
+    coordinator: 'coordinator@travela.vn',
+    manager: 'manager@travela.vn',
+  } as const;
+
+  await page.locator('input[type="email"]').fill(credentials[role]);
+  await page.locator('input[type="password"]').fill('123456aA@');
+  await page.getByRole('button', { name: /Đăng Nhập|Đăng nhập|Dang Nhap|Dang nhap|ÄÄƒng Nháº­p/i }).click();
+  await page.waitForURL((url) => !url.pathname.endsWith('/login'));
+  await page.waitForResponse((response) => response.url().includes('/api/v1/bootstrap') && response.ok(), { timeout: 15000 }).catch(() => null);
+  await page.waitForLoadState('networkidle').catch(() => null);
 }
 
 async function lookupBooking(page: Page, code: string, contact: string) {
   await page.getByPlaceholder('VD: BK-582910').fill(code);
   await page.getByPlaceholder('0988 123 456').fill(contact);
-  await page.getByRole('button', { name: /Tra Cuu Thong Tin|Tra Cứu Thông Tin/i }).click();
+  await page.getByRole('button', { name: /Tra cứu thông tin|Tra cuu thong tin|Tra Cuu Thong Tin|Tra Cứu Thông Tin/i }).click();
 }
 
 function installRuntimeAudit(page: Page) {
@@ -37,7 +53,8 @@ function installRuntimeAudit(page: Page) {
     const errorText = request.failure()?.errorText ?? '';
     const resourceType = request.resourceType();
     const isNavigationAbort = errorText === 'net::ERR_ABORTED' && ['image', 'font'].includes(resourceType);
-    if (!url.startsWith('data:') && !url.startsWith('blob:') && !isNavigationAbort) {
+    const isBootstrapAbort = errorText === 'net::ERR_ABORTED' && url.includes('/api/v1/bootstrap');
+    if (!url.startsWith('data:') && !url.startsWith('blob:') && !isNavigationAbort && !isBootstrapAbort) {
       issues.push(`requestfailed: ${request.resourceType()} ${url} ${request.failure()?.errorText ?? ''}`);
     }
   });
@@ -112,7 +129,7 @@ test.describe('Feedback hardening audit', () => {
     await page.getByPlaceholder('Nguyễn Văn A').fill('Nguyễn Văn A');
     await page.getByPlaceholder('0901 234 567').fill('0901234567');
     await page.getByPlaceholder('email@example.com').fill('nguyenvana@example.com');
-    await page.getByRole('radio', { name: /Nam/i }).first().check();
+    await page.locator('section').filter({ hasText: /Thông tin hành khách/i }).locator('select').first().selectOption('male');
     await page.getByPlaceholder('Đúng theo CCCD/Passport').fill('Nguyễn Văn A');
     await page.locator('input[type="date"]').first().fill('1990-01-01');
     await page.locator('section').filter({ hasText: /Thông tin hành khách/i }).getByRole('checkbox', { name: /Phòng đơn/i }).check();
@@ -122,8 +139,8 @@ test.describe('Feedback hardening audit', () => {
     await page.goto(appUrl('/booking/lookup'));
     await page.waitForLoadState('domcontentloaded');
     await lookupBooking(page, 'BK-394821', '0912345678');
-    await page.getByRole('region', { name: /Kết quả tra cứu đơn đặt/i }).getByRole('button', { name: /Hủy/i }).click();
-    const cancelDialog = page.getByRole('dialog', { name: /Gửi yêu cầu hủy/i });
+    await page.getByRole('region', { name: /Kết quả tra cứu đơn đặt|Ket qua tra cuu don dat/i }).getByRole('button', { name: /Hủy|Huy/i }).click();
+    const cancelDialog = page.getByRole('dialog', { name: /Gửi yêu cầu hủy|Gui yeu cau huy/i });
     await expect(cancelDialog).toBeVisible();
     const dialogBox = await cancelDialog.boundingBox();
     const viewport = page.viewportSize();

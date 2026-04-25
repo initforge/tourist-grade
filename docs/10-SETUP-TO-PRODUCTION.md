@@ -14,13 +14,13 @@ Chốt một cách chạy repo thống nhất để:
 ## 10.2 Môi trường chuẩn
 
 - Frontend: `http://localhost:8080`
-- API: `http://localhost:4000/api/v1`
+- Backend API: `http://localhost:4000/api/v1`
 - Postgres: `localhost:5432`
 
 Stack chuẩn:
 
 - `frontend`
-- `api`
+- `backend`
 - `db`
 
 ## 10.3 Điều kiện máy dev
@@ -50,7 +50,7 @@ docker compose up -d --build
 2. Kiểm tra Docker Desktop đã chạy.
 3. Từ root repo chạy `docker compose up --build`.
 4. Mở `http://localhost:8080`.
-5. Nếu cần debug API riêng, kiểm tra container `api` và logs.
+5. Nếu cần debug backend riêng, kiểm tra container `backend` và logs.
 
 ## 10.6 Env mặc định
 
@@ -81,7 +81,7 @@ docker compose logs -f
 ### Restart một service
 
 ```bash
-docker compose restart api
+docker compose restart backend
 docker compose restart frontend
 ```
 
@@ -120,7 +120,7 @@ npm install
 npm run dev
 ```
 
-Khi chạy split mode, vẫn giữ giả định API local là `http://localhost:4000/api/v1`.
+Khi chạy split mode, vẫn giữ giả định backend local là `http://localhost:4000/api/v1`.
 
 ## 10.9 Smoke test local tối thiểu
 

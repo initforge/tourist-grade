@@ -1,56 +1,60 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { loginAs } from './support/app';
 
-async function loginAsAdmin(page: any) {
-  await page?.goto('/');
-  await page?.waitForLoadState('domcontentloaded');
-  await page?.evaluate(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any)?.__authLogin('admin');
-  });
-  await page?.goto('/admin/users');
-  await page?.waitForLoadState('domcontentloaded');
+async function loginAsAdmin(page: Page) {
+  await loginAs(page, 'admin', '/admin/users');
 }
 
-test?.describe('Admin Users Verification', () => {
+test.describe('Admin Users Verification', () => {
   test('Row 26: admin users are split into staff and customer tabs with the correct actions', async ({ page }) => {
     await loginAsAdmin(page);
 
-    await expect(page?.getByRole('heading', { name: /Qu.*n l.* Ng/i }))?.toBeVisible();
-    await expect(page?.getByRole('button', { name: 'Nhân viên', exact: true }))?.toBeVisible();
-    await expect(page?.getByRole('button', { name: 'Khách hàng', exact: true }))?.toBeVisible();
-    await expect(page?.getByRole('button', { name: /Thêm tài khoản/i }))?.toBeVisible();
-    await expect(page?.getByRole('columnheader', { name: /Vai trò/i }))?.toBeVisible();
-    await expect(page?.getByText('Quản Trị Viên (Admin)'))?.toBeVisible();
-    await expect(page?.getByText('Khách Hàng VIP'))?.toHaveCount(0);
+    await expect(page.getByRole('heading', { name: /Qu.*n l.* Ng/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Nh.*n vi.*n$/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Kh.*ch h.*ng$/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Th.*m t.*i kho.*n/i })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: /Vai tr./i })).toBeVisible();
 
-    await page?.getByRole('button', { name: /Thêm tài khoản/i })?.click();
-    const drawer = page?.getByRole('dialog', { name: /Thêm Tài Khoản Mới/i });
-    await expect(drawer)?.toBeVisible();
-    await expect(drawer?.getByText('Khách hàng'))?.toHaveCount(0);
-    await drawer?.getByRole('button', { name: /Hủy bỏ/i })?.click();
+    const adminRow = page.getByRole('row', { name: /Qu.*n Tr.* Vi.*n/i });
+    await expect(adminRow).toBeVisible();
+    await expect(adminRow.getByText(/^Admin$/)).toBeVisible();
+    await expect(page.getByText(/Kh.*ch H.*ng Demo/i)).toHaveCount(0);
 
-    await page?.getByRole('button', { name: 'Khách hàng', exact: true })?.click();
-    await expect(page?.getByRole('button', { name: /Thêm tài khoản/i }))?.toHaveCount(0);
-    await expect(page?.getByRole('columnheader', { name: /Lịch sử đơn đặt/i }))?.toBeVisible();
-    await expect(page?.getByRole('columnheader', { name: /Tổng số tiền đã chi/i }))?.toBeVisible();
-    await expect(page?.getByText('Khách Hàng VIP'))?.toBeVisible();
-    await expect(page?.getByText(/đơn thành công/i))?.toBeVisible();
-    await expect(page?.getByLabel('Chỉnh sửa Khách Hàng VIP'))?.toHaveCount(0);
+    await page.getByRole('button', { name: /Th.*m t.*i kho.*n/i }).click();
+    const drawer = page.getByRole('dialog', { name: /Th.*m T.*i Kho.*n M.*i/i });
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByText(/Kh.*ch h.*ng/i)).toHaveCount(0);
+    await drawer.getByRole('button', { name: /H.y b./i }).click();
 
-    const customerRow = page?.getByRole('row', { name: /Khách Hàng VIP/i });
-    await customerRow?.getByLabel('Xem chi tiết Khách Hàng VIP')?.click();
-    const historyDialog = page?.getByRole('dialog', { name: /Chi tiết khách hàng/i });
-    await expect(historyDialog)?.toBeVisible();
-    await expect(historyDialog?.getByText('Số đơn thành công'))?.toBeVisible();
-    await expect(historyDialog?.getByText('Số đơn hủy'))?.toBeVisible();
-    await expect(historyDialog?.getByText('Tổng số tiền đã chi'))?.toBeVisible();
-    await expect(historyDialog?.getByText('BK-847291'))?.toBeVisible();
-    await historyDialog?.getByRole('button')?.first()?.click();
+    await page.getByRole('button', { name: /^Kh.*ch h.*ng$/i }).click();
+    await expect(page.getByRole('button', { name: /Th.*m t.*i kho.*n/i })).toHaveCount(0);
+    await expect(page.getByRole('columnheader', { name: /L.ch s. .*n .*t/i })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: /T.ng s. ti.n .* chi/i })).toBeVisible();
+    await expect(page.getByText('customer@travela.vn')).toBeVisible();
+    await expect(page.getByText(/.n th.nh c.ng/i)).toBeVisible();
+    await expect(page.getByLabel(/Ch.nh s.a/i)).toHaveCount(0);
 
-    await customerRow?.getByLabel('Khóa tài khoản Khách Hàng VIP')?.click();
-    const confirmDialog = page?.getByRole('dialog', { name: /Xác nhận khóa tài khoản/i });
-    await expect(confirmDialog)?.toBeVisible();
-    await confirmDialog?.getByRole('button', { name: /Khóa tài khoản/i })?.click();
-    await expect(customerRow?.getByText('Đã khóa'))?.toBeVisible();
+    const customerRow = page.getByRole('row', { name: /customer@travela.vn/i });
+    await customerRow.getByLabel(/Xem chi ti.t/i).click();
+    const historyDialog = page.getByRole('dialog', { name: /Chi ti.t kh.*ch h.*ng/i });
+    await expect(historyDialog).toBeVisible();
+    await expect(historyDialog.getByText(/S. .*n th.nh c.ng/i)).toBeVisible();
+    await expect(historyDialog.getByText(/S. .*n h.y/i)).toBeVisible();
+    await expect(historyDialog.getByText(/T.ng s. ti.n .* chi/i)).toBeVisible();
+    await expect(historyDialog.getByText('BK-847291')).toBeVisible();
+    await historyDialog.getByRole('button').first().click();
+
+    const toggleButton = customerRow.getByRole('button').last();
+    await toggleButton.click();
+    let confirmDialog = page.locator('.ant-modal').last();
+    await expect(confirmDialog).toBeVisible();
+    await confirmDialog.getByRole('button', { name: /Kh.* t.*i kho.*n/i }).click();
+    await expect(customerRow.getByText(/. kh.a/i)).toBeVisible();
+
+    await customerRow.getByRole('button').last().click();
+    confirmDialog = page.locator('.ant-modal').last();
+    await expect(confirmDialog).toBeVisible();
+    await confirmDialog.getByRole('button', { name: /M.* kh.* t.*i kho.*n/i }).click();
+    await expect(customerRow.getByText(/Ho.t .*ng/i)).toBeVisible();
   });
 });

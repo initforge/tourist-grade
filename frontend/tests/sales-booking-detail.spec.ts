@@ -1,18 +1,13 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { loginAs } from './support/app';
 
 const refundBillFixture = 'tests/fixtures/refund-bill.svg';
 
-async function loginAsSales(page: any) {
-  await page?.goto('/');
-  await page?.waitForLoadState('domcontentloaded');
-  await page?.evaluate(() => {
-    localStorage?.removeItem('__travela_bookings');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any)?.__authLogin('sales');
-  });
+async function loginAsSales(page: Page) {
+  await loginAs(page, 'sales', undefined, { clearBookings: true });
 }
 
-async function fillPendingPassengerData(page: any) {
+async function fillPendingPassengerData(page: Page) {
   await page?.getByRole('button', { name: /Chỉnh sửa$/ })?.first()?.click();
 
   const modal = page?.getByRole('dialog');
@@ -111,7 +106,7 @@ test?.describe('Sales Booking Detail Verification', () => {
     await page?.waitForLoadState('domcontentloaded');
 
     await expect(page?.getByText(/Dị ứng hải sản nhẹ/i))?.toHaveCount(1);
-    await expect(page?.getByText(/VNPAY \/ VietQR/i))?.toHaveCount(2);
+    await expect(page?.getByText(/PayOS/i))?.toHaveCount(2);
   });
 
   test('Pending-cancel booking shows cancellation reason and only the confirm-cancel action', async ({ page }) => {

@@ -955,7 +955,7 @@ export default function AdminSuppliers() {
       {supplierEditorId && (
         <Modal
           title={supplierEditorId === 'new' ? 'Thêm nhà cung cấp' : `Sửa nhà cung cấp - ${editingSupplier?.name ?? ''}`}
-          subtitle={supplierEditorId === 'new' ? 'Thêm mới chỉ khai báo bảng dịch vụ. Bảng giá sẽ được bổ sung ở bước chỉnh sửa.' : 'Bảng dịch vụ hiển thị dạng bảng, bảng giá nằm trong từng phần mở rộng.'}
+          subtitle={supplierEditorId === 'new' ? 'Thêm mới chỉ khai báo bảng dịch vụ. Bảng giá sẽ được bổ sung ở bước chỉnh sửa.' : 'Bảng giá của khách sạn và nhà hàng được thêm ở ngoài bảng dịch vụ; phần mở rộng chỉ dùng để xem chi tiết bảng giá.'}
           onClose={resetSupplierEditor}
           wide
         >
@@ -1042,7 +1042,7 @@ export default function AdminSuppliers() {
               updateDraftService={updateDraftService}
               onAddPrice={(serviceId, mealService) => {
                 const supplierId = String(supplierEditorId);
-                setQuotePopup({ supplierId, kind: 'edit', serviceId, mealService });
+                setQuotePopup({ supplierId, kind: serviceId ? 'edit' : 'add', serviceId, mealService });
               }}
             />
 
@@ -1117,9 +1117,10 @@ function SupplierEditorSections({
   supplierForm: SupplierFormState;
   addDraftService: (kind?: 'main' | 'meal') => void;
   updateDraftService: (serviceId: string, changes: Partial<SupplierServiceLine>, kind?: 'main' | 'meal') => void;
-  onAddPrice: (serviceId: string, mealService: boolean) => void;
+  onAddPrice: (serviceId?: string, mealService?: boolean) => void;
 }) {
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+  const showExternalAddPrice = mode === 'edit' && supplierForm.category !== 'Vận chuyển';
 
   const updateLatestPrice = (service: SupplierServiceLine, value: number, kind: 'main' | 'meal') => {
     const prices = service.prices.length > 0
@@ -1131,11 +1132,18 @@ function SupplierEditorSections({
   const renderHeader = (title: string, kind: 'main' | 'meal') => (
     <div className="flex items-center justify-between">
       <h3 className="font-serif text-xl text-primary">{title}</h3>
-      {!(supplierForm.category === 'Vận chuyển' && supplierForm.transportType === 'Máy bay' && kind === 'main') && (
-        <button onClick={() => addDraftService(kind)} className="border border-secondary px-4 py-2 text-xs font-bold uppercase tracking-widest text-secondary">
-          Thêm dịch vụ
-        </button>
-      )}
+      <div className="flex flex-wrap justify-end gap-3">
+        {showExternalAddPrice && kind === 'main' && (
+          <button onClick={() => onAddPrice()} className="border border-secondary px-4 py-2 text-xs font-bold uppercase tracking-widest text-secondary">
+            Thêm bảng giá
+          </button>
+        )}
+        {!(supplierForm.category === 'Vận chuyển' && supplierForm.transportType === 'Máy bay' && kind === 'main') && (
+          <button onClick={() => addDraftService(kind)} className="border border-secondary px-4 py-2 text-xs font-bold uppercase tracking-widest text-secondary">
+            Thêm dịch vụ
+          </button>
+        )}
+      </div>
     </div>
   );
 
@@ -1275,11 +1283,13 @@ function SupplierEditorSections({
                       <tr className="border-t border-outline-variant/10 bg-surface-container-low/20">
                         <td colSpan={supplierForm.category === 'Khách sạn' && kind === 'main' ? 5 : supplierForm.category === 'Nhà hàng' || kind === 'meal' ? 5 : 3} className="px-4 py-4">
                           <div className="space-y-3">
-                            <div className="flex justify-end">
-                              <button onClick={() => onAddPrice(service.id, kind === 'meal')} className="border border-secondary px-4 py-2 text-xs font-bold uppercase tracking-widest text-secondary">
-                                Thêm bảng giá
-                              </button>
-                            </div>
+                            {supplierForm.category === 'Vận chuyển' && (
+                              <div className="flex justify-end">
+                                <button onClick={() => onAddPrice(service.id, kind === 'meal')} className="border border-secondary px-4 py-2 text-xs font-bold uppercase tracking-widest text-secondary">
+                                  Thêm bảng giá
+                                </button>
+                              </div>
+                            )}
                             <ServicePriceTable rows={service.prices} />
                           </div>
                         </td>
