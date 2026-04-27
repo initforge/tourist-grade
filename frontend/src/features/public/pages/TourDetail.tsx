@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { addWishlistItem, removeWishlistItem } from '@shared/lib/api/wishlist';
 import { useAuthStore } from '@shared/store/useAuthStore';
 import { type DepartureScheduleEntry } from '@entities/tour/data/tours';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
@@ -42,15 +43,41 @@ export default function TourDetail() {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
   const user = useAuthStore((state) => state.user);
+  const accessToken = useAuthStore((state) => state.accessToken);
   const publicTours = useAppDataStore((state) => state.publicTours);
   const publicLoading = useAppDataStore((state) => state.publicLoading);
+  const wishlist = useAppDataStore((state) => state.wishlist);
+  const upsertWishlistItem = useAppDataStore((state) => state.upsertWishlistItem);
+  const removeWishlistStoreItem = useAppDataStore((state) => state.removeWishlistItem);
   const isCustomer = user?.role === 'customer';
-  const [isWishlisted, setIsWishlisted] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<DepartureScheduleEntry | null>(null);
   const [expandedAccordion, setExpandedAccordion] = useState<string | null>(null);
   const [collapsedItineraryDays, setCollapsedItineraryDays] = useState<number[]>([]);
+  const [activeImageIndex, setActiveImageIndex] = useState<number | null>(null);
+  const [wishlistBusy, setWishlistBusy] = useState(false);
 
   const tour = publicTours.find((item) => item.slug === slug);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [slug]);
+
+  const isWishlisted = Boolean(tour && wishlist.some((item) => item.tourId === tour.id));
+
+  const filteredSchedules = useMemo(
+    () => (tour?.departureSchedule ?? []).filter((item) => item.availableSeats > 0 && item.status !== 'closed' && item.status !== 'full'),
+    [tour?.departureSchedule],
+  );
+  const scheduleRows = buildScheduleRows(filteredSchedules);
+  const fallbackSchedule = scheduleRows.find((row) => row.date.status === 'open' || row.date.status === 'filling')?.date ?? scheduleRows[0]?.date ?? null;
+  const activeSchedule = selectedSchedule ?? fallbackSchedule;
+
+  useEffect(() => {
+    setSelectedSchedule(null);
+    setExpandedAccordion(null);
+    setCollapsedItineraryDays([]);
+    setActiveImageIndex(null);
+  }, [slug]);
 
   if (!tour && publicLoading) {
     return (
@@ -74,27 +101,41 @@ export default function TourDetail() {
     );
   }
 
-  const relatedTours = publicTours.filter((item) => item.id !== tour.id && item.category === 'domestic').slice(0, 3);
-  const scheduleRows = buildScheduleRows(tour.departureSchedule);
-  const fallbackSchedule = scheduleRows.find((row) => row.date.status === 'open' || row.date.status === 'filling')?.date ?? scheduleRows[0]?.date ?? null;
-  const activeSchedule = selectedSchedule ?? fallbackSchedule;
+  const relatedTours = publicTours
+    .filter((item) => item.id !== tour.id)
+    .filter((item) => item.regionKey === tour.regionKey)
+    .slice(0, 3);
+  const fallbackRelatedTours = publicTours
+    .filter((item) => item.id !== tour.id)
+    .filter((item) => item.category === tour.category)
+    .slice(0, 3);
+  const displayRelatedTours = relatedTours.length > 0 ? relatedTours : fallbackRelatedTours;
   const activeAdultPrice = activeSchedule?.priceAdult ?? tour.price.adult;
-  const galleryImages = [tour.image, ...tour.gallery].slice(0, 4);
-  const sideTopImage = galleryImages[1] ?? tour.image;
-  const sideBottomImages = [galleryImages[2] ?? tour.image, galleryImages[3] ?? sideTopImage];
-  const reviewItems = [
-    { name: 'Minh Anh', date: '12/03/2026', rating: 5, comment: 'Lịch trình hợp lý, hướng dẫn viên theo sát đoàn và du thuyền sạch.' },
-    { name: 'Gia Huy', date: '28/02/2026', rating: 5, comment: 'Khâu đặt tour nhanh, thông tin trước ngày đi rõ ràng, bữa ăn trên tàu ổn.' },
-    { name: 'Thu Hà', date: '09/02/2026', rating: 4, comment: 'Cảnh đẹp, phòng tốt. Nên giữ thêm thời gian ở Ti Tốp cho khách chụp ảnh.' },
-  ];
+  const galleryImages = [tour.image, ...tour.gallery].filter(Boolean);
+  const reviewItems = tour.reviews ?? [];
 
-  const toggleWishlist = (event: React.MouseEvent) => {
+  const toggleWishlist = async (event: React.MouseEvent) => {
     event.preventDefault();
     if (!isCustomer) {
       navigate('/login');
       return;
     }
-    setIsWishlisted((current) => !current);
+    if (!tour || wishlistBusy) {
+      return;
+    }
+
+    setWishlistBusy(true);
+    try {
+      if (isWishlisted) {
+        await removeWishlistItem(tour.id, accessToken);
+        removeWishlistStoreItem(tour.id);
+      } else {
+        const response = await addWishlistItem(tour.id, accessToken);
+        upsertWishlistItem(response.item);
+      }
+    } finally {
+      setWishlistBusy(false);
+    }
   };
 
   const handleBook = () => {
@@ -113,7 +154,7 @@ export default function TourDetail() {
   };
 
   const mealLabel = (meal: string) => (
-    meal === 'breakfast' ? 'sáng' : meal === 'lunch' ? 'trưa' : 'chiều'
+    meal === 'breakfast' ? 'sáng' : meal === 'lunch' ? 'trưa' : 'tối'
   );
 
   const AccordionItem = ({
@@ -146,10 +187,10 @@ export default function TourDetail() {
   return (
     <div className="public-page">
       <main className="public-container public-hero pb-16 md:pb-20 overflow-x-hidden">
-        <section className="mb-6 md:mb-8">
+        <section className="mb-5 md:mb-6">
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.85fr)]">
-            <button type="button" className="public-media-frame relative aspect-[16/11] md:aspect-[16/10] lg:min-h-[420px] group text-left">
-              <img alt={tour.title} className="w-full h-full object-cover" src={galleryImages[0]} />
+            <button type="button" onClick={() => setActiveImageIndex(0)} className="public-media-frame relative aspect-[16/11] md:aspect-[16/10] lg:min-h-[420px] group text-left">
+              <img alt={tour.title} className="w-full h-full object-cover" src={galleryImages[0] ?? tour.image} />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all" />
               <div className="absolute bottom-4 left-4 bg-white/90 px-3 py-1 text-[10px] tracking-[0.2em] uppercase font-medium text-primary">
                 {tour.category === 'domestic' ? 'Trong nước' : 'Quốc tế'}
@@ -157,25 +198,21 @@ export default function TourDetail() {
             </button>
 
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-1 lg:grid-rows-[minmax(0,1fr)_minmax(0,1fr)]">
-              <div className="public-media-frame aspect-[16/10] md:aspect-[4/3] lg:min-h-[204px] overflow-hidden">
-                <img alt={`${tour.title} 2`} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" src={sideTopImage} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="public-media-frame aspect-square overflow-hidden">
-                  <img alt={`${tour.title} 3`} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" src={sideBottomImages[0]} />
-                </div>
-                <div className="public-media-frame relative aspect-square overflow-hidden">
-                  <img alt={`${tour.title} 4`} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" src={sideBottomImages[1]} />
-                  <div className="absolute inset-0 bg-primary/45 flex items-center justify-center">
-                    <span className="text-white font-label text-xs tracking-widest">+{galleryImages.length}</span>
-                  </div>
-                </div>
-              </div>
+              {(galleryImages.slice(1, 4).length > 0 ? galleryImages.slice(1, 4) : [tour.image]).map((image, imageIndex) => (
+                <button
+                  key={`${image}-${imageIndex}`}
+                  type="button"
+                  onClick={() => setActiveImageIndex(imageIndex + 1)}
+                  className={`public-media-frame overflow-hidden ${imageIndex === 0 ? 'aspect-[16/10] md:aspect-[4/3] lg:min-h-[204px]' : 'aspect-square'}`}
+                >
+                  <img alt={`${tour.title} ${imageIndex + 2}`} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" src={image} />
+                </button>
+              ))}
             </div>
           </div>
         </section>
 
-        <section className="mb-8 md:mb-10">
+        <section className="mb-8 md:mb-9">
           <div className="flex items-center gap-2 mb-3 flex-wrap">
             <span className="text-secondary font-label text-[10px] uppercase tracking-[0.2em]">
               {tour.category === 'domestic' ? 'Du lịch trong nước' : 'Du lịch quốc tế'}
@@ -186,18 +223,16 @@ export default function TourDetail() {
               </span>
             )}
           </div>
-          <h1 className="font-headline text-3xl md:text-4xl leading-tight tracking-tight text-primary mb-4 max-w-4xl">
+          <h1 className="font-headline text-3xl md:text-4xl leading-tight tracking-tight text-primary mb-3 max-w-4xl">
             {tour.title}
           </h1>
           <div className="flex items-center gap-x-4 gap-y-2 flex-wrap text-sm text-primary/70">
-            {tour.rating && (
-              <div className="flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-[16px] text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>
-                  star
-                </span>
-                <span>{tour.rating} ({tour.reviewCount} đánh giá)</span>
-              </div>
-            )}
+            <div className="flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[16px] text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>
+                star
+              </span>
+              <span>{tour.rating?.toFixed(1) ?? '0.0'} ({tour.reviewCount ?? 0} đánh giá)</span>
+            </div>
             <div className="hidden md:block w-px h-3 bg-outline-variant/40" />
             <div className="flex items-center gap-1.5">
               <span className="material-symbols-outlined text-[16px]">location_on</span>
@@ -216,62 +251,55 @@ export default function TourDetail() {
             <div className="flex-1 min-w-0 space-y-8 md:space-y-10">
               <div>
                 <div className="flex items-center gap-4 mb-4">
-                  <h3 className="font-headline text-xl text-primary">Lịch khởi hành</h3>
+                  <h3 className="font-headline text-xl text-primary">Lịch khởi hành còn chỗ</h3>
                   <div className="flex-grow h-px bg-outline-variant/30" />
                 </div>
                 <div id="tour-schedule-table" className="overflow-x-auto rounded-sm border border-[var(--color-primary)]/20 bg-white">
-                  <table className="w-full min-w-[800px]">
+                  <table className="w-full min-w-[860px]">
                     <thead>
                       <tr className="bg-[var(--color-primary)] text-white">
                         <th className="text-center text-[10px] uppercase tracking-widest font-semibold px-4 py-3 w-16">Tháng</th>
                         <th className="text-left text-[10px] uppercase tracking-widest font-semibold px-4 py-3">Ngày khởi hành</th>
+                        <th className="text-left text-[10px] uppercase tracking-widest font-semibold px-4 py-3">Mã tour</th>
                         <th className="text-right text-[10px] uppercase tracking-widest font-semibold px-4 py-3">Người lớn</th>
                         <th className="text-right text-[10px] uppercase tracking-widest font-semibold px-4 py-3">Trẻ em</th>
                         <th className="text-right text-[10px] uppercase tracking-widest font-semibold px-4 py-3">Em bé</th>
                         <th className="text-right text-[10px] uppercase tracking-widest font-semibold px-4 py-3">Phụ thu phòng đơn</th>
-                        <th className="text-center text-[10px] uppercase tracking-widest font-semibold px-4 py-3">Số chỗ trống</th>
+                        <th className="text-center text-[10px] uppercase tracking-widest font-semibold px-4 py-3">Chỗ trống</th>
                         <th className="w-12" />
                       </tr>
                     </thead>
                     <tbody>
                       {scheduleRows.map((row) => {
-                        const schedule = row.date;
-                        const isSelected = selectedSchedule?.id === schedule.id;
-                        const isSelectable = schedule.status !== 'full' && schedule.status !== 'closed';
-                        const adultPrice = schedule.priceAdult ?? tour.price.adult;
-                        const childPrice = schedule.priceChild ?? tour.price.child;
-                        const infantPrice = schedule.priceInfant ?? (tour.price.infant ?? 0);
+                        const scheduleItem = row.date;
+                        const isSelected = selectedSchedule?.id === scheduleItem.id;
+                        const adultPrice = scheduleItem.priceAdult ?? tour.price.adult;
+                        const childPrice = scheduleItem.priceChild ?? tour.price.child;
+                        const infantPrice = scheduleItem.priceInfant ?? (tour.price.infant ?? 0);
 
                         return (
                           <tr
-                            key={schedule.id}
-                            onClick={() => isSelectable && setSelectedSchedule(isSelected ? null : schedule)}
+                            key={scheduleItem.id}
+                            onClick={() => setSelectedSchedule(isSelected ? null : scheduleItem)}
                             className={`border-b border-[var(--color-primary)]/10 last:border-0 cursor-pointer transition-colors ${
-                              isSelected
-                                ? 'bg-[var(--color-secondary)]/10 border-l-4 border-l-[var(--color-secondary)]'
-                                : isSelectable
-                                  ? 'hover:bg-[var(--color-surface)]'
-                                  : 'opacity-50 cursor-default'
+                              isSelected ? 'bg-[var(--color-secondary)]/10 border-l-4 border-l-[var(--color-secondary)]' : 'hover:bg-[var(--color-surface)]'
                             }`}
                           >
                             <td className="px-4 py-3.5 text-center text-sm font-semibold text-[var(--color-secondary)]">{row.monthLabel}</td>
                             <td className="px-4 py-3.5 text-sm font-medium text-primary">
-                              {new Date(schedule.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                              {new Date(scheduleItem.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                             </td>
+                            <td className="px-4 py-3.5 text-sm text-primary/65">{`${scheduleItem.programCode ?? tour.id} - ${scheduleItem.instanceCode ?? scheduleItem.id}`}</td>
                             <td className="px-4 py-3.5 text-right text-sm font-bold text-primary">{adultPrice.toLocaleString('vi-VN')}đ</td>
                             <td className="px-4 py-3.5 text-right text-sm text-primary/70">{childPrice.toLocaleString('vi-VN')}đ</td>
                             <td className="px-4 py-3.5 text-right text-sm text-primary/70">{infantPrice.toLocaleString('vi-VN')}đ</td>
                             <td className="px-4 py-3.5 text-right text-sm text-primary/60">
-                              {schedule.singleRoomSurcharge ? `+${schedule.singleRoomSurcharge.toLocaleString('vi-VN')}đ` : '—'}
+                              {scheduleItem.singleRoomSurcharge && scheduleItem.singleRoomSurcharge > 0 ? `+${scheduleItem.singleRoomSurcharge.toLocaleString('vi-VN')}đ` : 'Không có'}
                             </td>
                             <td className="px-4 py-3.5 text-center">
-                              {schedule.availableSeats > 0 ? (
-                                <span className={`font-bold text-sm ${schedule.availableSeats <= 5 ? 'text-red-500' : 'text-primary'}`}>
-                                  {schedule.availableSeats}
-                                </span>
-                              ) : (
-                                <span className="text-red-500 text-sm font-bold">Hết chỗ</span>
-                              )}
+                              <span className={`font-bold text-sm ${scheduleItem.availableSeats <= 5 ? 'text-red-500' : 'text-primary'}`}>
+                                {scheduleItem.availableSeats}/{scheduleItem.totalSlots ?? scheduleItem.availableSeats}
+                              </span>
                             </td>
                             <td className="px-2 py-3.5 text-center">
                               {isSelected && (
@@ -308,7 +336,7 @@ export default function TourDetail() {
                             Ngày {String(day.day).padStart(2, '0')}: {day.title.toUpperCase()}
                             {meals && <span className="font-sans text-sm font-semibold normal-case"> (Ăn {meals})</span>}
                           </h4>
-                          <span className={`material-symbols-outlined shrink-0 mt-0.5 h-9 w-9 rounded-full bg-sky-50 text-sky-600 flex items-center justify-center transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}>
+                          <span className={`material-symbols-outlined shrink-0 self-center h-9 w-9 rounded-full bg-sky-50 text-sky-600 flex items-center justify-center transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}>
                             keyboard_arrow_down
                           </span>
                         </button>
@@ -378,43 +406,15 @@ export default function TourDetail() {
                       ))}
                     </div>
                   </AccordionItem>
-
-                  <AccordionItem title="Thông tin khác" keyName="other">
-                    <div className="space-y-3">
-                      <div className="flex items-start gap-3">
-                        <span className="material-symbols-outlined text-primary/40 text-base shrink-0">directions_bus</span>
-                        <div>
-                          <p className="font-medium text-primary text-sm">Phương tiện</p>
-                          <p className="text-primary/70 text-xs">{tour.transport === 'xe' ? 'Xe du lịch' : 'Máy bay'} {tour.arrivalPoint && `→ ${tour.arrivalPoint}`}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <span className="material-symbols-outlined text-primary/40 text-base shrink-0">location_on</span>
-                        <div>
-                          <p className="font-medium text-primary text-sm">Khởi hành</p>
-                          <p className="text-primary/70 text-xs">{tour.departurePoint}</p>
-                        </div>
-                      </div>
-                      {tour.tourType === 'mua_le' && tour.holiday && (
-                        <div className="flex items-start gap-3">
-                          <span className="material-symbols-outlined text-primary/40 text-base shrink-0">celebration</span>
-                          <div>
-                            <p className="font-medium text-primary text-sm">Dịp lễ</p>
-                            <p className="text-primary/70 text-xs">{tour.holiday}</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </AccordionItem>
                 </div>
               </div>
             </div>
 
-            <div className="w-full lg:w-[320px] xl:w-[340px] shrink-0 lg:sticky lg:top-24">
+            <div className="w-full lg:w-[340px] xl:w-[360px] shrink-0 lg:sticky lg:top-24">
               <div className="public-floating-card overflow-hidden">
                 <div className="p-5 space-y-4">
                   <div>
-                    <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label mb-2">Giá</p>
+                    <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label mb-2">Giá từ</p>
                     <div className="flex items-end gap-2 flex-wrap">
                       <span className="font-headline text-3xl font-bold text-[var(--color-secondary)]">
                         {activeAdultPrice.toLocaleString('vi-VN')}đ
@@ -433,7 +433,7 @@ export default function TourDetail() {
                       <span className="material-symbols-outlined text-primary/45 text-[18px] mt-0.5">confirmation_number</span>
                       <div>
                         <p className="text-[10px] uppercase tracking-wider text-primary/45 font-label mb-0.5">Mã tour</p>
-                        <p className="font-semibold text-primary">{tour.id}</p>
+                        <p className="font-semibold text-primary">{`${activeSchedule?.programCode ?? tour.id} - ${activeSchedule?.instanceCode ?? activeSchedule?.id ?? 'Chọn lịch'}`}</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3 text-sm">
@@ -464,7 +464,7 @@ export default function TourDetail() {
                     <div className="flex items-start gap-3 text-sm">
                       <span className="material-symbols-outlined text-primary/45 text-[18px] mt-0.5">event_seat</span>
                       <div>
-                        <p className="text-[10px] uppercase tracking-wider text-primary/45 font-label mb-0.5">Số chỗ còn</p>
+                        <p className="text-[10px] uppercase tracking-wider text-primary/45 font-label mb-0.5">Chỗ trống</p>
                         <p className="font-semibold text-primary">{activeSchedule?.availableSeats ?? tour.availableSeats}</p>
                       </div>
                     </div>
@@ -490,17 +490,12 @@ export default function TourDetail() {
                       Đặt ngay
                     </button>
                   </div>
-
-                  {!selectedSchedule && activeSchedule && (
-                    <p className="text-center text-[11px] text-primary/45 italic">
-                      Đang hiển thị lịch gần nhất. Bạn có thể đổi ở bảng lịch phía trái.
-                    </p>
-                  )}
                 </div>
               </div>
 
               <button
                 onClick={toggleWishlist}
+                disabled={wishlistBusy}
                 className={`w-full mt-3 py-3 border font-sans uppercase tracking-[0.1em] text-[10px] font-bold transition-all flex items-center justify-center gap-2 ${
                   isWishlisted
                     ? 'border-[var(--color-tertiary)] text-[var(--color-tertiary)] hover:bg-[var(--color-tertiary)]/5'
@@ -526,23 +521,27 @@ export default function TourDetail() {
           </div>
           <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
             <div className="bg-white border border-outline-variant/20 p-6">
-              <p className="font-headline text-4xl text-primary leading-none">{tour.rating?.toFixed(1) ?? '4.8'}</p>
+              <p className="font-headline text-4xl text-primary leading-none">{tour.rating?.toFixed(1) ?? '0.0'}</p>
               <div className="flex gap-1 mt-3 text-secondary">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <span key={star} className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <span key={index} className="material-symbols-outlined text-lg" style={{ fontVariationSettings: `'FILL' ${index < Math.round(tour.rating ?? 0) ? 1 : 0}` }}>
                     star
                   </span>
                 ))}
               </div>
               <p className="text-sm text-primary/60 mt-3">{tour.reviewCount ?? reviewItems.length} lượt đánh giá</p>
             </div>
-            <div className="grid gap-4 md:grid-cols-3">
-              {reviewItems.map((review) => (
-                <article key={review.name} className="bg-white border border-outline-variant/20 p-5">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {reviewItems.length === 0 ? (
+                <div className="md:col-span-2 xl:col-span-3 bg-white border border-outline-variant/20 p-6 text-sm text-primary/55">
+                  Chưa có đánh giá nào cho lịch trình này.
+                </div>
+              ) : reviewItems.map((review) => (
+                <article key={review.id} className="bg-white border border-outline-variant/20 p-5">
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div>
-                      <p className="font-semibold text-primary">{review.name}</p>
-                      <p className="text-xs text-primary/45">{review.date}</p>
+                      <p className="font-semibold text-primary">{review.authorName}</p>
+                      <p className="text-xs text-primary/45">{new Date(review.createdAt).toLocaleDateString('vi-VN')}</p>
                     </div>
                     <div className="flex text-secondary">
                       {Array.from({ length: review.rating }).map((_, index) => (
@@ -552,6 +551,7 @@ export default function TourDetail() {
                       ))}
                     </div>
                   </div>
+                  {review.title && <p className="text-sm font-medium text-primary mb-2">{review.title}</p>}
                   <p className="text-sm text-primary/70 leading-relaxed">{review.comment}</p>
                 </article>
               ))}
@@ -559,14 +559,14 @@ export default function TourDetail() {
           </div>
         </section>
 
-        {relatedTours.length > 0 && (
+        {displayRelatedTours.length > 0 && (
           <section className="mt-14 md:mt-16">
             <div className="flex items-center gap-4 mb-6">
               <h3 className="font-headline text-xl text-primary">Tour liên quan</h3>
               <div className="flex-grow h-px bg-outline-variant/30" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {relatedTours.map((item) => (
+              {displayRelatedTours.map((item) => (
                 <div
                   key={item.id}
                   onClick={() => navigate(`/tours/${item.slug}`)}
@@ -597,6 +597,18 @@ export default function TourDetail() {
           </section>
         )}
       </main>
+
+      {activeImageIndex !== null && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <button className="absolute inset-0" onClick={() => setActiveImageIndex(null)} aria-label="Đóng xem ảnh" />
+          <div className="relative z-10 max-w-6xl w-full">
+            <button onClick={() => setActiveImageIndex(null)} className="absolute right-0 -top-12 text-white">
+              <span className="material-symbols-outlined text-3xl">close</span>
+            </button>
+            <img src={galleryImages[activeImageIndex] ?? galleryImages[0]} alt={`${tour.title} preview`} className="w-full max-h-[80vh] object-contain rounded-sm" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

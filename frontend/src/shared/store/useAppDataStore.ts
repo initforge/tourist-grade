@@ -3,7 +3,7 @@ import type { Tour } from '@entities/tour/data/tours';
 import type { BlogPost } from '@entities/blog/data/blogs';
 import type { Booking } from '@entities/booking/data/bookings';
 import type { User } from '@entities/user/data/users';
-import type { TourGuide, TourInstance, TourProgram } from '@entities/tour-program/data/tourProgram';
+import type { SpecialDay, TourGuide, TourInstance, TourProgram } from '@entities/tour-program/data/tourProgram';
 import type { Voucher } from '@entities/voucher/data/vouchers';
 import { apiRequest } from '@shared/lib/api/client';
 import { useAuthStore } from './useAuthStore';
@@ -28,6 +28,10 @@ export interface SupplierServiceLine {
   priceMode?: 'Báo giá' | 'Niêm yết';
   menu?: string;
   note?: string;
+  formulaCount?: string;
+  formulaCountDefault?: string;
+  formulaQuantity?: string;
+  formulaQuantityDefault?: string;
   prices: SupplierPriceRow[];
 }
 
@@ -75,6 +79,23 @@ export interface ServiceRow {
   prices: ServicePriceRow[];
 }
 
+export interface WishlistItem {
+  id: string;
+  tourId: string;
+  slug: string;
+  addedAt: string;
+}
+
+export interface CustomerReview {
+  id: string;
+  bookingId: string;
+  rating: number;
+  title?: string;
+  comment: string;
+  createdAt: string;
+  authorName: string;
+}
+
 interface BootstrapPayload {
   users: User[];
   tourPrograms: TourProgram[];
@@ -83,9 +104,12 @@ interface BootstrapPayload {
   services: ServiceRow[];
   guides: TourGuide[];
   vouchers: Voucher[];
+  specialDays: SpecialDay[];
   blogs: Array<Record<string, unknown>>;
   tours: Tour[];
   bookings: Booking[];
+  wishlist: WishlistItem[];
+  reviews: CustomerReview[];
 }
 
 interface PublicBlogsResponse {
@@ -122,7 +146,10 @@ interface AppDataState {
   services: ServiceRow[];
   guides: TourGuide[];
   vouchers: Voucher[];
+  specialDays: SpecialDay[];
   bookings: Booking[];
+  wishlist: WishlistItem[];
+  reviews: CustomerReview[];
   publicReady: boolean;
   protectedReady: boolean;
   publicLoading: boolean;
@@ -137,13 +164,21 @@ interface AppDataState {
   setServices: (services: ServiceRow[]) => void;
   setGuides: (guides: TourGuide[]) => void;
   setVouchers: (vouchers: Voucher[]) => void;
+  setSpecialDays: (specialDays: SpecialDay[]) => void;
   setBookings: (bookings: Booking[]) => void;
+  setWishlist: (wishlist: WishlistItem[]) => void;
+  setReviews: (reviews: CustomerReview[]) => void;
   upsertBooking: (booking: Booking) => void;
+  upsertWishlistItem: (item: WishlistItem) => void;
+  removeWishlistItem: (tourId: string) => void;
+  upsertReview: (review: CustomerReview) => void;
+  appendPublicTourReview: (tourId: string, review: CustomerReview) => void;
   upsertUser: (user: User) => void;
   upsertTourProgram: (tourProgram: TourProgram) => void;
   upsertTourInstance: (tourInstance: TourInstance) => void;
   upsertService: (service: ServiceRow) => void;
   upsertSupplier: (supplier: SupplierRow) => void;
+  upsertGuide: (guide: TourGuide) => void;
   upsertVoucher: (voucher: Voucher) => void;
   removeVoucher: (id: string) => void;
 }
@@ -178,7 +213,10 @@ export const useAppDataStore = create<AppDataState>((set) => ({
   services: [],
   guides: [],
   vouchers: [],
+  specialDays: [],
   bookings: [],
+  wishlist: [],
+  reviews: [],
   publicReady: false,
   protectedReady: false,
   publicLoading: false,
@@ -216,7 +254,10 @@ export const useAppDataStore = create<AppDataState>((set) => ({
         services: [],
         guides: [],
         vouchers: [],
+        specialDays: [],
         bookings: [],
+        wishlist: [],
+        reviews: [],
         protectedReady: false,
         protectedLoading: false,
       });
@@ -236,7 +277,10 @@ export const useAppDataStore = create<AppDataState>((set) => ({
         services: response.data.services,
         guides: response.data.guides,
         vouchers: response.data.vouchers,
+        specialDays: response.data.specialDays,
         bookings: response.data.bookings,
+        wishlist: response.data.wishlist,
+        reviews: response.data.reviews,
         protectedReady: true,
         protectedLoading: false,
       });
@@ -253,7 +297,10 @@ export const useAppDataStore = create<AppDataState>((set) => ({
     services: [],
     guides: [],
     vouchers: [],
+    specialDays: [],
     bookings: [],
+    wishlist: [],
+    reviews: [],
     protectedReady: false,
     protectedLoading: false,
   }),
@@ -265,12 +312,75 @@ export const useAppDataStore = create<AppDataState>((set) => ({
   setServices: (services) => set({ services }),
   setGuides: (guides) => set({ guides }),
   setVouchers: (vouchers) => set({ vouchers }),
+  setSpecialDays: (specialDays) => set({ specialDays }),
   setBookings: (bookings) => set({ bookings }),
+  setWishlist: (wishlist) => set({ wishlist }),
+  setReviews: (reviews) => set({ reviews }),
 
   upsertBooking: (booking) => set((state) => ({
     bookings: state.bookings.some((item) => item.id === booking.id)
       ? state.bookings.map((item) => (item.id === booking.id ? booking : item))
       : [booking, ...state.bookings],
+  })),
+
+  upsertWishlistItem: (item) => set((state) => ({
+    wishlist: state.wishlist.some((entry) => entry.tourId === item.tourId)
+      ? state.wishlist.map((entry) => (entry.tourId === item.tourId ? item : entry))
+      : [item, ...state.wishlist],
+  })),
+
+  removeWishlistItem: (tourId) => set((state) => ({
+    wishlist: state.wishlist.filter((entry) => entry.tourId !== tourId),
+  })),
+
+  upsertReview: (review) => set((state) => ({
+    reviews: state.reviews.some((entry) => entry.id === review.id)
+      ? state.reviews.map((entry) => (entry.id === review.id ? review : entry))
+      : [review, ...state.reviews],
+    bookings: state.bookings.map((booking) => (
+      booking.id === review.bookingId
+        ? {
+            ...booking,
+            review: {
+              id: review.id,
+              rating: review.rating,
+              title: review.title,
+              comment: review.comment,
+              createdAt: review.createdAt,
+            },
+          }
+        : booking
+    )),
+  })),
+
+  appendPublicTourReview: (tourId, review) => set((state) => ({
+    publicTours: state.publicTours.map((tour) => {
+      if (tour.id !== tourId) {
+        return tour;
+      }
+
+      const nextReviews = [
+        {
+          id: review.id,
+          bookingId: review.bookingId,
+          rating: review.rating,
+          title: review.title,
+          comment: review.comment,
+          createdAt: review.createdAt,
+          authorName: review.authorName,
+        },
+        ...(tour.reviews ?? []),
+      ];
+      const nextReviewCount = nextReviews.length;
+      const nextRating = nextReviews.reduce((sum, item) => sum + item.rating, 0) / nextReviewCount;
+
+      return {
+        ...tour,
+        reviews: nextReviews,
+        reviewCount: nextReviewCount,
+        rating: Math.round(nextRating * 10) / 10,
+      };
+    }),
   })),
 
   upsertUser: (user) => set((state) => ({
@@ -301,6 +411,12 @@ export const useAppDataStore = create<AppDataState>((set) => ({
     suppliers: state.suppliers.some((item) => item.id === supplier.id)
       ? state.suppliers.map((item) => (item.id === supplier.id ? supplier : item))
       : [supplier, ...state.suppliers],
+  })),
+
+  upsertGuide: (guide) => set((state) => ({
+    guides: state.guides.some((item) => item.id === guide.id)
+      ? state.guides.map((item) => (item.id === guide.id ? guide : item))
+      : [guide, ...state.guides],
   })),
 
   upsertVoucher: (voucher) => set((state) => ({

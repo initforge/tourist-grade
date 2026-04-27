@@ -16,6 +16,13 @@ export const PAYMENT_STATUS_LABEL: Record<Booking['paymentStatus'], string> = {
   refunded: 'Đã hoàn tiền',
 };
 
+export const REFUND_STATUS_LABEL: Record<Booking['refundStatus'], string> = {
+  none: 'Chưa phát sinh',
+  pending: 'Đang chờ hoàn tiền',
+  refunded: 'Đã hoàn tiền',
+  not_required: 'Hoàn thành',
+};
+
 export const PAYMENT_METHOD_LABEL: Record<Booking['paymentMethod'], string> = {
   vnpay: 'VNPAY',
   stripe: 'Stripe',
@@ -40,6 +47,54 @@ export function canCustomerCancel(booking: Booking) {
   return ['booked', 'pending', 'confirmed'].includes(booking.status) && new Date(booking.tourDate) > new Date();
 }
 
+export function getBookingPaymentWindowExpiresAt(booking: Booking) {
+  return booking.paymentWindowExpiresAt ? new Date(booking.paymentWindowExpiresAt) : null;
+}
+
+export function getBookingFinalPaymentDueAt(booking: Booking) {
+  return booking.finalPaymentDueAt ? new Date(booking.finalPaymentDueAt) : null;
+}
+
+export function isBookingPaymentWindowExpired(booking: Booking, now = new Date()) {
+  if (booking.status === 'cancelled') {
+    return true;
+  }
+  const expiresAt = getBookingPaymentWindowExpiresAt(booking);
+  return Boolean(expiresAt && expiresAt <= now && booking.paymentStatus === 'unpaid');
+}
+
+export function isBookingFinalPaymentOverdue(booking: Booking, now = new Date()) {
+  if (booking.status === 'cancelled') {
+    return true;
+  }
+
+  const finalPaymentDueAt = getBookingFinalPaymentDueAt(booking);
+  return Boolean(finalPaymentDueAt && finalPaymentDueAt <= now && booking.paymentStatus === 'partial' && booking.remainingAmount > 0);
+}
+
 export function canCustomerPay(booking: Booking) {
-  return canCustomerCancel(booking) && ['unpaid', 'partial'].includes(booking.paymentStatus);
+  return (
+    canCustomerCancel(booking)
+    && ['unpaid', 'partial'].includes(booking.paymentStatus)
+    && !isBookingPaymentWindowExpired(booking)
+    && !isBookingFinalPaymentOverdue(booking)
+  );
+}
+
+export function getUpcomingPaymentNote(booking: Booking) {
+  if (booking.paymentStatus === 'unpaid') {
+    const expiresAt = getBookingPaymentWindowExpiresAt(booking);
+    if (expiresAt) {
+      return `Thanh toán trong 15 phút, trước ${expiresAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${expiresAt.toLocaleDateString('vi-VN')}.`;
+    }
+  }
+
+  if (booking.paymentStatus === 'partial' && booking.remainingAmount > 0) {
+    const dueAt = getBookingFinalPaymentDueAt(booking);
+    if (dueAt) {
+      return `Thanh toán phần còn lại trước ngày ${dueAt.toLocaleDateString('vi-VN')}.`;
+    }
+  }
+
+  return '';
 }

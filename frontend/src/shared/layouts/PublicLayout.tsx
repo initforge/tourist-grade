@@ -17,6 +17,7 @@ export function PublicLayout() {
   const logout = useAuthStore(s => s?.logout);
   const navigate = useNavigate();
   const avatarSrc = user?.avatar || createLocalAvatar(user?.name || 'Travela');
+  const showLookup = !isAuthenticated || user?.role !== 'customer';
 
   const handleLogout = async () => {
     await logout();
@@ -66,7 +67,9 @@ export function PublicLayout() {
             <Link to="/tours" className="hover:text-[var(--color-tertiary)] transition-colors">Tour Nội Địa</Link>
             <Link to="/about" className="hover:text-[var(--color-tertiary)] transition-colors">Về Chúng Tôi</Link>
             <Link to="/blog" className="hover:text-[var(--color-tertiary)] transition-colors">Cẩm Nang</Link>
-            <Link to="/booking/lookup" className="hover:text-[var(--color-secondary)] transition-colors font-semibold">Tra Cứu Đã Đặt</Link>
+            {showLookup && (
+              <Link to="/booking/lookup" className="hover:text-[var(--color-secondary)] transition-colors font-semibold">Tra Cứu Đã Đặt</Link>
+            )}
           </nav>
 
           <div className="flex items-center gap-2 md:gap-4">
@@ -106,7 +109,9 @@ export function PublicLayout() {
               <Link to="/tours" className="whitespace-nowrap hover:text-[var(--color-tertiary)] transition-colors">Tour Nội Địa</Link>
               <Link to="/about" className="whitespace-nowrap hover:text-[var(--color-tertiary)] transition-colors">Về Chúng Tôi</Link>
               <Link to="/blog" className="whitespace-nowrap hover:text-[var(--color-tertiary)] transition-colors">Cẩm Nang</Link>
-              <Link to="/booking/lookup" className="whitespace-nowrap hover:text-[var(--color-secondary)] transition-colors">Tra Cứu</Link>
+              {showLookup && (
+                <Link to="/booking/lookup" className="whitespace-nowrap hover:text-[var(--color-secondary)] transition-colors">Tra Cứu</Link>
+              )}
               {user?.role === 'customer' && (
                 <>
                   <Link to="/customer/bookings" className="whitespace-nowrap hover:text-[var(--color-tertiary)] transition-colors">Lịch sử</Link>
@@ -147,7 +152,9 @@ export function PublicLayout() {
           <div>
             <h4 className="text-white font-medium mb-4">Hỗ Trợ</h4>
             <ul className="space-y-2 text-sm">
-              <li><Link to="/booking/lookup" className="hover:text-[var(--color-secondary)] transition-colors">Tra cứu hóa đơn</Link></li>
+              {showLookup && (
+                <li><Link to="/booking/lookup" className="hover:text-[var(--color-secondary)] transition-colors">Tra cứu hóa đơn</Link></li>
+              )}
               <li><Link to="/about" className="hover:text-white transition-colors">Chính sách hủy đổi</Link></li>
               <li><Link to="/about" className="hover:text-white transition-colors">Bảo mật thông tin</Link></li>
             </ul>

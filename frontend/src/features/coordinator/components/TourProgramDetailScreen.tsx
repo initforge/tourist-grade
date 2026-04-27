@@ -287,41 +287,26 @@ export default function TourProgramDetailScreen({ role }: { role: DetailRole }) 
           </div>
 
           {canEdit && (
-            <div className="flex gap-3">
-              {!isEditing ? (
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="px-6 py-3 bg-[#D4AF37] text-white text-xs uppercase tracking-widest font-bold hover:opacity-90 transition-opacity"
-                >
-                  Chỉnh sửa
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={resetDraft}
-                    className="px-6 py-3 border border-outline-variant/40 text-xs uppercase tracking-widest text-primary/70 hover:bg-surface transition-colors"
-                  >
-                    Hủy bỏ
-                  </button>
-                  <button
-                    onClick={saveChanges}
-                    className="px-6 py-3 bg-primary text-white text-xs uppercase tracking-widest font-bold hover:bg-[var(--color-secondary)] transition-colors"
-                  >
-                    Lưu thay đổi
-                  </button>
-                  {!isActiveProgram && (
-                    <button
-                      onClick={sendForApproval}
-                      className="px-6 py-3 bg-emerald-600 text-white text-xs uppercase tracking-widest font-bold hover:bg-emerald-700 transition-colors"
-                    >
-                      Gửi duyệt
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
+            <button
+              onClick={() => navigate(`/coordinator/tour-programs/${program?.id}/edit`)}
+              className="px-6 py-3 bg-[#D4AF37] text-white text-xs uppercase tracking-widest font-bold hover:opacity-90 transition-opacity"
+            >
+              Chỉnh sửa
+            </button>
           )}
         </div>
+
+        {program?.rejectionReason && (
+          <div className="mb-6 border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+            Lý do từ chối: {program.rejectionReason}
+          </div>
+        )}
+
+        {program?.inactiveReason && (
+          <div className="mb-6 border border-stone-200 bg-stone-50 px-5 py-4 text-sm text-stone-700">
+            Lý do ngừng kinh doanh: {program.inactiveReason}
+          </div>
+        )}
 
         <div className="flex gap-8 mb-8 border-b border-outline-variant/30">
           {([
@@ -527,7 +512,7 @@ export default function TourProgramDetailScreen({ role }: { role: DetailRole }) 
                   </div>
 
                   <label className="block max-w-xs">
-                    <span className="block text-[10px] uppercase tracking-widest text-primary/55 font-bold mb-2">Độ phủ mở bán tối thiểu</span>
+                    <span className="block text-[10px] uppercase tracking-widest text-primary/55 font-bold mb-2">Thời gian mở bán tối thiểu</span>
                     <input
                       type="number"
                       min={1}

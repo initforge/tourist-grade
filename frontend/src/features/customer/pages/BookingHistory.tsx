@@ -5,17 +5,27 @@ import { useAuthStore } from '@shared/store/useAuthStore';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
 import { useRequireAuth } from '@shared/hooks/useAuthGuard';
 import { CancelBookingModal } from '@shared/ui/CancelBookingModal';
-import { BOOKING_STATUS_LABEL, canCustomerPay, formatCurrency } from '@shared/lib/booking';
+import { TourReviewModal } from '@shared/ui/TourReviewModal';
+import {
+  BOOKING_STATUS_LABEL,
+  canCustomerPay,
+  formatCurrency,
+  getUpcomingPaymentNote,
+  PAYMENT_STATUS_LABEL,
+  REFUND_STATUS_LABEL,
+} from '@shared/lib/booking';
 import { createBookingPaymentLink } from '@shared/lib/api/bookings';
 
 export default function BookingHistory() {
   useRequireAuth('/login?redirect=/customer/bookings');
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
+  const accessToken = useAuthStore((state) => state.accessToken);
   const publicTours = useAppDataStore((state) => state.publicTours);
   const bookings = useAppDataStore((state) => state.bookings);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed' | 'cancelled'>('upcoming');
   const [cancelBooking, setCancelBooking] = useState<Booking | null>(null);
+  const [reviewBooking, setReviewBooking] = useState<Booking | null>(null);
   const [payBookingId, setPayBookingId] = useState<string | null>(null);
 
   const statusMap: Record<typeof activeTab, Booking['status'][]> = {
@@ -40,7 +50,7 @@ export default function BookingHistory() {
     setPayBookingId(booking.id);
 
     try {
-      const response = await createBookingPaymentLink(booking.id);
+      const response = await createBookingPaymentLink(booking.id, accessToken);
       const checkoutUrl = response.paymentLink.checkoutUrl;
 
       if (checkoutUrl) {
@@ -54,7 +64,7 @@ export default function BookingHistory() {
   return (
     <div className="w-full bg-[var(--color-background)] min-h-screen pt-16 pb-32">
       <main className="max-w-5xl mx-auto px-6">
-        <h1 className="font-serif text-3xl text-[var(--color-primary)] mb-8">Lịch sử đặt chỗ</h1>
+        <h1 className="font-serif text-3xl text-[var(--color-primary)] mb-8">Lịch sử đặt tour</h1>
 
         <div className="flex gap-8 mb-8 border-b border-[#D0C5AF]/30">
           {([
@@ -103,13 +113,27 @@ export default function BookingHistory() {
                     <div>
                       <p className="text-[10px] uppercase tracking-widest text-[var(--color-secondary)] mb-2 font-bold">{booking.bookingCode}</p>
                       <h3 className="font-serif text-xl text-[var(--color-primary)] max-w-lg mb-2 line-clamp-2">{booking.tourName}</h3>
-                      <p className="text-sm text-[var(--color-primary)]/70 flex items-center gap-2">
+                      <p className="text-sm text-[var(--color-primary)]/70 flex items-center gap-2 flex-wrap">
                         <span className="material-symbols-outlined text-[16px]">calendar_today</span>
                         {new Date(booking.tourDate).toLocaleDateString('vi-VN', { day: '2-digit', month: 'long', year: 'numeric' })}
                         <span className="mx-1">·</span>
                         {booking.tourDuration}
                       </p>
-                      <p className="text-xs text-primary/50 mt-2">{BOOKING_STATUS_LABEL[booking.status]}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <span className="text-xs text-primary/55">{BOOKING_STATUS_LABEL[booking.status]}</span>
+                        <span className="text-xs text-primary/45">· {PAYMENT_STATUS_LABEL[booking.paymentStatus]}</span>
+                        {booking.status === 'cancelled' && (
+                          <span className="text-xs text-primary/45">· {REFUND_STATUS_LABEL[booking.refundStatus]}</span>
+                        )}
+                      </div>
+                      {activeTab === 'upcoming' && getUpcomingPaymentNote(booking) && (
+                        <p className="text-xs text-amber-700 mt-2">{getUpcomingPaymentNote(booking)}</p>
+                      )}
+                      {activeTab === 'cancelled' && (
+                        <p className="text-xs text-primary/55 mt-2">
+                          Hoàn tiền: <strong>{booking.refundAmount ? formatCurrency(booking.refundAmount) : '0đ'}</strong>
+                        </p>
+                      )}
                     </div>
                     <div className="text-right shrink-0 hidden md:block">
                       <p className="font-serif text-xl text-[var(--color-primary)]">{formatCurrency(booking.totalAmount)}</p>
@@ -143,6 +167,16 @@ export default function BookingHistory() {
                         </button>
                       )}
 
+                      {activeTab === 'completed' && !booking.review && (
+                        <button
+                          onClick={() => setReviewBooking(booking)}
+                          className="px-6 py-2 border border-emerald-400 text-emerald-700 font-sans uppercase tracking-[0.1em] text-[10px] hover:bg-emerald-50 transition-colors flex items-center gap-1.5"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">reviews</span>
+                          Đánh giá tour
+                        </button>
+                      )}
+
                       {['booked', 'pending', 'confirmed'].includes(booking.status) && (
                         <button
                           onClick={() => setCancelBooking(booking)}
@@ -163,6 +197,14 @@ export default function BookingHistory() {
 
       {cancelBooking && (
         <CancelBookingModal booking={cancelBooking} onClose={() => setCancelBooking(null)} />
+      )}
+
+      {reviewBooking && (
+        <TourReviewModal
+          bookingId={reviewBooking.id}
+          tourId={reviewBooking.tourId}
+          onClose={() => setReviewBooking(null)}
+        />
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { expireOverdueDepositBookings, expireUnpaidBookings } from '../lib/booking-lifecycle.js';
 import { prisma } from '../lib/prisma.js';
 import { asyncHandler, badRequest, notFound } from '../lib/http.js';
 import { authenticate } from '../middleware/auth.js';
@@ -30,6 +31,9 @@ export function createPaymentsRouter() {
   const router = Router();
 
   router.post('/bookings/:id/payos-link', asyncHandler(async (req, res) => {
+    await expireUnpaidBookings(prisma);
+    await expireOverdueDepositBookings(prisma);
+
     const bookingId = String(req.params.id);
     const client = getPayOSClient();
     if (!client) {
@@ -39,7 +43,15 @@ export function createPaymentsRouter() {
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
       include: {
-        tourInstance: true,
+        tourInstance: {
+          include: {
+            program: {
+              select: {
+                slug: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -47,7 +59,12 @@ export function createPaymentsRouter() {
       throw notFound('Booking not found');
     }
 
-    const payload = (booking.payloadJson as { paymentRatio?: 'deposit' | 'full' } | null) ?? {};
+    if (booking.status === 'CANCELLED') {
+      throw badRequest('Booking can no longer be paid');
+    }
+
+    const payload = (booking.payloadJson as { paymentRatio?: 'deposit' | 'full'; publicScheduleId?: string } | null) ?? {};
+    const checkoutBaseUrl = `http://localhost:8080/tours/${booking.tourInstance.program.slug}/book?scheduleId=${encodeURIComponent(payload.publicScheduleId ?? booking.tourInstance.code)}&bookingId=${booking.id}`;
     const remainingAmount = Number(booking.remainingAmount);
     const paidAmount = Number(booking.paidAmount);
     const payableAmount = payload.paymentRatio === 'deposit' && paidAmount === 0
@@ -94,8 +111,8 @@ export function createPaymentsRouter() {
       orderCode,
       amount: payableAmount,
       description: buildPayOSDescription(booking.bookingCode),
-      cancelUrl: env.PAYOS_CANCEL_URL,
-      returnUrl: env.PAYOS_RETURN_URL,
+      cancelUrl: `${checkoutBaseUrl}&payos=cancel`,
+      returnUrl: `${checkoutBaseUrl}&payos=return`,
       buyerName: booking.contactName,
       buyerEmail: booking.contactEmail,
       buyerPhone: booking.contactPhone,
@@ -127,6 +144,7 @@ export function createPaymentsRouter() {
   }));
 
   router.post('/payos/webhook', asyncHandler(async (req, res) => {
+    await expireOverdueDepositBookings(prisma);
     const client = getPayOSClient();
     if (!client) {
       throw badRequest('PayOS has not been configured');
@@ -164,6 +182,10 @@ export function createPaymentsRouter() {
     } else if (transaction.status !== 'PAID' && (isPayOSPaidStatus(webhookStatus) || isPayOSPaidStatus(webhookCode))) {
       const nextPaidAmount = Number(transaction.booking.paidAmount) + Number(paymentData.amount);
       const totalAmount = Number(transaction.booking.totalAmount);
+      const nextBookingStatus =
+        transaction.booking.status === 'BOOKED' || transaction.booking.status === 'PENDING'
+          ? 'PENDING'
+          : transaction.booking.status;
 
       await prisma.paymentTransaction.update({
         where: { id: transaction.id },
@@ -178,6 +200,7 @@ export function createPaymentsRouter() {
       await prisma.booking.update({
         where: { id: transaction.bookingId },
         data: {
+          status: nextBookingStatus,
           paidAmount: nextPaidAmount,
           remainingAmount: Math.max(totalAmount - nextPaidAmount, 0),
           paymentStatus: nextPaidAmount >= totalAmount ? 'PAID' : 'PARTIAL',

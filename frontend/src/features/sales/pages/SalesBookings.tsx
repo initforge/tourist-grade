@@ -153,7 +153,7 @@ export default function BookingManagement() {
       case 'pending_confirm':
         return bookings?.filter(b => b.status === 'pending' || b.status === 'pending_cancel');
       case 'confirmed':
-        return bookings?.filter(b => b.status === 'confirmed' || b.status === 'booked');
+        return bookings?.filter(b => b.status === 'confirmed');
       case 'completed':
         return bookings?.filter(b => b.status === 'completed');
       case 'cancelled':
@@ -197,7 +197,7 @@ export default function BookingManagement() {
   // Tab counts
   const tabCounts = useMemo(() => ({
     pending_confirm: bookings?.filter(b => b.status === 'pending' || b.status === 'pending_cancel')?.length,
-    confirmed:       bookings?.filter(b => b.status === 'confirmed' || b.status === 'booked')?.length,
+    confirmed:       bookings?.filter(b => b.status === 'confirmed')?.length,
     completed:       bookings?.filter(b => b.status === 'completed')?.length,
     cancelled:       bookings?.filter(b => b.status === 'cancelled')?.length,
   }), [bookings]);

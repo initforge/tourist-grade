@@ -1,183 +1,169 @@
-import { useState } from 'react';
-import { Modal, message } from 'antd';
-
-// ── Types ────────────────────────────────────────────────────────────────────
-
-export interface SpecialDay {
-  id: string;
-  name: string;
-  occasion: string;
-  startDate: string;
-  endDate: string;
-  note?: string;
-}
-
-// ── Mock ────────────────────────────────────────────────────────────────────────
-
-const initialSpecialDays: SpecialDay[] = [
-  {
-    id: 'SD001',
-    name: 'Tết Dương lịch 2026',
-    occasion: 'Nghỉ lễ',
-    startDate: '2026-01-01',
-    endDate: '2026-01-01',
-    note: 'Nghỉ 1 ngày',
-  },
-  {
-    id: 'SD002',
-    name: 'Tết Nguyên Đán 2026',
-    occasion: 'Tết lớn',
-    startDate: '2026-02-17',
-    endDate: '2026-02-23',
-    note: 'Nghỉ 7 ngày — cao điểm du lịch',
-  },
-  {
-    id: 'SD003',
-    name: 'Giỗ Tổ Hùng Vương 2026',
-    occasion: 'Nghỉ lễ',
-    startDate: '2026-04-10',
-    endDate: '2026-04-10',
-    note: 'Kết hợp nghỉ lễ 30/4',
-  },
-];
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
+import { useMemo, useState } from 'react';
+import { message, Modal } from 'antd';
+import type { SpecialDay } from '@entities/tour-program/data/tourProgram';
+import { createSpecialDay, deleteSpecialDay, updateSpecialDay } from '@shared/lib/api/specialDays';
+import { useAuthStore } from '@shared/store/useAuthStore';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
 
 function fmtDate(iso: string) {
-  return new Date(iso)?.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
-
 export default function SpecialDays() {
-  const [items, setItems] = useState<SpecialDay[]>(initialSpecialDays);
+  const token = useAuthStore((state) => state.accessToken);
+  const specialDays = useAppDataStore((state) => state.specialDays);
+  const setSpecialDays = useAppDataStore((state) => state.setSpecialDays);
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<SpecialDay | null>(null);
   const [form, setForm] = useState<Partial<SpecialDay>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const filtered = items?.filter(s =>
-    s?.name?.toLowerCase()?.includes(search?.toLowerCase()) ||
-    s?.occasion?.toLowerCase()?.includes(search?.toLowerCase())
-  );
+  const filtered = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    if (!keyword) return specialDays;
+    return specialDays.filter((item) => `${item.name} ${item.occasion} ${item.note ?? ''}`.toLowerCase().includes(keyword));
+  }, [search, specialDays]);
 
   const validate = () => {
-    const e: Record<string, string> = {};
-    if (!form?.name?.trim()) e.name = 'Tên ngày đặc biệt không được trống';
-    if (!form?.occasion?.trim()) e.occasion = 'Dịp đặc biệt không được trống';
-    if (!form?.startDate) e.startDate = 'Ngày bắt đầu không được trống';
-    if (!form?.endDate) e.endDate = 'Ngày kết thúc không được trống';
-    setErrors(e);
-    return Object.keys(e)?.length === 0;
+    const nextErrors: Record<string, string> = {};
+    if (!form.name?.trim()) nextErrors.name = 'Tên ngày đặc biệt không được để trống';
+    if (!form.occasion?.trim()) nextErrors.occasion = 'Dịp đặc biệt không được để trống';
+    if (!form.startDate) nextErrors.startDate = 'Ngày bắt đầu không được để trống';
+    if (!form.endDate) nextErrors.endDate = 'Ngày kết thúc không được để trống';
+    if (form.startDate && form.endDate && form.endDate < form.startDate) nextErrors.endDate = 'Ngày kết thúc phải sau hoặc bằng ngày bắt đầu';
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
   const openCreate = () => {
-    setForm({});
+    setEditing({ id: '', name: '', occasion: '', startDate: '', endDate: '', note: '' });
+    setForm({ id: '', name: '', occasion: '', startDate: '', endDate: '', note: '' });
     setErrors({});
-    setEditing({ id: '', name: '', occasion: '', startDate: '', endDate: '', note: '' } as SpecialDay);
   };
 
   const openEdit = (item: SpecialDay) => {
+    setEditing(item);
     setForm({ ...item });
     setErrors({});
-    setEditing(item);
   };
 
-  const handleSave = () => {
-    if (!validate() || !editing) return;
-    if (editing?.id) {
-      setItems(prev => prev?.map(x => x.id === editing?.id ? { ...x, ...form } as SpecialDay : x));
-      message?.success('Cập nhật thành công!');
-    } else {
-      const newItem: SpecialDay = { ...form, id: `SD${String(items?.length + 1)?.padStart(3, '0')}` } as SpecialDay;
-      setItems(prev => [...prev, newItem]);
-      message?.success('Thêm mới thành công!');
+  const persistList = (nextItems: SpecialDay[]) => {
+    setSpecialDays([...nextItems].sort((left, right) => left.startDate.localeCompare(right.startDate)));
+  };
+
+  const handleSave = async () => {
+    if (!editing || !validate()) return;
+
+    const payload: SpecialDay = {
+      id: form.id?.trim() || editing.id || `SD${String(specialDays.length + 1).padStart(3, '0')}`,
+      name: form.name!.trim(),
+      occasion: form.occasion!.trim(),
+      startDate: form.startDate!,
+      endDate: form.endDate!,
+      note: form.note?.trim() || '',
+    };
+
+    try {
+      if (editing.id) {
+        persistList(specialDays.map((item) => item.id === editing.id ? payload : item));
+        if (token) {
+          const response = await updateSpecialDay(token, editing.id, payload);
+          persistList(specialDays.map((item) => item.id === editing.id ? response.specialDay : item));
+        }
+        message.success('Cập nhật thành công');
+      } else {
+        persistList([payload, ...specialDays]);
+        if (token) {
+          const response = await createSpecialDay(token, payload);
+          persistList([response.specialDay, ...specialDays]);
+        }
+        message.success('Thêm mới thành công');
+      }
+
+      setEditing(null);
+      setForm({});
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : 'Không thể lưu ngày đặc biệt');
     }
-    setEditing(null);
-    setForm({});
   };
 
   const handleDelete = (item: SpecialDay) => {
-    Modal?.confirm({
+    Modal.confirm({
       title: 'Xóa ngày đặc biệt',
-      content: `Xóa "${item?.name}"?`,
+      content: `Xóa "${item.name}"?`,
       okText: 'Xóa',
       okButtonProps: { danger: true },
       cancelText: 'Hủy',
-      onOk: () => {
-        setItems(prev => prev?.filter(x => x?.id !== item?.id));
-        message?.success('Đã xóa!');
+      onOk: async () => {
+        const nextItems = specialDays.filter((entry) => entry.id !== item.id);
+        persistList(nextItems);
+        try {
+          if (token) {
+            await deleteSpecialDay(token, item.id);
+          }
+          message.success('Đã xóa');
+        } catch (error) {
+          message.error(error instanceof Error ? error.message : 'Không thể xóa ngày đặc biệt');
+        }
       },
     });
   };
 
   return (
-    <div className="w-full bg-[#F3F3F3] min-h-full">
+    <div className="w-full min-h-full bg-[#F3F3F3]">
       <div className="p-6 md:p-10">
-
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="space-y-1.5">
             <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold">Danh mục</p>
-            <h1 className="font-['Noto_Serif'] text-3xl text-[#2A2421] leading-tight">Ngày đặc biệt</h1>
-            <p className="text-xs text-[#2A2421]/50">Quản lý các ngày lễ, dịp đặc biệt trong năm?.</p>
+            <h1 className="font-['Noto_Serif'] text-3xl text-[#2A2421]">Ngày đặc biệt</h1>
+            <p className="text-xs text-[#2A2421]/50">Quản lý các dịp lễ và mùa cao điểm dùng chung cho hệ thống.</p>
           </div>
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-2 bg-[#2A2421] text-white px-5 py-2.5 text-xs font-['Inter'] uppercase tracking-widest hover:bg-[#D4AF37] transition-colors"
-          >
+          <button onClick={openCreate} className="flex items-center gap-2 bg-[#2A2421] px-5 py-2.5 text-xs font-bold uppercase tracking-widest text-white">
             <span className="material-symbols-outlined text-[16px]">add</span>
             Thêm ngày đặc biệt
           </button>
         </div>
 
-        {/* Search */}
-        <div className="bg-white border border-[#D0C5AF]/20 p-4 mb-6 flex items-center gap-3">
-          <span className="material-symbols-outlined text-[#2A2421]/40 text-[18px]">search</span>
+        <div className="mb-6 flex items-center gap-3 border border-[#D0C5AF]/20 bg-white p-4">
+          <span className="material-symbols-outlined text-[18px] text-[#2A2421]/40">search</span>
           <input
             type="text"
             value={search}
-            onChange={e => setSearch(e?.target?.value)}
+            onChange={(event) => setSearch(event.target.value)}
             placeholder="Tìm theo tên hoặc dịp..."
-            className="flex-1 text-sm outline-none bg-transparent"
+            className="flex-1 bg-transparent text-sm outline-none"
           />
         </div>
 
-        {/* Table */}
-        <div className="bg-white border border-[#D0C5AF]/20 overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[700px]">
+        <div className="overflow-x-auto border border-[#D0C5AF]/20 bg-white">
+          <table className="w-full min-w-[760px] border-collapse text-left">
             <thead>
-              <tr className="bg-[#FAFAF5] border-b border-[#D0C5AF]/30">
-                {['Tên ngày đặc biệt', 'Dịp đặc biệt', 'Ngày bắt đầu', 'Ngày kết thúc', 'Ghi chú', 'Hành động']?.map(h => (
-                  <th key={h} className="px-5 py-4 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">{h}</th>
+              <tr className="border-b border-[#D0C5AF]/30 bg-[#FAFAF5]">
+                {['Tên ngày đặc biệt', 'Dịp đặc biệt', 'Ngày bắt đầu', 'Ngày kết thúc', 'Ghi chú', 'Hành động'].map((header) => (
+                  <th key={header} className="px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-[#2A2421]">{header}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-[#D0C5AF]/15">
-              {filtered.length === 0 ? (
+              {filtered.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-5 py-16 text-center text-sm text-[#2A2421]/40">
-                    <span className="material-symbols-outlined text-4xl block mb-2 text-[#D0C5AF]">event</span>
+                    <span className="material-symbols-outlined mb-2 block text-4xl text-[#D0C5AF]">event</span>
                     Không có ngày đặc biệt nào
                   </td>
                 </tr>
-              ) : filtered?.map(item => (
-                <tr key={item?.id} className="hover:bg-[#FAFAF5] transition-colors">
-                  <td className="px-5 py-4 font-medium text-sm font-['Noto_Serif'] text-[#2A2421]">{item?.name}</td>
-                  <td className="px-5 py-4 text-sm text-[#2A2421]/70">{item?.occasion}</td>
-                  <td className="px-5 py-4 text-sm text-[#2A2421]/70">{fmtDate(item?.startDate)}</td>
-                  <td className="px-5 py-4 text-sm text-[#2A2421]/70">{fmtDate(item?.endDate)}</td>
-                  <td className="px-5 py-4 text-sm text-[#2A2421]/50 max-w-[160px] truncate">{item?.note ?? '—'}</td>
+              )}
+              {filtered.map((item) => (
+                <tr key={item.id} className="hover:bg-[#FAFAF5]">
+                  <td className="px-5 py-4 font-medium text-[#2A2421]">{item.name}</td>
+                  <td className="px-5 py-4 text-sm text-[#2A2421]/70">{item.occasion}</td>
+                  <td className="px-5 py-4 text-sm text-[#2A2421]/70">{fmtDate(item.startDate)}</td>
+                  <td className="px-5 py-4 text-sm text-[#2A2421]/70">{fmtDate(item.endDate)}</td>
+                  <td className="px-5 py-4 text-sm text-[#2A2421]/60">{item.note || '—'}</td>
                   <td className="px-5 py-4">
                     <div className="flex gap-2">
-                      <button onClick={() => openEdit(item)}
-                        className="px-2 py-1 text-[10px] font-bold border border-[#D0C5AF] text-[#2A2421]/60 hover:bg-gray-50">
-                        Sửa
-                      </button>
-                      <button onClick={() => handleDelete(item)}
-                        className="px-2 py-1 text-[10px] font-bold border border-red-300 text-red-600 hover:bg-red-50">
-                        Xóa
-                      </button>
+                      <button onClick={() => openEdit(item)} className="border border-[#D0C5AF] px-2 py-1 text-[10px] font-bold text-[#2A2421]/60">Sửa</button>
+                      <button onClick={() => handleDelete(item)} className="border border-red-300 px-2 py-1 text-[10px] font-bold text-red-600">Xóa</button>
                     </div>
                   </td>
                 </tr>
@@ -185,83 +171,55 @@ export default function SpecialDays() {
             </tbody>
           </table>
         </div>
-
-        <p className="mt-4 text-[11px] text-[#2A2421]/40">Hiển thị {filtered?.length} / {items?.length} ngày đặc biệt</p>
       </div>
 
-      {/* Drawer */}
       {editing && (
         <div className="fixed inset-0 z-50 overflow-hidden">
-          <div className="absolute inset-0 bg-[#2A2421]/50 backdrop-blur-sm" onClick={() => setEditing(null)}></div>
-          <div className="absolute inset-y-0 right-0 max-w-lg w-full flex">
-            <div className="w-full h-full bg-white shadow-2xl flex flex-col">
-              <div className="px-6 py-5 border-b border-[#D0C5AF]/30 flex items-center justify-between shrink-0">
+          <div className="absolute inset-0 bg-[#2A2421]/50" onClick={() => setEditing(null)} />
+          <div className="absolute inset-y-0 right-0 flex w-full max-w-lg">
+            <div className="flex h-full w-full flex-col bg-white shadow-2xl">
+              <div className="flex items-center justify-between border-b border-[#D0C5AF]/30 px-6 py-5">
                 <div>
                   <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold">Danh mục</p>
-                  <h2 className="font-['Noto_Serif'] text-xl text-[#2A2421]">
-                    {editing?.id ? 'Chỉnh sửa ngày đặc biệt' : 'Thêm ngày đặc biệt'}
-                  </h2>
+                  <h2 className="font-['Noto_Serif'] text-xl text-[#2A2421]">{editing.id ? 'Chỉnh sửa ngày đặc biệt' : 'Thêm ngày đặc biệt'}</h2>
                 </div>
-                <button onClick={() => setEditing(null)} className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full">
+                <button onClick={() => setEditing(null)} className="w-8 h-8 rounded-full hover:bg-gray-100">
                   <span className="material-symbols-outlined text-[#2A2421]/60">close</span>
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              <div className="flex-1 space-y-5 overflow-y-auto p-6">
                 <div>
-                  <label className="text-[10px] uppercase tracking-widest text-[#2A2421]/60 font-bold mb-2 block">Tên ngày đặc biệt *</label>
-                  <input type="text" value={form?.name ?? ''} onChange={e => setForm({ ...form, name: e?.target?.value })}
-                    className={`w-full border p-3 text-sm outline-none ${errors?.name ? 'border-red-400' : 'border-[#D0C5AF]/40 focus:border-[#D4AF37]'}`}
-                    placeholder="VD: Tết Nguyên Đán 2026" />
-                  {errors?.name && <p className="text-red-500 text-xs mt-1">{errors?.name}</p>}
+                  <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Tên ngày đặc biệt *</label>
+                  <input value={form.name ?? ''} onChange={(event) => setForm({ ...form, name: event.target.value })} className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none" />
+                  {errors.name && <p className="mt-1 text-xs text-red-500">{errors.name}</p>}
                 </div>
-
                 <div>
-                  <label className="text-[10px] uppercase tracking-widest text-[#2A2421]/60 font-bold mb-2 block">Dịp đặc biệt *</label>
-                  <select value={form?.occasion ?? ''} onChange={e => setForm({ ...form, occasion: e?.target?.value })}
-                    className={`w-full border p-3 text-sm outline-none appearance-none ${errors?.occasion ? 'border-red-400' : 'border-[#D0C5AF]/40 focus:border-[#D4AF37]'}`}>
-                    <option value="">Chọn dịp...</option>
-                    <option value="Tết lớn">Tết lớn</option>
-                    <option value="Nghỉ lễ">Nghỉ lễ</option>
-                    <option value="Mùa cao điểm">Mùa cao điểm</option>
-                    <option value="Lễ hội">Lễ hội</option>
-                    <option value="Khác">Khác</option>
-                  </select>
-                  {errors?.occasion && <p className="text-red-500 text-xs mt-1">{errors?.occasion}</p>}
+                  <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Dịp đặc biệt *</label>
+                  <input value={form.occasion ?? ''} onChange={(event) => setForm({ ...form, occasion: event.target.value })} className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none" />
+                  {errors.occasion && <p className="mt-1 text-xs text-red-500">{errors.occasion}</p>}
                 </div>
-
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <label className="text-[10px] uppercase tracking-widest text-[#2A2421]/60 font-bold mb-2 block">Ngày bắt đầu *</label>
-                    <input type="date" value={form?.startDate ?? ''} onChange={e => setForm({ ...form, startDate: e?.target?.value })}
-                      className={`w-full border p-3 text-sm outline-none ${errors?.startDate ? 'border-red-400' : 'border-[#D0C5AF]/40 focus:border-[#D4AF37]'}`} />
-                    {errors?.startDate && <p className="text-red-500 text-xs mt-1">{errors?.startDate}</p>}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Ngày bắt đầu *</label>
+                    <input type="date" value={form.startDate ?? ''} onChange={(event) => setForm({ ...form, startDate: event.target.value })} className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none" />
+                    {errors.startDate && <p className="mt-1 text-xs text-red-500">{errors.startDate}</p>}
                   </div>
-                  <div className="flex-1">
-                    <label className="text-[10px] uppercase tracking-widest text-[#2A2421]/60 font-bold mb-2 block">Ngày kết thúc *</label>
-                    <input type="date" value={form?.endDate ?? ''} onChange={e => setForm({ ...form, endDate: e?.target?.value })}
-                      className={`w-full border p-3 text-sm outline-none ${errors?.endDate ? 'border-red-400' : 'border-[#D0C5AF]/40 focus:border-[#D4AF37]'}`} />
-                    {errors?.endDate && <p className="text-red-500 text-xs mt-1">{errors?.endDate}</p>}
+                  <div>
+                    <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Ngày kết thúc *</label>
+                    <input type="date" value={form.endDate ?? ''} onChange={(event) => setForm({ ...form, endDate: event.target.value })} className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none" />
+                    {errors.endDate && <p className="mt-1 text-xs text-red-500">{errors.endDate}</p>}
                   </div>
                 </div>
-
                 <div>
-                  <label className="text-[10px] uppercase tracking-widest text-[#2A2421]/60 font-bold mb-2 block">Ghi chú (tùy chọn)</label>
-                  <textarea value={form?.note ?? ''} onChange={e => setForm({ ...form, note: e?.target?.value })} rows={2}
-                    className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none focus:border-[#D4AF37] resize-none"
-                    placeholder="VD: Nghỉ 7 ngày — cao điểm du lịch" />
+                  <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Ghi chú</label>
+                  <textarea value={form.note ?? ''} onChange={(event) => setForm({ ...form, note: event.target.value })} rows={3} className="w-full resize-none border border-[#D0C5AF]/40 p-3 text-sm outline-none" />
                 </div>
               </div>
 
-              <div className="p-6 border-t border-[#D0C5AF]/30 bg-[#FAFAF5] flex gap-3 shrink-0">
-                <button onClick={() => setEditing(null)}
-                  className="flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest border border-[#2A2421]/20 hover:bg-white transition-colors">
-                  Hủy bỏ
-                </button>
-                <button onClick={handleSave}
-                  className="flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold bg-[#2A2421] text-white hover:bg-[#D4AF37] transition-colors">
-                  Lưu
-                </button>
+              <div className="flex gap-3 border-t border-[#D0C5AF]/30 bg-[#FAFAF5] p-6">
+                <button onClick={() => setEditing(null)} className="flex-1 border border-[#2A2421]/20 py-3 text-xs font-bold uppercase tracking-widest">Hủy</button>
+                <button onClick={() => void handleSave()} className="flex-1 bg-[#2A2421] py-3 text-xs font-bold uppercase tracking-widest text-white">Lưu</button>
               </div>
             </div>
           </div>

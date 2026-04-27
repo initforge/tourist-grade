@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { message } from 'antd';
 import { type TourProgram } from '@entities/tour-program/data/tourProgram';
+import { patchTourProgram } from '@shared/lib/api/tourPrograms';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
+import { useAuthStore } from '@shared/store/useAuthStore';
 
 function fmtPrice(n: number) {
   return new Intl.NumberFormat('vi-VN').format(n) + ' VND';
@@ -10,10 +12,11 @@ function fmtPrice(n: number) {
 
 export default function AdminTourPrograms() {
   const navigate = useNavigate();
+  const token = useAuthStore(state => state.accessToken);
   const programs = useAppDataStore(state => state.tourPrograms);
   const setPrograms = useAppDataStore(state => state.setTourPrograms);
   const [activeTab, setActiveTab] = useState<'pending' | 'active' | 'inactive'>('pending');
-  const [inactiveReasons, setInactiveReasons] = useState<Record<string, string>>({});
+  const [stopDraft, setStopDraft] = useState<{ program: TourProgram; reason: string } | null>(null);
 
   const filtered = useMemo(() => programs.filter((program) => {
     if (activeTab === 'pending') return program.status === 'draft';
@@ -28,6 +31,38 @@ export default function AdminTourPrograms() {
 
   const persistPrograms = (nextPrograms: TourProgram[]) => {
     setPrograms(nextPrograms);
+  };
+
+  const handleStopProgram = async () => {
+    if (!stopDraft) return;
+    const reason = stopDraft.reason.trim();
+    if (!reason) {
+      message.error('Cần nhập lý do ngừng kinh doanh');
+      return;
+    }
+
+    const nextProgram: TourProgram = {
+      ...stopDraft.program,
+      status: 'inactive',
+      inactiveReason: reason,
+      updatedAt: new Date().toISOString(),
+    };
+    persistPrograms(programs.map(item => item.id === nextProgram.id ? nextProgram : item));
+
+    try {
+      if (token) {
+        const response = await patchTourProgram(token, stopDraft.program.id, {
+          status: 'inactive',
+          inactiveReason: reason,
+        });
+        persistPrograms(programs.map(item => item.id === response.tourProgram.id ? response.tourProgram : item));
+      }
+      setActiveTab('inactive');
+      setStopDraft(null);
+      message.success(`Đã ngừng kinh doanh ${stopDraft.program.name}`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : 'Không thể cập nhật trạng thái chương trình tour');
+    }
   };
 
   return (
@@ -150,18 +185,7 @@ export default function AdminTourPrograms() {
                           <button
                             onClick={(event) => {
                               event.stopPropagation();
-                              const nextPrograms: TourProgram[] = programs.map(item => (
-                                item.id === program.id
-                                  ? { ...item, status: 'inactive' as const, updatedAt: new Date().toISOString() }
-                                  : item
-                              ));
-                              persistPrograms(nextPrograms);
-                              setInactiveReasons(prev => ({
-                                ...prev,
-                                [program.id]: 'Tạm ngừng thủ công từ màn quản lý chương trình tour',
-                              }));
-                              setActiveTab('inactive');
-                              message.success(`Đã tạm ngừng ${program.name}`);
+                              setStopDraft({ program, reason: program.inactiveReason ?? '' });
                             }}
                             className="border border-red-300 px-2 py-1 text-[10px] font-bold text-red-600 hover:bg-red-50"
                           >
@@ -175,7 +199,7 @@ export default function AdminTourPrograms() {
                   {activeTab === 'inactive' && (
                     <>
                       <td className="px-4 py-4 text-sm text-[#2A2421]/70">{program.tourType === 'mua_le' ? 'Mùa lễ' : 'Quanh năm'}</td>
-                      <td className="px-4 py-4 text-sm text-[#2A2421]/70">{inactiveReasons[program.id] ?? '—'}</td>
+                      <td className="px-4 py-4 text-sm text-[#2A2421]/70">{program.inactiveReason ?? '—'}</td>
                     </>
                   )}
                 </tr>
@@ -188,6 +212,29 @@ export default function AdminTourPrograms() {
           <p className="text-[11px] text-[#2A2421]/40">Hiển thị {filtered.length} chương trình tour</p>
         </div>
       </div>
+
+      {stopDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#2A2421]/50" onClick={() => setStopDraft(null)} />
+          <div className="relative w-full max-w-lg border border-[#D0C5AF]/30 bg-white p-8 shadow-2xl">
+            <h3 className="font-['Noto_Serif'] text-2xl text-[#2A2421]">Ngừng kinh doanh</h3>
+            <p className="mt-2 text-sm text-[#2A2421]/60">Nhập lý do ngừng kinh doanh cho chương trình <strong>{stopDraft.program.name}</strong>.</p>
+            <textarea
+              value={stopDraft.reason}
+              onChange={(event) => setStopDraft({ ...stopDraft, reason: event.target.value })}
+              rows={4}
+              className="mt-5 w-full resize-none border border-[#D0C5AF]/40 p-3 text-sm outline-none"
+              placeholder="Lý do ngừng kinh doanh..."
+            />
+            <div className="mt-6 flex gap-3">
+              <button onClick={() => setStopDraft(null)} className="flex-1 border border-[#2A2421]/20 py-3 text-xs font-bold uppercase tracking-widest">Hủy</button>
+              <button onClick={() => void handleStopProgram()} className="flex-1 bg-red-600 py-3 text-xs font-bold uppercase tracking-widest text-white">Xác nhận</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+

@@ -1,4 +1,4 @@
-export type VoucherType = 'percent' | 'fixed';
+﻿export type VoucherType = 'percent' | 'fixed';
 export type VoucherStatus = 'draft' | 'pending_approval' | 'rejected' | 'upcoming' | 'active' | 'inactive';
 
 export interface Voucher {
@@ -23,7 +23,7 @@ export const VOUCHER_STATUS_LABEL: Record<VoucherStatus, string> = {
   draft: 'Nháp',
   pending_approval: 'Chờ phê duyệt',
   rejected: 'Không được phê duyệt',
-  upcoming: 'Chưa diễn ra',
+  upcoming: 'Sắp diễn ra',
   active: 'Đang hoạt động',
   inactive: 'Vô hiệu/Hết hạn',
 };
@@ -36,3 +36,4 @@ export const VOUCHER_STATUS_STYLE: Record<VoucherStatus, string> = {
   active: 'bg-emerald-100 text-emerald-700 border border-emerald-300',
   inactive: 'bg-gray-100 text-gray-400 border border-gray-300',
 };
+

@@ -9,6 +9,7 @@ export interface TourProgram {
   departurePoint: string;
   sightseeingSpots: string[];
   duration: { days: number; nights: number };
+  lodgingStandard?: '2 sao' | '3 sao' | '4 sao' | '5 sao';
   transport: 'xe' | 'maybay';
   arrivalPoint?: string;
   tourType: 'mua_le' | 'quanh_nam';
@@ -22,11 +23,20 @@ export interface TourProgram {
   bookingDeadline: number;
   status: 'draft' | 'active' | 'inactive';
   inactiveReason?: string;
+  rejectionReason?: string;
+  approvalStatus?: 'pending' | 'rejected' | 'approved';
   itinerary: ProgramItineraryDay[];
   pricingConfig: PricingConfig;
+  draftPricingTables?: TourProgramPricingTablesState;
+  draftManualPricing?: TourProgramManualPricingState;
+  draftPricingOverrides?: TourProgramPricingOverrides;
+  draftPreviewRows?: TourProgramPreviewRow[];
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  submittedAt?: string;
+  approvedAt?: string;
+  rejectedAt?: string;
 }
 
 export interface ProgramItineraryDay {
@@ -34,12 +44,69 @@ export interface ProgramItineraryDay {
   title: string;
   description: string;
   meals: ('breakfast' | 'lunch' | 'dinner')[];
+  accommodationPoint?: string;
+}
+
+export interface TourProgramSelection {
+  optionId: string;
+  isDefault?: boolean;
+  manualPrice?: number;
+  occurrences?: number | '';
+  note?: string;
+}
+
+export interface TourProgramPricingTablesState {
+  transport: TourProgramSelection[];
+  flight: TourProgramSelection[];
+  hotels: Record<string, TourProgramSelection[]>;
+  meals: Record<string, TourProgramSelection[]>;
+  attractions: Record<string, TourProgramSelection[]>;
+  otherCosts: TourProgramSelection[];
+}
+
+export interface TourProgramManualPricingState {
+  adult: boolean;
+  child: boolean;
+  infant: boolean;
+  singleSupplement: boolean;
+}
+
+export interface TourProgramPricingOverrides {
+  adult: number;
+  child: number;
+  infant: number;
+  singleSupplement: number;
+}
+
+export interface TourProgramPreviewRow {
+  id: string;
+  departureDate: string;
+  endDate: string;
+  dayType: string;
+  expectedGuests: number;
+  costPerAdult: number;
+  sellPrice: number;
+  profitPercent: number;
+  bookingDeadline: string;
+  conflictLabel: string;
+  conflictDetails: string[];
+  checked: boolean;
+}
+
+export interface SpecialDay {
+  id: string;
+  name: string;
+  occasion: string;
+  startDate: string;
+  endDate: string;
+  note?: string;
 }
 
 // --- Tour instance (sinh ra từ chương trình) ---
 export type TourInstanceStatus =
   | 'cho_duyet_ban'
   | 'yeu_cau_chinh_sua'
+  | 'tu_choi_ban'
   | 'dang_mo_ban'
   | 'chua_du_kien'
   | 'da_huy'
@@ -54,6 +121,7 @@ export type TourInstanceStatus =
 export const TOUR_INSTANCE_STATUS_LABEL: Record<TourInstanceStatus, string> = {
   cho_duyet_ban: 'Chờ duyệt bán',
   yeu_cau_chinh_sua: 'Yêu cầu chỉnh sửa',
+  tu_choi_ban: 'Từ chối bán',
   dang_mo_ban: 'Đang mở bán',
   chua_du_kien: 'Chưa đủ điều kiện',
   da_huy: 'Đã hủy',
@@ -69,6 +137,7 @@ export const TOUR_INSTANCE_STATUS_LABEL: Record<TourInstanceStatus, string> = {
 export const TOUR_INSTANCE_STATUS_STYLE: Record<TourInstanceStatus, string> = {
   cho_duyet_ban: 'bg-amber-100 text-amber-700 border-amber-300',
   yeu_cau_chinh_sua: 'bg-orange-100 text-orange-700 border-orange-300',
+  tu_choi_ban: 'bg-red-100 text-red-700 border-red-300',
   dang_mo_ban: 'bg-blue-100 text-blue-700 border-blue-300',
   chua_du_kien: 'bg-red-50 text-red-600 border-red-200',
   da_huy: 'bg-gray-100 text-gray-600 border-gray-300',
@@ -227,6 +296,16 @@ export interface TourGuide {
   tourGuidedCount: number;
   languages: string[];
   avatar?: string;
+  gender?: 'Nam' | 'Nữ';
+  dob?: string;
+  email?: string;
+  address?: string;
+  operatingArea?: string;
+  guideCardNumber?: string;
+  issueDate?: string;
+  expiryDate?: string;
+  issuePlace?: string;
+  note?: string;
 }
 
 // --- Holiday ---
@@ -290,3 +369,6 @@ export const MEAL_LABELS: Record<'breakfast' | 'lunch' | 'dinner', string> = {
   lunch: 'Bữa trưa',
   dinner: 'Bữa tối',
 };
+
+
+

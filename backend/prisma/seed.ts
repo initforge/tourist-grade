@@ -1,6 +1,11 @@
-﻿import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { hashPassword } from '../src/lib/password.js';
-import { resetBookingFixtures, resetTourWorkflowFixtures, resetVoucherFixtures } from '../src/lib/booking-fixtures.js';
+import {
+  resetBookingFixtures,
+  resetCustomerPublicFixtures,
+  resetTourWorkflowFixtures,
+  resetVoucherFixtures,
+} from '../src/lib/booking-fixtures.js';
 
 const prisma = new PrismaClient();
 
@@ -13,11 +18,15 @@ function toDate(value: string) {
 
 async function main() {
   await prisma.paymentTransaction.deleteMany();
+  await prisma.emailOutbox.deleteMany();
+  await prisma.tourReview.deleteMany();
+  await prisma.wishlistItem.deleteMany();
   await prisma.bookingPassenger.deleteMany();
   await prisma.booking.deleteMany();
   await prisma.tourInstance.deleteMany();
   await prisma.voucherTarget.deleteMany();
   await prisma.voucher.deleteMany();
+  await prisma.specialDay.deleteMany();
   await prisma.tourProgram.deleteMany();
   await prisma.supplierServicePrice.deleteMany();
   await prisma.supplierServiceVariant.deleteMany();
@@ -84,6 +93,18 @@ async function main() {
       },
     }),
   ]);
+
+  await prisma.specialDay.createMany({
+    data: [
+      { code: 'SD001', name: 'Tết Nguyên Đán 2026', occasion: 'Lễ Tết', startDate: toDate('2026-02-17'), endDate: toDate('2026-02-23'), note: 'Kỳ nghỉ Tết âm lịch' },
+      { code: 'SD002', name: 'Giỗ Tổ Hùng Vương', occasion: 'Lễ quốc gia', startDate: toDate('2026-04-06'), endDate: toDate('2026-04-06'), note: 'Giỗ Tổ Hùng Vương' },
+      { code: 'SD003', name: 'Giải phóng Miền Nam', occasion: 'Lễ quốc gia', startDate: toDate('2026-04-30'), endDate: toDate('2026-04-30'), note: '30/4' },
+      { code: 'SD004', name: 'Quốc tế Lao động', occasion: 'Lễ quốc gia', startDate: toDate('2026-05-01'), endDate: toDate('2026-05-01'), note: '1/5' },
+      { code: 'SD005', name: 'Quốc khánh', occasion: 'Lễ quốc gia', startDate: toDate('2026-09-02'), endDate: toDate('2026-09-02'), note: '2/9' },
+      { code: 'SD006', name: 'Mùa thu Nhật Bản', occasion: 'Mùa lễ quốc tế', startDate: toDate('2026-10-15'), endDate: toDate('2026-10-28'), note: 'Mùa lá đỏ' },
+      { code: 'SD007', name: 'Giáng Sinh', occasion: 'Lễ quốc tế', startDate: toDate('2026-12-25'), endDate: toDate('2026-12-25'), note: 'Noel' },
+    ],
+  });
 
   const publicTours = [
     {
@@ -158,7 +179,7 @@ async function main() {
       itinerary: [
         { day: 1, title: 'S?n bay Cam Ranh - Amanoi', description: 'Check-in bi?t th? ngh? d??ng.', activities: ['Check-in'], meals: ['lunch', 'dinner'] },
         { day: 2, title: 'H?nh tr?nh n??c', description: 'Du thuy?n ri?ng v? snorkeling.', activities: ['Du thuy?n', 'Snorkeling'], meals: ['breakfast', 'lunch', 'dinner'] },
-        { day: 3, title: 'TÄ©nh táº¡i', description: 'Yoga vÃ  trekking nháº¹.', activities: ['Yoga', 'Trekking'], meals: ['breakfast', 'lunch', 'dinner'] },
+        { day: 3, title: 'Tĩnh tại', description: 'Yoga và trekking nhẹ.', activities: ['Yoga', 'Trekking'], meals: ['breakfast', 'lunch', 'dinner'] },
         { day: 4, title: 'T?m bi?t', description: 'Tr? ph?ng v? ra s?n bay.', activities: ['Tr? ph?ng'], meals: ['breakfast'] },
       ],
       departurePoint: 'H? Ch? Minh',
@@ -174,8 +195,8 @@ async function main() {
         { id: 'DS002-1', date: '2026-05-01', availableSeats: 4, status: 'open', priceAdult: 28000000, priceChild: 14000000, priceInfant: 2800000 },
         { id: 'DS002-2', date: '2026-05-15', availableSeats: 4, status: 'open', priceAdult: 28000000, priceChild: 14000000, priceInfant: 2800000 },
       ],
-      inclusions: ['Xe Ä‘Æ°a Ä‘Ã³n', '03 Ä‘Ãªm Amanoi', 'Spa 60 phÃºt/ngÃ y'],
-      exclusions: ['VÃ© mÃ¡y bay', 'Chi phÃ­ cÃ¡ nhÃ¢n'],
+      inclusions: ['Xe đưa đón', '03 đêm Amanoi', 'Spa 60 phút/ngày'],
+      exclusions: ['Vé máy bay', 'Chi phí cá nhân'],
       childPolicy: 'Tr? em d??i 12 tu?i t?nh 50% gi? ng??i l?n.',
       cancellationPolicy: [
         { daysBefore: 14, refundPercent: 100 },
@@ -187,8 +208,8 @@ async function main() {
     {
       id: 'T003',
       slug: 'kham-pha-mua-thu-kyoto-chuyen-bay-thang',
-      title: 'MÃ¹a Thu Kyoto & Osaka - Váº» Äáº¹p VÄ©nh Cá»­u',
-      description: 'HÃ nh trÃ¬nh 6 ngÃ y khÃ¡m phÃ¡ Kyoto vÃ  Osaka trong mÃ¹a lÃ¡ Ä‘á».',
+      title: 'Mùa Thu Kyoto & Osaka - Vẻ Đẹp Vĩnh Cửu',
+      description: 'Hành trình 6 ngày khám phá Kyoto và Osaka trong mùa lá đỏ.',
       highlights: ['Kimono', 'Kaiseki', 'Onsen'],
       duration: { days: 6, nights: 5 },
       price: { adult: 32000000, child: 26000000, infant: 8000000 },
@@ -205,10 +226,10 @@ async function main() {
       category: 'international',
       itinerary: [
         { day: 1, title: 'H? N?i - Osaka', description: 'Bay th?ng ??n Osaka.', activities: ['Nh?n ph?ng'], meals: ['lunch'] },
-        { day: 2, title: 'KhÃ¡m phÃ¡ Osaka', description: 'Tham quan lÃ¢u Ä‘Ã i Osaka.', activities: ['LÃ¢u Ä‘Ã i Osaka', 'Dotonbori'], meals: ['breakfast', 'dinner'] },
+        { day: 2, title: 'Khám phá Osaka', description: 'Tham quan lâu đài Osaka.', activities: ['Lâu đài Osaka', 'Dotonbori'], meals: ['breakfast', 'dinner'] },
         { day: 3, title: 'C? ?? Kyoto', description: 'Th?m Kinkakuji v? tr?i nghi?m tr? ??o.', activities: ['Kinkakuji', 'Tr? ??o'], meals: ['breakfast', 'lunch', 'dinner'] },
         { day: 4, title: 'Arashiyama', description: 'R?ng tr?c v? b?a t?i Kaiseki.', activities: ['R?ng tr?c', 'Kaiseki'], meals: ['breakfast', 'lunch', 'dinner'] },
-        { day: 5, title: 'Nara', description: 'CÃ´ng viÃªn hÆ°Æ¡u vÃ  mua sáº¯m.', activities: ['Nara', 'Mua sáº¯m'], meals: ['breakfast', 'lunch'] },
+        { day: 5, title: 'Nara', description: 'Công viên hươu và mua sắm.', activities: ['Nara', 'Mua sắm'], meals: ['breakfast', 'lunch'] },
         { day: 6, title: 'Osaka - H? N?i', description: 'Onsen s?ng v? k?t th?c h?nh tr?nh.', activities: ['Onsen'], meals: ['breakfast'] },
       ],
       departurePoint: 'H? N?i',
@@ -216,7 +237,7 @@ async function main() {
       transport: 'maybay',
       arrivalPoint: 'Osaka',
       tourType: 'mua_le',
-      holiday: 'MÃ¹a thu Nháº­t Báº£n',
+      holiday: 'Mùa thu Nhật Bản',
       bookingDeadline: 21,
       selectedDates: ['2026-10-15', '2026-10-20'],
       departureSchedule: [
@@ -224,7 +245,7 @@ async function main() {
         { id: 'DS003-2', date: '2026-10-20', availableSeats: 18, status: 'open', priceAdult: 32000000, priceChild: 26000000, priceInfant: 8000000 },
       ],
       inclusions: ['V? m?y bay', 'Kh?ch s?n 4 sao', '?n theo ch??ng tr?nh', 'B?o hi?m'],
-      exclusions: ['Chi phÃ­ cÃ¡ nhÃ¢n', 'VAT'],
+      exclusions: ['Chi phí cá nhân', 'VAT'],
       childPolicy: 'Tr? em 2-11 tu?i t?nh 81% gi? ng??i l?n.',
       cancellationPolicy: [
         { daysBefore: 30, refundPercent: 100 },
@@ -390,7 +411,7 @@ async function main() {
         durationNights: publicTours[2].duration.nights,
         transport: 'MAYBAY',
         tourType: 'MUA_LE',
-        holidayLabel: 'MÃ¹a thu Nháº­t Báº£n',
+        holidayLabel: 'Mùa thu Nhật Bản',
         bookingDeadline: 21,
         status: 'DRAFT',
         itineraryJson: publicTours[2].itinerary.map((day) => ({
@@ -417,11 +438,11 @@ async function main() {
     prisma.tourProgram.create({
       data: {
         code: 'TP004',
-        name: 'Sapa - Ruï¿½Tng Báº­c Thang MÃ¹a Háº¡ 2N1Ä',
+        name: 'Sapa - Ru?ng B?c Thang M?a H? 2N1?',
         slug: 'sapa-ruong-bac-thang-mua-ha-2n1d',
-        description: 'ChÆ°Æ¡ng trÃ¬nh Sapa Ä‘ang ngá»«ng hoáº¡t Ä‘ï¿½Tng Ä‘ï¿½f rÃ  soÃ¡t láº¡i Ä‘Ä‘i tÃ¡c vÃ  chÃ­nh sÃ¡ch giÃ¡.',
-        departurePoint: 'HÃ  Nï¿½Ti',
-        sightseeingSpots: ['Sapa', 'Báº£n CÃ¡t CÃ¡t', 'NÃºi HÃ m Rï¿½"ng'],
+        description: 'Ch??ng tr?nh Sapa ?ang ng?ng ho?t ??ng ?? r? so?t l?i ??i t?c v? ch?nh s?ch gi?.',
+        departurePoint: 'H? N?i',
+        sightseeingSpots: ['Sapa', 'B?n C?t C?t', 'N?i H?m R?ng'],
         durationDays: 2,
         durationNights: 1,
         transport: 'XE',
@@ -429,8 +450,8 @@ async function main() {
         bookingDeadline: 10,
         status: 'INACTIVE',
         itineraryJson: [
-          { day: 1, title: 'HÃ  Nï¿½Ti - Sapa', description: 'Di chuyï¿½fn lÃªn Sapa.', meals: ['lunch', 'dinner'] },
-          { day: 2, title: 'Sapa - HÃ  Nï¿½Ti', description: 'Trï¿½Y vá» HÃ  Nï¿½Ti.', meals: ['breakfast', 'lunch'] },
+          { day: 1, title: 'H? N?i - Sapa', description: 'Di chuy?n l?n Sapa.', meals: ['lunch', 'dinner'] },
+          { day: 2, title: 'Sapa - H? N?i', description: 'Tr? v? H? N?i.', meals: ['breakfast', 'lunch'] },
         ],
         pricingConfigJson: {
           profitMargin: 18,
@@ -443,7 +464,7 @@ async function main() {
           minParticipants: 10,
         },
         publicContentJson: {
-          inactiveReason: 'Táº¡m dá»«ng Ä‘ï¿½f cáº­p nháº­t láº¡i giÃ¡ phÃ²ng vÃ  Ä‘Ä‘i tÃ¡c váº­n chuyï¿½fn',
+          inactiveReason: 'T?m d?ng ?? c?p nh?t l?i gi? ph?ng v? ??i t?c v?n chuy?n',
         },
         createdById: coordinator.id,
         updatedById: coordinator.id,
@@ -590,7 +611,7 @@ async function main() {
         openedAt: toDate('2026-03-05T00:00:00Z'),
         closedAt: toDate('2026-03-17T00:00:00Z'),
         cancelledAt: toDate('2026-03-17T12:00:00Z'),
-        cancelReason: 'KhÃ´ng Ä‘á»§ khÃ¡ch tÄ‘i thiï¿½fu (chï¿½? cÃ³ 5/8)',
+        cancelReason: 'Kh?ng ?? kh?ch t?i thi?u (ch? c? 5/8)',
         refundTotal: 11250000,
       },
     }),
@@ -602,7 +623,7 @@ async function main() {
         departureDate: toDate('2026-10-20'),
         bookingDeadlineAt: toDate('2026-09-29'),
         status: 'DANG_MO_BAN',
-        departurePoint: 'HÃ  Nï¿½Ti',
+        departurePoint: 'H? N?i',
         arrivalPoint: 'Osaka',
         sightseeingSpots: ['Osaka', 'Kyoto', 'Nara'],
         transport: 'MAYBAY',
@@ -664,34 +685,57 @@ async function main() {
         receivedAt: toDate('2026-05-18T10:00:00Z'),
       },
     }),
+    prisma.tourInstance.create({
+      data: {
+        code: 'TI010',
+        programId: tp1.id,
+        programNameSnapshot: tp1.name,
+        departureDate: toDate('2026-05-01'),
+        bookingDeadlineAt: toDate('2026-04-24'),
+        status: 'DANG_MO_BAN',
+        departurePoint: 'Hà Nội',
+        sightseeingSpots: ['Quảng Ninh'],
+        transport: 'XE',
+        expectedGuests: 12,
+        minParticipants: 8,
+        priceAdult: 4800000,
+        priceChild: 2400000,
+        priceInfant: 0,
+        createdById: coordinator.id,
+        approvedById: manager.id,
+        submittedAt: toDate('2026-03-27T10:00:00Z'),
+        approvedAt: toDate('2026-03-28T10:00:00Z'),
+        openedAt: toDate('2026-04-01T00:00:00Z'),
+      },
+    }),
   ]);
 
   await prisma.supplier.createMany({
     data: [
       {
         id: 'SUP001',
-        name: 'KhÃ¡ch sáº¡n Di Sáº£n Viï¿½?t',
+        name: 'Kh?ch s?n Di S?n Vi?t',
         phone: '024 3939 8888',
         email: 'contact@heritage.vn',
         type: 'HOTEL',
-        serviceSummary: 'LÆ°u trÃº',
-        operatingArea: 'Háº¡ Long',
-        address: '12 BÃ£i ChÃ¡y, Háº¡ Long',
+        serviceSummary: 'Lưu trú',
+        operatingArea: 'Hạ Long',
+        address: '12 Bãi Cháy, Hạ Long',
         establishedYear: 2016,
-        description: 'KhÃ¡ch sáº¡n 4 sao phá»¥c vá»¥ khÃ¡ch Ä‘oÃ n, cÃ³ nhÃ  hÃ ng nï¿½Ti khu.',
+        description: 'Kh?ch s?n 4 sao ph?c v? kh?ch ?o?n, c? nh? h?ng n?i khu.',
         isActive: true,
       },
       {
         id: 'SUP002',
-        name: 'Váº­n táº£i XuyÃªn Viï¿½?t',
+        name: 'V?n t?i Xuy?n Vi?t',
         phone: '0901 234 567',
         email: 'ops@vantaiviet.vn',
         type: 'TRANSPORT',
         serviceSummary: 'Xe tham quan',
-        operatingArea: 'HÃ  Nï¿½Ti, Quáº£ng Ninh, Ninh BÃ¬nh',
-        address: '31 Tráº§n Quang Kháº£i, HÃ  Nï¿½Ti',
+        operatingArea: 'H? N?i, Qu?ng Ninh, Ninh B?nh',
+        address: '31 Tr?n Quang Kh?i, H? N?i',
         establishedYear: 2014,
-        description: 'NhÃ  xe chuyÃªn tour ghÃ©p vÃ  tour riÃªng.',
+        description: 'Nh? xe chuy?n tour gh?p v? tour ri?ng.',
         isActive: true,
       },
       {
@@ -700,11 +744,11 @@ async function main() {
         phone: '024 3888 7777',
         email: 'reserve@lotus.vn',
         type: 'RESTAURANT',
-        serviceSummary: 'Bá»¯a ï¿½fn Ä‘oÃ n',
-        operatingArea: 'HÃ  Nï¿½Ti',
-        address: '88 TrÃ ng Tiá»n, HoÃ n Kiáº¿m, HÃ  Nï¿½Ti',
+        serviceSummary: 'B?a ?n ?o?n',
+        operatingArea: 'H? N?i',
+        address: '88 Tr?ng Ti?n, Ho?n Ki?m, H? N?i',
         establishedYear: 2011,
-        description: 'NhÃ  hÃ ng chuyÃªn set menu cho khÃ¡ch du lï¿½<ch Ä‘oÃ n.',
+        description: 'Nh? h?ng chuy?n set menu cho kh?ch du l?ch ?o?n.',
         isActive: false,
       },
     ],
@@ -715,37 +759,37 @@ async function main() {
       {
         id: 'SUP001-S1',
         supplierId: 'SUP001',
-        name: 'PhÃ²ng Ä‘Ã´i',
-        description: 'PhÃ²ng tiÃªu chuáº©n hÆ°ï¿½>ng phÄ‘',
-        unit: 'PhÃ²ng',
+        name: 'Ph?ng ??i',
+        description: 'Ph?ng ti?u chu?n h??ng ph?',
+        unit: 'Ph?ng',
         quantity: 1,
         basePrice: 1300000,
       },
       {
         id: 'SUP001-S2',
         supplierId: 'SUP001',
-        name: 'PhÃ²ng Ä‘Æ¡n',
-        description: 'PhÃ²ng tiÃªu chuáº©n giÆ°á»ng lï¿½>n',
-        unit: 'PhÃ²ng',
+        name: 'Ph?ng ??n',
+        description: 'Ph?ng ti?u chu?n gi??ng l?n',
+        unit: 'Ph?ng',
         quantity: 1,
         basePrice: 1200000,
       },
       {
         id: 'SUP001-M1',
         supplierId: 'SUP001',
-        name: 'Buffet sÃ¡ng',
-        unit: 'Bá»¯a',
+        name: 'Buffet s?ng',
+        unit: 'B?a',
         quantity: 1,
         basePrice: 180000,
         isMealService: true,
-        menu: 'Buffet 20 mÃ³n + nÆ°ï¿½>c Ã©p',
-        note: 'Phá»¥c vá»¥ tá»« 06:00-09:30',
+        menu: 'Buffet 20 m?n + n??c ?p',
+        note: 'Phục vụ từ 06:00-09:30',
       },
       {
         id: 'SUP002-S1',
         supplierId: 'SUP002',
-        name: 'Xe 16 chÃ¡Â»â€”',
-        description: 'Äï¿½"ng hÃ nh suÄ‘t hÃ nh trÃ¬nh',
+        name: 'Xe 16 ch?',
+        description: '??ng h?nh su?t h?nh tr?nh',
         unit: 'Xe',
         quantity: 1,
         capacity: 16,
@@ -756,8 +800,8 @@ async function main() {
       {
         id: 'SUP002-S2',
         supplierId: 'SUP002',
-        name: 'Xe 25 chÃ¡Â»â€”',
-        description: 'PhÆ°Æ¡ng Ã¡n dá»± phÃ²ng',
+        name: 'Xe 25 ch?',
+        description: 'Phương án dự phòng',
         unit: 'Xe',
         quantity: 1,
         capacity: 25,
@@ -768,25 +812,25 @@ async function main() {
       {
         id: 'SUP004-S1',
         supplierId: 'SUP004',
-        name: 'Set menu Ä‘oÃ n',
-        description: 'Phá»¥c vá»¥ bÃ n trÃ²n 10 ngÆ°á»i',
-        unit: 'BÃ n',
+        name: 'Set menu đoàn',
+        description: 'Phục vụ bàn tròn 10 người',
+        unit: 'Bàn',
         quantity: 1,
         basePrice: 1800000,
-        menu: '6 mÃ³n + canh + trÃ¡ng miï¿½?ng',
-        note: 'CÃ³ menu chay theo yÃªu cáº§u',
+        menu: '6 m?n + canh + tr?ng mi?ng',
+        note: 'C? menu chay theo y?u c?u',
       },
     ],
   });
 
   await prisma.supplierServicePrice.createMany({
     data: [
-      { serviceVariantId: 'SUP001-S1', unitPrice: 1300000, fromDate: toDate('2026-01-01'), toDate: toDate('2026-12-31'), note: 'GiÃ¡ chuáº©n', createdByName: 'Äiá»u phÄ‘i viÃªn' },
-      { serviceVariantId: 'SUP001-S2', unitPrice: 1200000, fromDate: toDate('2026-01-01'), toDate: toDate('2026-12-31'), note: 'GiÃ¡ chuáº©n', createdByName: 'Äiá»u phÄ‘i viÃªn' },
-      { serviceVariantId: 'SUP001-M1', unitPrice: 180000, fromDate: toDate('2026-01-01'), toDate: toDate('2026-12-31'), note: 'Ãp dá»¥ng nï¿½Ti khu', createdByName: 'Äiá»u phÄ‘i viÃªn' },
-      { serviceVariantId: 'SUP002-S1', unitPrice: 8100000, fromDate: toDate('2026-04-01'), toDate: toDate('2026-09-30'), note: 'Xe 16 chï¿½-', createdByName: 'Äiá»u phÄ‘i viÃªn' },
-      { serviceVariantId: 'SUP002-S2', unitPrice: 9600000, fromDate: toDate('2026-04-01'), toDate: toDate('2026-09-30'), note: 'Xe 25 chï¿½-', createdByName: 'Äiá»u phÄ‘i viÃªn' },
-      { serviceVariantId: 'SUP004-S1', unitPrice: 1800000, fromDate: toDate('2026-01-01'), toDate: toDate('2026-12-31'), note: 'Set menu cÆ¡ báº£n', createdByName: 'Äiá»u phÄ‘i viÃªn' },
+      { serviceVariantId: 'SUP001-S1', unitPrice: 1300000, fromDate: toDate('2026-01-01'), toDate: toDate('2026-12-31'), note: 'Gi? chu?n', createdByName: '?i?u ph?i vi?n' },
+      { serviceVariantId: 'SUP001-S2', unitPrice: 1200000, fromDate: toDate('2026-01-01'), toDate: toDate('2026-12-31'), note: 'Gi? chu?n', createdByName: '?i?u ph?i vi?n' },
+      { serviceVariantId: 'SUP001-M1', unitPrice: 180000, fromDate: toDate('2026-01-01'), toDate: toDate('2026-12-31'), note: '?p d?ng n?i khu', createdByName: '?i?u ph?i vi?n' },
+      { serviceVariantId: 'SUP002-S1', unitPrice: 8100000, fromDate: toDate('2026-04-01'), toDate: toDate('2026-09-30'), note: 'Xe 16 ch?', createdByName: '?i?u ph?i vi?n' },
+      { serviceVariantId: 'SUP002-S2', unitPrice: 9600000, fromDate: toDate('2026-04-01'), toDate: toDate('2026-09-30'), note: 'Xe 25 ch?', createdByName: '?i?u ph?i vi?n' },
+      { serviceVariantId: 'SUP004-S1', unitPrice: 1800000, fromDate: toDate('2026-01-01'), toDate: toDate('2026-12-31'), note: 'Set menu c? b?n', createdByName: '?i?u ph?i vi?n' },
     ],
   });
 
@@ -795,42 +839,42 @@ async function main() {
       {
         id: 'service-1',
         code: 'SV-TKT',
-        name: 'VÃ© tham quan Sun World',
+        name: 'Vé tham quan Sun World',
         category: 'ATTRACTION_TICKET',
-        unit: 'vÃ©',
+        unit: 'vé',
         priceMode: 'LISTED',
         priceSetup: 'BY_AGE',
         status: 'ACTIVE',
-        description: 'Ãp dá»¥ng cho cÃ¡c chÆ°Æ¡ng trÃ¬nh tham quan táº¡i ÄÃ  Náºµng.',
-        supplierName: 'Sun World Háº¡ Long',
+        description: 'Áp dụng cho các chương trình tham quan tại Đà Nẵng.',
+        supplierName: 'Sun World Hạ Long',
         contactInfo: '024 3936 6666',
-        province: 'ÄÃ  Náºµng',
+        province: 'Đà Nẵng',
       },
       {
         id: 'service-2',
         code: 'SV-INS',
-        name: 'Báº£o hiá»ƒm du lá»‹ch',
+        name: 'Bảo hiểm du lịch',
         category: 'OTHER',
-        unit: 'khÃ¡ch',
+        unit: 'khách',
         priceMode: 'LISTED',
         priceSetup: 'COMMON',
         status: 'ACTIVE',
-        description: 'Ãp dá»¥ng trá»±c tiáº¿p vÃ o chi phÃ­ khÃ¡c.',
-        supplierName: 'Báº£o Viá»‡t Travel Care',
+        description: 'Áp dụng trực tiếp vào chi phí khác.',
+        supplierName: 'Bảo Việt Travel Care',
         contactInfo: 'hotro@baoviet.example',
         formulaCount: 'DEFAULT_VALUE',
         formulaCountDefault: '1',
         formulaQuantity: 'DEFAULT_VALUE',
-        formulaQuantityDefault: 'Theo sÄ‘ ngÆ°á»i',
+        formulaQuantityDefault: 'Theo sđ người',
       },
     ],
   });
 
   await prisma.servicePrice.createMany({
     data: [
-      { serviceId: 'service-1', unitPrice: 250000, effectiveDate: toDate('2026-01-01'), endDate: toDate('2026-06-30'), note: 'NgÆ°á»i lï¿½>n', createdByName: 'TrÆ°ï¿½Yng phÃ²ng Ä‘iá»u phÄ‘i' },
-      { serviceId: 'service-1', unitPrice: 180000, effectiveDate: toDate('2026-01-01'), endDate: toDate('2026-06-30'), note: 'Tráº» em', createdByName: 'TrÆ°ï¿½Yng phÃ²ng Ä‘iá»u phÄ‘i' },
-      { serviceId: 'service-2', unitPrice: 40000, effectiveDate: toDate('2026-01-01'), endDate: toDate('2026-12-31'), note: 'Báº£o hiï¿½fm nï¿½Ti Ä‘ï¿½<a', createdByName: 'Äiá»u phÄ‘i viÃªn' },
+      { serviceId: 'service-1', unitPrice: 250000, effectiveDate: toDate('2026-01-01'), endDate: toDate('2026-06-30'), note: 'Ng??i l?n', createdByName: 'Tr??ng ph?ng ?i?u ph?i' },
+      { serviceId: 'service-1', unitPrice: 180000, effectiveDate: toDate('2026-01-01'), endDate: toDate('2026-06-30'), note: 'Tr? em', createdByName: 'Tr??ng ph?ng ?i?u ph?i' },
+      { serviceId: 'service-2', unitPrice: 40000, effectiveDate: toDate('2026-01-01'), endDate: toDate('2026-12-31'), note: 'B?o hi?m n?i ??a', createdByName: '?i?u ph?i vi?n' },
     ],
   });
 
@@ -838,35 +882,35 @@ async function main() {
     data: [
       {
         code: 'HDV001',
-        fullName: 'Tráº§n Minh HoÃ ng',
+        fullName: 'Trần Minh Hoàng',
         gender: 'MALE',
         dateOfBirth: toDate('1986-04-12'),
         phone: '0901 111 222',
         email: 'hoang.hdv@travela.vn',
-        address: '25 Nguyï¿½.n ChÃ­ Thanh, HÃ  Nï¿½Ti',
-        operatingArea: 'Miá»n Báº¯c',
+        address: '25 Nguy?n Ch? Thanh, H? N?i',
+        operatingArea: 'Miền Bắc',
         guideCardNumber: 'HDV-001-2020',
         issueDate: toDate('2020-03-20'),
         expiryDate: toDate('2030-03-20'),
-        issuePlace: 'Tá»•ng cá»¥c Du lá»‹ch',
-        note: 'Phá»¥ trÃ¡ch tour nï¿½Ti Ä‘ï¿½<a miá»n Báº¯c',
-        languagesJson: ['Tiáº¿ng Anh'],
+        issuePlace: 'Tổng cục Du lịch',
+        note: 'Ph? tr?ch tour n?i ??a mi?n B?c',
+        languagesJson: ['Tiếng Anh'],
       },
       {
         code: 'HDV002',
-        fullName: 'LÃª Thu HÃ ',
+        fullName: 'L? Thu H?',
         gender: 'FEMALE',
         dateOfBirth: toDate('1992-08-21'),
         phone: '0902 333 444',
         email: 'ha.hdv@travela.vn',
-        address: '15 LÃ½ ThÆ°á»ng Kiï¿½?t, HÃ  Nï¿½Ti',
-        operatingArea: 'Nháº­t Báº£n',
+        address: '15 L? Th??ng Ki?t, H? N?i',
+        operatingArea: 'Nhật Bản',
         guideCardNumber: 'HDV-002-2021',
         issueDate: toDate('2021-05-11'),
         expiryDate: toDate('2031-05-11'),
-        issuePlace: 'Sï¿½Y Du lï¿½<ch HÃ  Nï¿½Ti',
-        note: 'Æ¯u tiÃªn tour inbound Nháº­t Báº£n',
-        languagesJson: ['Tiáº¿ng Nháº­t', 'Tiáº¿ng Anh'],
+        issuePlace: 'S? Du l?ch H? N?i',
+        note: 'Ưu tiên tour inbound Nhật Bản',
+        languagesJson: ['Tiếng Nhật', 'Tiếng Anh'],
       },
     ],
   });
@@ -882,7 +926,7 @@ async function main() {
         usageLimit: 200,
         usedCount: 0,
         status: 'DRAFT',
-        description: 'Khuyáº¿n mÃ£i mÃ¹a hÃ¨ 2026',
+        description: 'Khuyến mãi mùa hè 2026',
         createdById: sales.id,
       },
       {
@@ -894,7 +938,7 @@ async function main() {
         usageLimit: 100,
         usedCount: 15,
         status: 'PENDING_APPROVAL',
-        description: 'Giáº£m 10% cho tour chá»n lá»c',
+        description: 'Giảm 10% cho tour chọn lọc',
         createdById: sales.id,
       },
       {
@@ -906,8 +950,8 @@ async function main() {
         usageLimit: 10,
         usedCount: 0,
         status: 'REJECTED',
-        description: 'Voucher bï¿½< tá»« chÄ‘i do giÃ¡ trï¿½< quÃ¡ cao',
-        rejectionReason: 'GiÃ¡ trï¿½< giáº£m quÃ¡ cao, vui lÃ²ng giáº£m xuÄ‘ng 30%',
+        description: 'Voucher b? t? ch?i do gi? tr? qu? cao',
+        rejectionReason: 'Gi? tr? gi?m qu? cao, vui l?ng gi?m xu?ng 30%',
         createdById: sales.id,
       },
       {
@@ -919,7 +963,7 @@ async function main() {
         usageLimit: 50,
         usedCount: 12,
         status: 'ACTIVE',
-        description: 'Giáº£m 500K cho Ä‘Æ¡n hÃ ng cao cáº¥p',
+        description: 'Giảm 500K cho đơn hàng cao cấp',
         createdById: sales.id,
         approvedById: manager.id,
       },
@@ -960,10 +1004,10 @@ async function main() {
       paymentMethod: 'PAYOS',
       paymentType: 'ONLINE',
       paymentStatus: 'PAID',
-      contactName: 'Nguyï¿½.n Vï¿½fn A',
+      contactName: 'Nguy?n V?n A',
       contactEmail: 'nguyenvana@gmail.com',
       contactPhone: '0988 888 888',
-      contactNote: 'Dá»‹ á»©ng háº£i sáº£n nháº¹',
+      contactNote: 'Dị ứng hải sản nhẹ',
       roomCountsJson: { single: 1, double: 0, triple: 0 },
       totalAmount: 9000000,
       paidAmount: 9000000,
@@ -972,8 +1016,8 @@ async function main() {
       confirmedAt: toDate('2026-03-25T11:00:00Z'),
       passengers: {
         create: [
-          { type: 'ADULT', fullName: 'Nguyï¿½.n Vï¿½fn A', gender: 'MALE', dateOfBirth: toDate('1985-05-12'), cccd: '001085012345', nationality: 'Viï¿½?t Nam' },
-          { type: 'ADULT', fullName: 'Tráº§n Thá»‹ B', gender: 'FEMALE', dateOfBirth: toDate('1987-08-20'), cccd: '001087067890', nationality: 'Viá»‡t Nam' },
+          { type: 'ADULT', fullName: 'Nguy?n V?n A', gender: 'MALE', dateOfBirth: toDate('1985-05-12'), cccd: '001085012345', nationality: 'Vi?t Nam' },
+          { type: 'ADULT', fullName: 'Trần Thị B', gender: 'FEMALE', dateOfBirth: toDate('1987-08-20'), cccd: '001087067890', nationality: 'Việt Nam' },
         ],
       },
       paymentTransactions: {
@@ -995,23 +1039,23 @@ async function main() {
       paymentMethod: 'PAYOS',
       paymentType: 'ONLINE',
       paymentStatus: 'PAID',
-      contactName: 'Nguyï¿½.n Vï¿½fn A',
+      contactName: 'Nguy?n V?n A',
       contactEmail: 'nguyenvana@gmail.com',
       contactPhone: '0988 888 888',
       bankInfoJson: { accountNumber: '1234567890', bankName: 'Vietcombank', accountHolder: 'NGUYEN VAN A' },
       totalAmount: 32000000,
       paidAmount: 32000000,
       remainingAmount: 0,
-      cancellationReason: 'Thay Ä‘ï¿½.i káº¿ hoáº¡ch cÃ´ng tÃ¡c',
+      cancellationReason: 'Thay ??i k? ho?ch c?ng t?c',
       cancelledAt: toDate('2026-04-05T10:00:00Z'),
       refundAmount: 25600000,
       payloadJson: {
-        cancelledConfirmedBy: 'NhÃ¢n ViÃªn Kinh Doanh',
+        cancelledConfirmedBy: 'Nhân Viên Kinh Doanh',
         cancelledConfirmedAt: '2026-04-05T10:30:00Z',
       },
       passengers: {
         create: [
-          { type: 'ADULT', fullName: 'Nguyï¿½.n Vï¿½fn A', gender: 'MALE', dateOfBirth: toDate('1985-05-12'), cccd: '001085012345', nationality: 'Viï¿½?t Nam' },
+          { type: 'ADULT', fullName: 'Nguy?n V?n A', gender: 'MALE', dateOfBirth: toDate('1985-05-12'), cccd: '001085012345', nationality: 'Vi?t Nam' },
         ],
       },
       paymentTransactions: {
@@ -1033,7 +1077,7 @@ async function main() {
       paymentMethod: 'PAYOS',
       paymentType: 'ONLINE',
       paymentStatus: 'PARTIAL',
-      contactName: 'LÃª Vï¿½fn C',
+      contactName: 'L? V?n C',
       contactEmail: 'levanc@gmail.com',
       contactPhone: '0912 345 678',
       roomCountsJson: { single: 1, double: 1, triple: 0 },
@@ -1042,9 +1086,9 @@ async function main() {
       remainingAmount: 28000000,
       passengers: {
         create: [
-          { type: 'ADULT', fullName: 'LÃª Vï¿½fn C', gender: 'MALE', dateOfBirth: toDate('1990-03-15'), cccd: '001090034567', nationality: 'Viï¿½?t Nam', singleRoomSupplement: 500000 },
-          { type: 'ADULT', fullName: 'Pháº¡m Thá»‹ D', gender: 'FEMALE', dateOfBirth: toDate('1992-07-22'), cccd: '001092078901', nationality: 'Viá»‡t Nam' },
-          { type: 'CHILD', fullName: 'LÃª Minh E', gender: 'MALE', dateOfBirth: toDate('2018-01-10') },
+          { type: 'ADULT', fullName: 'L? V?n C', gender: 'MALE', dateOfBirth: toDate('1990-03-15'), cccd: '001090034567', nationality: 'Vi?t Nam', singleRoomSupplement: 500000 },
+          { type: 'ADULT', fullName: 'Phạm Thị D', gender: 'FEMALE', dateOfBirth: toDate('1992-07-22'), cccd: '001092078901', nationality: 'Việt Nam' },
+          { type: 'CHILD', fullName: 'Lê Minh E', gender: 'MALE', dateOfBirth: toDate('2018-01-10') },
         ],
       },
       paymentTransactions: {
@@ -1088,6 +1132,7 @@ async function main() {
   });
 
   await resetBookingFixtures(prisma);
+  await resetCustomerPublicFixtures(prisma);
   await resetTourWorkflowFixtures(prisma);
   await resetVoucherFixtures(prisma);
 

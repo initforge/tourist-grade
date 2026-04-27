@@ -4,6 +4,7 @@ import { message } from 'antd';
 import { useAuthStore } from '@shared/store/useAuthStore';
 import type { Booking } from '@entities/booking/data/bookings';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
+import { isBookingConfirmedForOperations } from '@shared/lib/bookingLifecycle';
 import { updateTourInstanceCommand } from '@shared/lib/api/tourInstances';
 
 export default function TourEstimate() {
@@ -75,6 +76,7 @@ export default function TourEstimate() {
 
   // Bookings for this tour
   const tourBookings = bookings?.filter((b: Booking) =>
+    isBookingConfirmedForOperations(b) &&
     b?.tourName?.toLowerCase()?.includes(instance?.programName?.toLowerCase()?.split(' ')[0])
   );
 

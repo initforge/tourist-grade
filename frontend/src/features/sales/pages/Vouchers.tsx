@@ -1,13 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Modal } from 'antd';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { TourProgram } from '@entities/tour-program/data/tourProgram';
 import { VOUCHER_STATUS_LABEL, VOUCHER_STATUS_STYLE } from '@entities/voucher/data/vouchers';
 import type { Voucher, VoucherStatus, VoucherType } from '@entities/voucher/data/vouchers';
 import {
   SALES_DRAFT_WARNING,
   VOUCHER_DATE_RULE_HELP,
-  approvedVoucherStatus,
   canSaveVoucher,
   canSendVoucherApproval,
   digitsOnly,
@@ -90,7 +89,7 @@ function fromForm(form: FormState, fallbackId: string): Voucher {
     limit: Number(form.limit),
     applicableTours: form.applicableTours,
     status: form.status,
-    description: form.description,
+    description: form.description.trim(),
     createdAt: form.createdAt,
     createdBy: form.createdBy,
     rejectionReason: form.rejectionReason,
@@ -99,30 +98,42 @@ function fromForm(form: FormState, fallbackId: string): Voucher {
 
 function validateFields(form: FormState) {
   const errors: Record<string, string> = {};
+
   if (!form.code.trim()) errors.code = 'Mã voucher không được để trống';
   if (!form.value.trim()) errors.value = 'Giá trị không được để trống';
   else if (!isPositiveIntegerText(form.value)) errors.value = 'Giá trị phải là số nguyên dương';
   if (!form.startDate) errors.startDate = 'Ngày bắt đầu không được để trống';
   if (!form.endDate) errors.endDate = 'Ngày kết thúc không được để trống';
-  if (form.startDate && form.endDate && form.endDate < form.startDate) errors.endDate = 'Ngày kết thúc phải sau ngày bắt đầu';
-  if (!form.limit.trim() || !isPositiveIntegerText(form.limit)) errors.limit = 'Số lượng phải là số nguyên dương';
+  if (form.startDate && form.endDate && form.endDate < form.startDate) {
+    errors.endDate = 'Ngày kết thúc phải sau ngày bắt đầu';
+  }
+  if (!form.limit.trim() || !isPositiveIntegerText(form.limit)) {
+    errors.limit = 'Số lượng phải là số nguyên dương';
+  }
+
   return errors;
 }
 
 function validate(form: FormState, action: 'save' | 'send') {
   const errors = validateFields(form);
+
   if (form.startDate && action === 'save' && !canSaveVoucher(form.startDate)) {
     errors.startDate = 'Ngày bắt đầu phải cách ngày hiện tại ít nhất 10 ngày';
   }
   if (form.startDate && action === 'send' && !canSendVoucherApproval(form.startDate)) {
     errors.startDate = 'Voucher phải được gửi phê duyệt trước ngày bắt đầu ít nhất 7 ngày';
   }
+
   return errors;
 }
 
 function WarningIcon({ title }: { title: string }) {
   return (
-    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-amber-700" title={title} aria-label={title}>
+    <span
+      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-amber-700"
+      title={title}
+      aria-label={title}
+    >
       <span className="material-symbols-outlined text-[14px]">warning</span>
     </span>
   );
@@ -144,16 +155,32 @@ function FormDrawer({
   tourPrograms: TourProgram[];
 }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showTourMenu, setShowTourMenu] = useState(false);
   const fieldErrors = validateFields(form);
   const saveAllowed = Object.keys(fieldErrors).length === 0 && canSaveVoucher(form.startDate);
   const sendAllowed = Object.keys(fieldErrors).length === 0 && canSendVoucherApproval(form.startDate);
+
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm({ ...form, [key]: value });
-  const toggleTour = (id: string) => update('applicableTours', form.applicableTours.includes(id) ? form.applicableTours.filter((item) => item !== id) : [...form.applicableTours, id]);
+  const toggleTour = (id: string) => {
+    update(
+      'applicableTours',
+      form.applicableTours.includes(id)
+        ? form.applicableTours.filter((item) => item !== id)
+        : [...form.applicableTours, id],
+    );
+  };
+
+  const selectedTourLabel = form.applicableTours.length === 0
+    ? 'Áp dụng cho tất cả chương trình'
+    : form.applicableTours.length === 1
+      ? (tourPrograms.find((tour) => tour.id === form.applicableTours[0])?.name ?? form.applicableTours[0])
+      : `${form.applicableTours.length} chương trình đã chọn`;
 
   const submit = (action: 'save' | 'send') => {
     const next = validate(form, action);
     setErrors(next);
-    if (Object.keys(next).length) return;
+    if (Object.keys(next).length > 0) return;
+
     if (action === 'save') onSave();
     else onSend();
   };
@@ -167,72 +194,154 @@ function FormDrawer({
             <p className="font-['Inter'] text-[10px] font-bold uppercase tracking-[0.2em] text-[#D4AF37]">Voucher</p>
             <h2 className="font-['Noto_Serif'] text-xl text-[#2A2421]">{form.id ? 'Chỉnh sửa Voucher' : 'Tạo Voucher Mới'}</h2>
           </div>
-          <button onClick={onClose} aria-label="close"><span className="material-symbols-outlined">close</span></button>
+          <button onClick={onClose} aria-label="Đóng">
+            <span className="material-symbols-outlined">close</span>
+          </button>
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto p-6">
           {form.status === 'rejected' && form.rejectionReason && (
             <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">Lý do: {form.rejectionReason}</div>
           )}
+
           <div>
-            <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Mã Khuyến Mãi *</label>
-            <input value={form.code} onChange={(event) => update('code', event.target.value.toUpperCase())} className="w-full border border-[#D0C5AF]/40 p-3 text-sm font-bold uppercase outline-none" />
+            <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Mã khuyến mãi *</label>
+            <input
+              value={form.code}
+              onChange={(event) => update('code', event.target.value.toUpperCase())}
+              className="w-full border border-[#D0C5AF]/40 p-3 text-sm font-bold uppercase outline-none"
+            />
             {errors.code && <p className="mt-1 text-xs text-red-500">{errors.code}</p>}
           </div>
+
           <div className="flex gap-4">
             <div className="flex-1">
               <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Loại chiết khấu</label>
-              <select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as VoucherType, value: digitsOnly(form.value) })} className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none">
+              <select
+                value={form.type}
+                onChange={(event) => setForm({ ...form, type: event.target.value as VoucherType, value: digitsOnly(form.value) })}
+                className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none"
+              >
                 <option value="percent">Phần trăm (%)</option>
                 <option value="fixed">Tiền mặt</option>
               </select>
             </div>
             <div className="flex-1">
               <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Giá trị *</label>
-              <input inputMode="numeric" value={form.value} onChange={(event) => update('value', digitsOnly(event.target.value))} placeholder={voucherValuePlaceholder(form.type)} className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none" />
+              <input
+                inputMode="numeric"
+                value={form.value}
+                onChange={(event) => update('value', digitsOnly(event.target.value))}
+                placeholder={voucherValuePlaceholder(form.type)}
+                className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none"
+              />
               {errors.value && <p className="mt-1 text-xs text-red-500">{errors.value}</p>}
             </div>
           </div>
+
           <div>
             <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Số lượng được dùng *</label>
-            <input inputMode="numeric" value={form.limit} onChange={(event) => update('limit', digitsOnly(event.target.value))} className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none" />
+            <input
+              inputMode="numeric"
+              value={form.limit}
+              onChange={(event) => update('limit', digitsOnly(event.target.value))}
+              className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none"
+            />
             {errors.limit && <p className="mt-1 text-xs text-red-500">{errors.limit}</p>}
           </div>
+
           <div className="flex gap-4">
             <div className="flex-1">
               <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Ngày bắt đầu *</label>
-              <input type="date" value={form.startDate} onChange={(event) => update('startDate', event.target.value)} className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none" />
+              <input
+                type="date"
+                value={form.startDate}
+                onChange={(event) => update('startDate', event.target.value)}
+                className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none"
+              />
               <p className="mt-1 text-xs italic text-[#2A2421]/45">{VOUCHER_DATE_RULE_HELP}</p>
               {errors.startDate && <p className="mt-1 text-xs text-red-500">{errors.startDate}</p>}
             </div>
             <div className="flex-1">
               <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Ngày kết thúc *</label>
-              <input type="date" value={form.endDate} onChange={(event) => update('endDate', event.target.value)} className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none" />
+              <input
+                type="date"
+                value={form.endDate}
+                onChange={(event) => update('endDate', event.target.value)}
+                className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none"
+              />
               {errors.endDate && <p className="mt-1 text-xs text-red-500">{errors.endDate}</p>}
             </div>
           </div>
+
           <div>
             <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Chương trình tour áp dụng</label>
-            <button type="button" onClick={() => update('applicableTours', [])} className="mb-2 text-sm font-medium text-[#D4AF37]">Áp dụng cho tất cả chương trình</button>
-            <div className="space-y-2 border border-[#D0C5AF]/40 p-3">
-              {tourPrograms.map((tour) => (
-                <label key={tour.id} className="flex items-center gap-3 text-sm">
-                  <input type="checkbox" checked={form.applicableTours.includes(tour.id)} onChange={() => toggleTour(tour.id)} />
-                  <span>{tour.name}</span>
-                </label>
-              ))}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowTourMenu((open) => !open)}
+                className="flex w-full items-center justify-between border border-[#D0C5AF]/40 p-3 text-left text-sm"
+              >
+                <span className="truncate">{selectedTourLabel}</span>
+                <span className="material-symbols-outlined text-[18px] text-[#2A2421]/50">arrow_drop_down</span>
+              </button>
+              {showTourMenu && (
+                <div className="absolute z-20 mt-2 max-h-64 w-full overflow-y-auto border border-[#D0C5AF]/30 bg-white shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      update('applicableTours', []);
+                      setShowTourMenu(false);
+                    }}
+                    className="flex w-full items-center justify-between border-b border-[#D0C5AF]/15 px-3 py-2 text-sm hover:bg-[#FAFAF5]"
+                  >
+                    <span>Áp dụng cho tất cả chương trình</span>
+                    {form.applicableTours.length === 0 && (
+                      <span className="material-symbols-outlined text-[16px] text-[#D4AF37]">check</span>
+                    )}
+                  </button>
+                  {tourPrograms.map((tour) => (
+                    <label key={tour.id} className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-[#FAFAF5]">
+                      <input
+                        type="checkbox"
+                        checked={form.applicableTours.includes(tour.id)}
+                        onChange={() => toggleTour(tour.id)}
+                      />
+                      <span className="min-w-0 flex-1 truncate">{tour.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
+
           <div>
             <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/60">Ghi chú</label>
-            <textarea value={form.description} onChange={(event) => update('description', event.target.value)} rows={3} className="w-full resize-none border border-[#D0C5AF]/40 p-3 text-sm outline-none" />
+            <textarea
+              value={form.description}
+              onChange={(event) => update('description', event.target.value)}
+              rows={3}
+              className="w-full resize-none border border-[#D0C5AF]/40 p-3 text-sm outline-none"
+            />
           </div>
         </div>
 
         <div className="flex gap-3 border-t border-[#D0C5AF]/30 bg-[#FAFAF5] p-6">
           <button onClick={onClose} className="flex-1 border border-[#2A2421]/20 py-3 font-['Inter'] text-xs uppercase tracking-widest">Hủy</button>
-          <button onClick={() => submit('save')} disabled={!saveAllowed} className={`flex-1 py-3 font-['Inter'] text-xs font-bold uppercase tracking-widest ${saveAllowed ? 'bg-[#2A2421] text-white' : 'cursor-not-allowed bg-gray-200 text-gray-400'}`}>Lưu</button>
-          <button onClick={() => submit('send')} disabled={!sendAllowed} className={`flex-1 py-3 font-['Inter'] text-xs font-bold uppercase tracking-widest ${sendAllowed ? 'bg-[#D4AF37] text-white' : 'cursor-not-allowed bg-gray-200 text-gray-400'}`}>Gửi Phê Duyệt</button>
+          <button
+            onClick={() => submit('save')}
+            disabled={!saveAllowed}
+            className={`flex-1 py-3 font-['Inter'] text-xs font-bold uppercase tracking-widest ${saveAllowed ? 'bg-[#2A2421] text-white' : 'cursor-not-allowed bg-gray-200 text-gray-400'}`}
+          >
+            Lưu
+          </button>
+          <button
+            onClick={() => submit('send')}
+            disabled={!sendAllowed}
+            className={`flex-1 py-3 font-['Inter'] text-xs font-bold uppercase tracking-widest ${sendAllowed ? 'bg-[#D4AF37] text-white' : 'cursor-not-allowed bg-gray-200 text-gray-400'}`}
+          >
+            Gửi phê duyệt
+          </button>
         </div>
       </div>
     </div>
@@ -257,6 +366,7 @@ function ListPage({
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<VoucherStatus | 'all'>('all');
+
   const filtered = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     return vouchers.filter((voucher) => {
@@ -284,11 +394,18 @@ function ListPage({
         <div className="mb-6 flex flex-wrap gap-3 border border-[#D0C5AF]/20 bg-white p-4">
           <div className="flex min-w-48 flex-1 items-center border border-[#D0C5AF]/40">
             <span className="material-symbols-outlined pl-3 text-[18px] text-[#2A2421]/40">search</span>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm theo mã voucher..." className="flex-1 bg-transparent py-2 pl-2 pr-4 text-sm outline-none" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Tìm theo mã voucher..."
+              className="flex-1 bg-transparent py-2 pl-2 pr-4 text-sm outline-none"
+            />
           </div>
           <select value={status} onChange={(event) => setStatus(event.target.value as VoucherStatus | 'all')} className="border border-[#D0C5AF]/40 bg-white px-4 py-2 text-sm outline-none">
             <option value="all">Tất cả trạng thái</option>
-            {Object.entries(VOUCHER_STATUS_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            {Object.entries(VOUCHER_STATUS_LABEL).map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
           </select>
         </div>
 
@@ -297,13 +414,19 @@ function ListPage({
             <thead>
               <tr className="border-b border-[#D0C5AF]/30 bg-[#FAFAF5]">
                 {['Mã Code', 'Loại', 'Giá trị', 'Thời gian áp dụng', 'Áp dụng', 'Tour áp dụng', 'Trạng thái', 'Thao tác'].map((header) => (
-                  <th key={header} className="px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-[#2A2421]">{header}</th>
+                  <th key={header} className="px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-[#2A2421]">
+                    {header}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-[#D0C5AF]/20">
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="px-5 py-10 text-center text-sm text-[#2A2421]/50">Không có voucher phù hợp với bộ lọc hiện tại</td></tr>
+                <tr>
+                  <td colSpan={8} className="px-5 py-10 text-center text-sm text-[#2A2421]/50">
+                    Không có voucher phù hợp với bộ lọc hiện tại
+                  </td>
+                </tr>
               )}
               {filtered.map((voucher) => (
                 <tr key={voucher.id} onClick={() => navigate(`/sales/vouchers/${voucher.id}`)} className="cursor-pointer hover:bg-[#FAFAF5]">
@@ -328,7 +451,9 @@ function ListPage({
                         <button onClick={() => onSend(voucher)} className="text-xs font-bold text-[#2A2421]">Gửi phê duyệt</button>
                       )}
                       {['draft', 'rejected', 'inactive'].includes(voucher.status) && (
-                        <button onClick={() => onDelete(voucher)} title="Xóa" aria-label="Xóa"><span className="material-symbols-outlined text-[18px] text-red-500">delete</span></button>
+                        <button onClick={() => onDelete(voucher)} title="Xóa" aria-label="Xóa">
+                          <span className="material-symbols-outlined text-[18px] text-red-500">delete</span>
+                        </button>
                       )}
                     </div>
                   </td>
@@ -342,7 +467,19 @@ function ListPage({
   );
 }
 
-function DetailPage({ voucher, onBack, onEdit, onDelete, getTourName }: { voucher: Voucher; onBack: () => void; onEdit: (voucher: Voucher) => void; onDelete: (voucher: Voucher) => void; getTourName: (id: string) => string }) {
+function DetailPage({
+  voucher,
+  onBack,
+  onEdit,
+  onDelete,
+  getTourName,
+}: {
+  voucher: Voucher;
+  onBack: () => void;
+  onEdit: (voucher: Voucher) => void;
+  onDelete: (voucher: Voucher) => void;
+  getTourName: (id: string) => string;
+}) {
   const readOnly = !['draft', 'rejected'].includes(voucher.status);
 
   return (
@@ -366,14 +503,16 @@ function DetailPage({ voucher, onBack, onEdit, onDelete, getTourName }: { vouche
             </div>
           )}
         </div>
-        {voucher.rejectionReason && <div className="mb-6 border border-red-200 bg-red-50 p-4 text-sm text-red-700">Lý do: {voucher.rejectionReason}</div>}
+        {voucher.rejectionReason && (
+          <div className="mb-6 border border-red-200 bg-red-50 p-4 text-sm text-red-700">Lý do: {voucher.rejectionReason}</div>
+        )}
         <dl className="grid gap-6 md:grid-cols-2">
           <div><dt className="text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/50">Loại</dt><dd className="mt-1">{voucher.type === 'percent' ? 'Phần trăm (%)' : 'Tiền mặt'}</dd></div>
           <div><dt className="text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/50">Giá trị</dt><dd className="mt-1">{formatVoucherValue(voucher)}</dd></div>
           <div><dt className="text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/50">Thời gian áp dụng</dt><dd className="mt-1">{voucher.startDate} → {voucher.endDate}</dd></div>
           <div><dt className="text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/50">Tour áp dụng</dt><dd className="mt-1">{voucher.applicableTours.length ? voucher.applicableTours.map(getTourName).join(', ') : 'Tất cả'}</dd></div>
           <div><dt className="text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/50">Số lượt dùng</dt><dd className="mt-1">{voucher.used} / {voucher.limit}</dd></div>
-          <div><dt className="text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/50">Ghi chú</dt><dd className="mt-1">{voucher.description ?? '—'}</dd></div>
+          <div><dt className="text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/50">Ghi chú</dt><dd className="mt-1">{voucher.description || '—'}</dd></div>
         </dl>
       </div>
       <button onClick={onBack} className="mt-6 text-sm font-bold text-[#D4AF37]">Quay lại danh sách</button>
@@ -398,9 +537,11 @@ export default function SalesVoucherManagement() {
   const persist = async (next: Voucher) => {
     upsertVoucher(next);
     if (!token) return;
+
     const response = next.id.startsWith('tmp-')
       ? await createVoucher(token, next)
       : await updateVoucher(token, next.id, next);
+
     upsertVoucher(response.voucher);
   };
 

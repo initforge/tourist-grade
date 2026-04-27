@@ -43,6 +43,7 @@ import {
   TourGenerationRules,
   TourInstances as CoordinatorTourOperations,
   TourProgramDetail as CoordinatorTourProgramDetail,
+  TourProgramEdit as CoordinatorTourProgramEdit,
   TourPrograms as CoordinatorTourPrograms,
   TourProgramWizard as CoordinatorTourProgramWizard,
   TourReceiveDispatch,
@@ -122,6 +123,7 @@ export default function AppRouter() {
           <Route path="tours" element={<ActiveTours />} />
           <Route path="tours/:id/estimate" element={<ManagerTourEstimate />} />
           <Route path="tours/:id/estimate-approval" element={<ManagerTourEstimateApproval />} />
+          <Route path="tours/:id/settlement" element={<CoordinatorTourSettlement />} />
           <Route path="voucher-approval" element={<ManagerVoucherApproval />} />
           <Route path="cancel-policies" element={<ManagerCancelPolicy />} />
           <Route path="vouchers" element={<ManagerVouchers />} />
@@ -134,6 +136,7 @@ export default function AppRouter() {
           <Route path="tour-programs" element={<CoordinatorTourPrograms />} />
           <Route path="tour-programs/create" element={<CoordinatorTourProgramWizard />} />
           <Route path="tour-programs/:id" element={<CoordinatorTourProgramDetail />} />
+          <Route path="tour-programs/:id/edit" element={<CoordinatorTourProgramEdit />} />
           <Route path="tour-programs/:id/receive" element={<TourReceiveDispatch />} />
           <Route path="tour-rules" element={<TourGenerationRules />} />
           <Route path="tours" element={<CoordinatorTourOperations />} />

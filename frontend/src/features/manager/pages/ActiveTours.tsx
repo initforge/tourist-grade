@@ -187,9 +187,9 @@ function ApprovePreviewPopup({
                     <td className="px-4 py-3 whitespace-nowrap">{formatDate(row?.departureDate)}</td>
                     <td className="px-4 py-3">{row?.dayType}</td>
                     <td className="px-4 py-3">{row?.expectedGuests}</td>
-                    <td className="px-4 py-3">{row?.costPerAdult?.toLocaleString('vi-VN')}đ</td>
+                    <td className="px-4 py-3">{row?.costPerAdult?.toLocaleString('vi-VN')}Ä'</td>
                     <td className="px-4 py-3">{row?.profitPercent}%</td>
-                    <td className="px-4 py-3">{row?.sellPrice?.toLocaleString('vi-VN')}đ</td>
+                    <td className="px-4 py-3">{row?.sellPrice?.toLocaleString('vi-VN')}Ä'</td>
                     <td className="px-4 py-3 whitespace-nowrap">{formatDate(row?.bookingDeadline)}</td>
                     <td className="px-4 py-3 text-center">
                       <input type="checkbox" checked={row?.checked} readOnly aria-label={`review ${row?.id}`} className="w-4 h-4 accent-[#D4AF37]" />
@@ -307,7 +307,6 @@ function SelectedToursActionPopup({
                     'Số KH hiện tại/tối thiểu',
                     'Hạn bán',
                     'Dự kiến hoàn',
-                    'Lợi nhuận dự kiến',
                     ...(mode === 'extend' ? ['Gia hạn đến ngày'] : []),
                     'Thao tác',
                   ]?.map(header => (
@@ -328,11 +327,6 @@ function SelectedToursActionPopup({
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">{instance?.bookingDeadline}</td>
                     <td className="px-4 py-3">{fmtCurrency(instance?.expectedGuests * instance?.priceAdult)}</td>
-                    <td className="px-4 py-3">
-                      <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold">
-                        {getProjectedProfitPercent(instance, programs)}%
-                      </span>
-                    </td>
                     {mode === 'extend' && (
                       <td className="px-4 py-3">
                         <input
@@ -414,9 +408,14 @@ export default function AdminActiveTours() {
     }
     setShowApprovePopup(null);
   };
-  const handleReject = async (id: string, reason: string) => {
+  const handleReject = async (id: string, reason: string, mode: 'reject' | 'request_edit') => {
     if (token) {
-      const response = await updateTourInstanceCommand(token, id, 'reject-sale', { reason });
+      const response = await updateTourInstanceCommand(
+        token,
+        id,
+        mode === 'request_edit' ? 'request-edit-sale' : 'reject-sale',
+        { reason },
+      );
       upsertTourInstance(response.tourInstance);
       setInstances(prev => prev?.map(instance => instance.id === id ? response.tourInstance : instance));
     }
@@ -465,7 +464,7 @@ export default function AdminActiveTours() {
           }).then(response => response.tourInstance);
         }
 
-        return updateTourInstanceCommand(token, instance.id, 'estimate/approve')
+        return updateTourInstanceCommand(token, instance.id, 'continue-insufficient')
           .then(response => response.tourInstance);
       }));
 
@@ -602,7 +601,7 @@ export default function AdminActiveTours() {
               <div className="flex gap-2">
                 <button disabled={selectedIds.size === 0} onClick={() => openBatchAction('cancel')}
                   className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest border transition-colors ${selectedIds.size === 0 ? 'border-gray-200 text-gray-300 cursor-not-allowed' : 'border-red-300 text-red-600 hover:bg-red-50'}`}>
-                  Hủy tour ({selectedIds?.size})
+                  Há»§y tour ({selectedIds?.size})
                 </button>
                 <button disabled={selectedIds.size === 0} onClick={() => openBatchAction('continue')}
                   className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors ${selectedIds.size === 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
@@ -620,14 +619,14 @@ export default function AdminActiveTours() {
                 <thead>
                   <tr className="bg-[#FAFAF5] border-b border-[#D0C5AF]/30">
                     <th className="px-4 py-3.5 w-10" />
-                    {['Mã tour', 'Tên chương trình', 'Ngày KH', 'Số KH hiện tại/tối thiểu', 'Hạn bán', 'Dự kiến hoàn', 'Lợi nhuận dự kiến']?.map(h => (
+                    {['Mã tour', 'Tên chương trình', 'Ngày KH', 'Số KH hiện tại/tối thiểu', 'Hạn bán', 'Dự kiến hoàn']?.map(h => (
                       <th key={h} className="px-4 py-3.5 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#D0C5AF]/15">
                   {filtered.length === 0 ? (
-                    <tr><td colSpan={8} className="px-5 py-16 text-center text-sm text-[#2A2421]/40">Không có tour nào</td></tr>
+                    <tr><td colSpan={7} className="px-5 py-16 text-center text-sm text-[#2A2421]/40">Không có tour nào</td></tr>
                   ) : filtered?.map(t => (
                     <tr key={t?.id} className={`hover:bg-[#FAFAF5] transition-colors ${selectedIds?.has(t?.id) ? 'bg-amber-50' : ''}`}>
                       <td className="px-4 py-4 text-center">
@@ -643,11 +642,6 @@ export default function AdminActiveTours() {
                       </td>
                       <td className="px-4 py-4 text-sm text-[#2A2421]/70">{t?.bookingDeadline}</td>
                       <td className="px-4 py-4 text-sm font-bold text-[#D4AF37]">{fmtCurrency(t?.expectedGuests * t?.priceAdult)}</td>
-                      <td className="px-4 py-4">
-                        <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold">
-                          {getProjectedProfitPercent(t, programs)}%
-                        </span>
-                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -744,14 +738,14 @@ export default function AdminActiveTours() {
             <table className="w-full text-left border-collapse min-w-[700px]">
               <thead>
                 <tr className="bg-[#FAFAF5] border-b border-[#D0C5AF]/30">
-                  {['Mã tour', 'Tên chương trình', 'Ngày KH', 'Số KH thực tế', 'Doanh thu TT', 'Chi phí TT', 'Lợi nhuận TT (%)']?.map(h => (
+                  {['Mã tour', 'Tên chương trình', 'Ngày KH', 'Số KH thực tế', 'Doanh thu TT', 'Chi phí TT', 'Lợi nhuận TT (%)', '']?.map(h => (
                     <th key={h} className="px-4 py-3.5 text-[10px] uppercase tracking-widest text-[#2A2421] font-bold">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#D0C5AF]/15">
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={7} className="px-5 py-16 text-center text-sm text-[#2A2421]/40">Không có tour nào</td></tr>
+                  <tr><td colSpan={8} className="px-5 py-16 text-center text-sm text-[#2A2421]/40">Không có tour nào</td></tr>
                 ) : filtered?.map(t => (
                   <tr key={t?.id} className="hover:bg-[#FAFAF5] transition-colors">
                     <td className="px-4 py-4 font-medium text-sm font-['Noto_Serif'] text-[#2A2421]">{t?.id}</td>
@@ -768,6 +762,14 @@ export default function AdminActiveTours() {
                       {t?.settlement ? (
                         <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold">{t?.settlement?.profitPercent}%</span>
                       ) : '—'}
+                    </td>
+                    <td className="px-4 py-4">
+                      <button
+                        onClick={() => navigate(`/manager/tours/${t?.id}/settlement`, { state: { readOnly: true } })}
+                        className="px-3 py-1.5 text-[10px] font-bold border border-[#D0C5AF]/40 text-[#2A2421]/70 hover:bg-[#FAFAF5]"
+                      >
+                        Xem
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -811,7 +813,7 @@ export default function AdminActiveTours() {
       {showRejectPopup && (
         <RejectPopup
           title={showRejectPopup.mode === 'request_edit' ? 'Yêu cầu sửa' : 'Từ chối'}
-          onConfirm={reason => handleReject(showRejectPopup?.id, reason)}
+          onConfirm={reason => handleReject(showRejectPopup?.id, reason, showRejectPopup.mode)}
           onCancel={() => setShowRejectPopup(null)}
         />
       )}
@@ -850,3 +852,4 @@ export default function AdminActiveTours() {
     </div>
   );
 }
+

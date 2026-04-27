@@ -1,9 +1,22 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import type { Passenger } from '@entities/booking/data/bookings';
+import type { Booking, Passenger } from '@entities/booking/data/bookings';
 import type { DepartureScheduleEntry } from '@entities/tour/data/tours';
-import { createBookingPaymentLink, createPublicBooking } from '@shared/lib/api/bookings';
+import {
+  createBookingPaymentLink,
+  createPublicBooking,
+  lookupBooking,
+  updateCheckoutBooking,
+  validatePublicPromoCode,
+} from '@shared/lib/api/bookings';
 import { formatCurrency } from '@shared/lib/booking';
+import {
+  getPassengerTypeLabel,
+  NATIONALITY_OPTIONS,
+  validatePassengerAgeByType,
+  validatePassengerDocument,
+  validatePhoneNumber,
+} from '@shared/lib/customerBooking';
 import { useAuthStore } from '@shared/store/useAuthStore';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
 
@@ -22,50 +35,54 @@ type ContactState = {
   note: string;
 };
 
-function buildPassengers(counts: Counts) {
-  const passengers: Passenger[] = [];
+type ContactErrors = {
+  name?: string;
+  phone?: string;
+  email?: string;
+};
 
-  for (let index = 0; index < counts.adult; index += 1) {
-    passengers.push({
-      type: 'adult',
-      name: '',
-      dob: '',
-      gender: 'male',
-      nationality: 'Việt Nam',
-      singleRoomSupplement: 0,
-    });
-  }
+type PassengerErrors = Record<number, { name?: string; dob?: string; cccd?: string }>;
 
-  for (let index = 0; index < counts.child; index += 1) {
-    passengers.push({
-      type: 'child',
-      name: '',
-      dob: '',
-      gender: 'male',
-      nationality: 'Việt Nam',
-    });
-  }
+type RoomCounts = {
+  single: number;
+  double: number;
+  triple: number;
+};
 
-  for (let index = 0; index < counts.infant; index += 1) {
-    passengers.push({
-      type: 'infant',
-      name: '',
-      dob: '',
-      gender: 'male',
-      nationality: 'Việt Nam',
-    });
-  }
+const BOOKING_DRAFT_STORAGE_KEY = 'travela-public-booking-draft';
 
-  return passengers;
+function buildPassengers(counts: Counts, previous: Passenger[] = []) {
+  const nextPassengers: Passenger[] = [];
+  const grouped = {
+    adult: previous.filter((passenger) => passenger.type === 'adult'),
+    child: previous.filter((passenger) => passenger.type === 'child'),
+    infant: previous.filter((passenger) => passenger.type === 'infant'),
+  };
+
+  (['adult', 'child', 'infant'] as const).forEach((type) => {
+    const total = counts[type];
+    for (let index = 0; index < total; index += 1) {
+      nextPassengers.push(grouped[type][index] ?? {
+        type,
+        name: '',
+        dob: '',
+        gender: 'male',
+        nationality: 'Việt Nam',
+        singleRoomSupplement: 0,
+      });
+    }
+  });
+
+  return nextPassengers;
 }
 
-function StepChip({ active, index, label }: { active: boolean; index: number; label: string }) {
+function StepChip({ active, complete, index, label }: { active: boolean; complete?: boolean; index: number; label: string }) {
   return (
     <div className="flex items-center gap-3">
-      <div className={`flex h-9 w-9 items-center justify-center rounded-full border text-sm font-semibold ${active ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)] text-white' : 'border-outline-variant/50 text-primary/45'}`}>
-        {index}
+      <div className={`flex h-10 w-10 items-center justify-center rounded-full border text-sm font-semibold ${active ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)] text-white' : complete ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-outline-variant/50 text-primary/45'}`}>
+        {complete ? <span className="material-symbols-outlined text-base">check</span> : index}
       </div>
-      <div className={`text-sm font-medium ${active ? 'text-primary' : 'text-primary/45'}`}>{label}</div>
+      <div className={`text-sm font-medium ${active ? 'text-primary' : complete ? 'text-primary/80' : 'text-primary/45'}`}>{label}</div>
     </div>
   );
 }
@@ -74,20 +91,51 @@ function SummaryRow({ label, value, strong = false }: { label: string; value: st
   return (
     <div className="flex items-center justify-between gap-4 text-sm">
       <span className="text-primary/60">{label}</span>
-      <span className={strong ? 'font-semibold text-primary' : 'text-primary'}>{value}</span>
+      <span className={strong ? 'font-semibold text-primary text-right' : 'text-primary text-right'}>{value}</span>
     </div>
   );
+}
+
+function saveDraftToStorage(payload: Record<string, unknown>) {
+  try {
+    localStorage.setItem(BOOKING_DRAFT_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function loadDraftFromStorage() {
+  try {
+    const raw = localStorage.getItem(BOOKING_DRAFT_STORAGE_KEY);
+    return raw ? JSON.parse(raw) as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearDraftFromStorage() {
+  try {
+    localStorage.removeItem(BOOKING_DRAFT_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
 }
 
 export default function BookingCheckout() {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const scheduleId = searchParams.get('scheduleId') ?? '';
+  const payosState = searchParams.get('payos');
+  const bookingIdParam = searchParams.get('bookingId') ?? '';
+
   const user = useAuthStore((state) => state.user);
   const accessToken = useAuthStore((state) => state.accessToken);
   const tours = useAppDataStore((state) => state.publicTours);
+  const bookings = useAppDataStore((state) => state.bookings);
   const upsertBooking = useAppDataStore((state) => state.upsertBooking);
+  const upsertReview = useAppDataStore((state) => state.upsertReview);
+
   const tour = tours.find((item) => item.slug === slug);
   const schedule: DepartureScheduleEntry | undefined = tour?.departureSchedule.find((item) => item.id === scheduleId);
 
@@ -100,21 +148,29 @@ export default function BookingCheckout() {
   });
   const [counts, setCounts] = useState<Counts>({ adult: 1, child: 0, infant: 0 });
   const [passengers, setPassengers] = useState<Passenger[]>(buildPassengers({ adult: 1, child: 0, infant: 0 }));
-  const [roomCounts, setRoomCounts] = useState({ single: 0, double: 1, triple: 0 });
+  const [roomCounts, setRoomCounts] = useState<RoomCounts>({ single: 0, double: 1, triple: 0 });
   const [promoCode, setPromoCode] = useState('');
-  const [appliedPromoCode, setAppliedPromoCode] = useState('');
+  const [promoMessage, setPromoMessage] = useState('');
+  const [discountAmount, setDiscountAmount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<'bank' | 'card'>('bank');
   const [paymentRatio, setPaymentRatio] = useState<'deposit' | 'full'>('full');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [createdBookingId, setCreatedBookingId] = useState('');
-  const [createdBookingCode, setCreatedBookingCode] = useState('');
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [isStartingPayment, setIsStartingPayment] = useState(false);
+  const [createdBooking, setCreatedBooking] = useState<Booking | null>(null);
   const [paymentUrl, setPaymentUrl] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
   const [error, setError] = useState('');
+  const [contactErrors, setContactErrors] = useState<ContactErrors>({});
+  const [passengerErrors, setPassengerErrors] = useState<PassengerErrors>({});
+  const [countError, setCountError] = useState('');
 
-  const singleRoomSurcharge = schedule?.singleRoomSurcharge ?? 500000;
+  const effectiveBooking = createdBooking ?? (bookingIdParam ? bookings.find((item) => item.id === bookingIdParam) ?? null : null);
+
   const priceAdult = schedule?.priceAdult ?? tour?.price.adult ?? 0;
   const priceChild = schedule?.priceChild ?? tour?.price.child ?? 0;
   const priceInfant = schedule?.priceInfant ?? tour?.price.infant ?? 0;
+  const singleRoomSurcharge = schedule?.singleRoomSurcharge ?? 0;
+  const availableSeats = schedule?.availableSeats ?? 0;
 
   const totalGuests = counts.adult + counts.child + counts.infant;
   const surchargeTotal = passengers.reduce((sum, passenger) => sum + (passenger.singleRoomSupplement ?? 0), 0);
@@ -122,12 +178,114 @@ export default function BookingCheckout() {
     () => counts.adult * priceAdult + counts.child * priceChild + counts.infant * priceInfant + surchargeTotal,
     [counts.adult, counts.child, counts.infant, priceAdult, priceChild, priceInfant, surchargeTotal],
   );
-  const payableAmount = paymentRatio === 'deposit' ? Math.ceil(subtotal * 0.5) : subtotal;
+  const totalAfterDiscount = Math.max(subtotal - discountAmount, 0);
+  const isDepositDisabled = Boolean(schedule && Math.ceil((new Date(schedule.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) < 7);
+  const payableAmount = paymentRatio === 'deposit' ? Math.ceil(totalAfterDiscount * 0.5) : totalAfterDiscount;
 
-  const syncPassengerCounts = (next: Counts) => {
-    setCounts(next);
-    setPassengers(buildPassengers(next));
-  };
+  useEffect(() => {
+    if (!tour || !schedule) {
+      return;
+    }
+
+    const draft = loadDraftFromStorage();
+    if (!draft || draft.slug !== slug || draft.scheduleId !== schedule.id) {
+      return;
+    }
+
+    setContact((current) => ({
+      ...current,
+      ...(draft.contact as ContactState | undefined),
+    }));
+    setCounts((draft.counts as Counts | undefined) ?? { adult: 1, child: 0, infant: 0 });
+    setPassengers(buildPassengers((draft.counts as Counts | undefined) ?? { adult: 1, child: 0, infant: 0 }, (draft.passengers as Passenger[] | undefined) ?? []));
+    setRoomCounts((draft.roomCounts as RoomCounts | undefined) ?? { single: 0, double: 1, triple: 0 });
+    setPromoCode(String(draft.promoCode ?? ''));
+    setDiscountAmount(Number(draft.discountAmount ?? 0));
+    setPaymentMethod((draft.paymentMethod as 'bank' | 'card' | undefined) ?? 'bank');
+    setPaymentRatio((draft.paymentRatio as 'deposit' | 'full' | undefined) ?? (isDepositDisabled ? 'full' : 'full'));
+    setCreatedBooking(draft.booking as Booking | null ?? null);
+    setActiveStep((draft.activeStep as CheckoutStep | undefined) ?? 0);
+  }, [isDepositDisabled, schedule, slug, tour]);
+
+  useEffect(() => {
+    if (isDepositDisabled && paymentRatio === 'deposit') {
+      setPaymentRatio('full');
+    }
+  }, [isDepositDisabled, paymentRatio]);
+
+  useEffect(() => {
+    if (!tour || !schedule) {
+      return;
+    }
+
+    saveDraftToStorage({
+      slug,
+      scheduleId: schedule.id,
+      contact,
+      counts,
+      passengers,
+      roomCounts,
+      promoCode,
+      discountAmount,
+      paymentMethod,
+      paymentRatio,
+      booking: createdBooking,
+      activeStep,
+    });
+  }, [activeStep, contact, counts, createdBooking, discountAmount, passengers, paymentMethod, paymentRatio, promoCode, roomCounts, schedule, slug, tour]);
+
+  useEffect(() => {
+    if (!bookingIdParam || !payosState) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncBookingAfterPayment = async () => {
+      const stored = loadDraftFromStorage();
+      const draftBooking = (stored?.booking as Booking | undefined) ?? effectiveBooking ?? null;
+      const lookupContact = draftBooking?.contactInfo.email || draftBooking?.contactInfo.phone || contact.email || contact.phone;
+      const lookupCode = draftBooking?.bookingCode;
+      if (!lookupContact || !lookupCode) {
+        setActiveStep(payosState === 'return' ? 2 : 1);
+        setStatusMessage(payosState === 'cancel' ? 'Thanh toán chưa hoàn tất. Đơn giữ chỗ trong 15 phút.' : 'Đã quay lại từ cổng thanh toán.');
+        return;
+      }
+
+      try {
+        const response = await lookupBooking(lookupCode, lookupContact);
+        if (cancelled) {
+          return;
+        }
+        upsertBooking(response.booking);
+        setCreatedBooking(response.booking);
+        const success = ['partial', 'paid'].includes(response.booking.paymentStatus);
+        setActiveStep(success && payosState === 'return' ? 2 : 1);
+        setStatusMessage(
+          success && payosState === 'return'
+            ? 'Thanh toán thành công.'
+            : 'Thanh toán chưa hoàn tất. Đơn giữ chỗ trong 15 phút để bạn thử lại.',
+        );
+      } catch {
+        if (!cancelled) {
+          setActiveStep(1);
+          setStatusMessage('Không thể đồng bộ lại kết quả thanh toán. Bạn có thể thử lại trong thời gian giữ chỗ.');
+        }
+      } finally {
+        if (!cancelled) {
+          const next = new URLSearchParams(searchParams);
+          next.delete('payos');
+          setSearchParams(next, { replace: true });
+        }
+      }
+    };
+
+    void syncBookingAfterPayment();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bookingIdParam, contact.email, contact.phone, effectiveBooking, payosState, searchParams, setSearchParams, upsertBooking]);
 
   const updatePassenger = (index: number, field: keyof Passenger, value: string | number) => {
     setPassengers((current) => current.map((passenger, passengerIndex) => (
@@ -135,71 +293,182 @@ export default function BookingCheckout() {
     )));
   };
 
+  const syncPassengerCounts = (next: Counts) => {
+    if (next.adult + next.child + next.infant > availableSeats) {
+      setCountError(`Số lượng hành khách không được vượt quá ${availableSeats} chỗ trống.`);
+      return;
+    }
+
+    setCountError('');
+    setCounts(next);
+    setPassengers((current) => buildPassengers(next, current));
+  };
+
   const toggleSingleRoom = (index: number, checked: boolean) => {
     updatePassenger(index, 'singleRoomSupplement', checked ? singleRoomSurcharge : 0);
   };
 
-  const infoStepReady = Boolean(
-    tour
-    && schedule
-    && contact.name.trim()
-    && contact.phone.trim()
-    && contact.email.trim()
-    && passengers.every((passenger) => passenger.name.trim() && passenger.dob),
-  );
+  const validateStepOne = () => {
+    const nextContactErrors: ContactErrors = {};
+    const nextPassengerErrors: PassengerErrors = {};
 
-  const applyPromoCode = () => {
-    if (promoCode.trim().toUpperCase() === 'TRAVELA10') {
-      setAppliedPromoCode('TRAVELA10');
+    if (!contact.name.trim()) nextContactErrors.name = 'Cần nhập họ tên liên hệ';
+    if (!contact.phone.trim()) nextContactErrors.phone = 'Cần nhập số điện thoại';
+    else if (!validatePhoneNumber(contact.phone)) nextContactErrors.phone = 'Số điện thoại không hợp lệ';
+    if (!contact.email.trim()) nextContactErrors.email = 'Cần nhập email';
+
+    passengers.forEach((passenger, index) => {
+      const errors: PassengerErrors[number] = {};
+      if (!passenger.name.trim()) errors.name = 'Cần nhập họ tên hành khách';
+      if (!passenger.dob) errors.dob = 'Cần nhập ngày sinh';
+      else {
+        const ageMessage = validatePassengerAgeByType(passenger, schedule?.date ?? '');
+        if (ageMessage) errors.dob = ageMessage;
+      }
+      const documentMessage = validatePassengerDocument(passenger);
+      if (documentMessage) errors.cccd = documentMessage;
+      if (Object.keys(errors).length > 0) {
+        nextPassengerErrors[index] = errors;
+      }
+    });
+
+    if (totalGuests <= 0) {
+      setCountError('Cần có ít nhất một hành khách.');
+    } else if (totalGuests > availableSeats) {
+      setCountError(`Số lượng hành khách không được vượt quá ${availableSeats} chỗ trống.`);
+    } else {
+      setCountError('');
+    }
+
+    setContactErrors(nextContactErrors);
+    setPassengerErrors(nextPassengerErrors);
+
+    return Object.keys(nextContactErrors).length === 0
+      && Object.keys(nextPassengerErrors).length === 0
+      && totalGuests > 0
+      && totalGuests <= availableSeats;
+  };
+
+  const applyPromoCode = async () => {
+    if (!tour || !schedule) {
+      return;
+    }
+
+    if (!promoCode.trim()) {
+      setDiscountAmount(0);
+      setPromoMessage('');
+      return;
+    }
+
+    try {
+      const response = await validatePublicPromoCode({
+        tourSlug: tour.slug,
+        scheduleId: schedule.id,
+        promoCode,
+        passengers,
+      }, accessToken);
+
+      setDiscountAmount(response.promo.discountAmount);
+      setPromoMessage(response.promo.discountAmount > 0 ? `Đã áp dụng ${response.promo.code}` : 'Mã không áp dụng cho đơn này.');
       setError('');
-      return;
+    } catch (promoError) {
+      setDiscountAmount(0);
+      setPromoMessage('');
+      setError(promoError instanceof Error ? promoError.message : 'Không thể áp dụng mã giảm giá.');
     }
-
-    setAppliedPromoCode('');
-    setError('Mã giảm giá không hợp lệ.');
   };
 
-  const goToPaymentStep = () => {
-    if (!infoStepReady) {
-      setError('Vui lòng điền đầy đủ thông tin liên hệ và hành khách.');
-      return;
+  const persistBookingDraft = async () => {
+    if (!tour || !schedule || !validateStepOne()) {
+      setError('Vui lòng hoàn thiện đầy đủ thông tin hành khách và liên hệ.');
+      return null;
     }
 
-    setError('');
-    setActiveStep(1);
-  };
-
-  const handleSubmit = async () => {
-    if (!tour || !schedule || !infoStepReady) {
-      return;
-    }
-
-    setIsSubmitting(true);
+    setIsSavingDraft(true);
     setError('');
 
     try {
-      const bookingResponse = await createPublicBooking({
+      const payload = {
         tourSlug: tour.slug,
         scheduleId: schedule.id,
         contact,
         passengers,
         roomCounts,
-        promoCode: appliedPromoCode || promoCode.trim(),
+        promoCode: promoCode.trim(),
+        paymentMethod,
+        paymentRatio,
+      };
+
+      const response = createdBooking
+        ? await updateCheckoutBooking(createdBooking.id, {
+            scheduleId: schedule.id,
+            contact,
+            passengers,
+            roomCounts,
+            promoCode: promoCode.trim(),
+            paymentMethod,
+            paymentRatio,
+          }, accessToken)
+        : await createPublicBooking(payload, accessToken);
+
+      upsertBooking(response.booking);
+      setCreatedBooking(response.booking);
+      setActiveStep(1);
+      setStatusMessage(createdBooking ? 'Đã cập nhật đơn đặt chỗ.' : 'Đã tạo đơn đặt chỗ. Vui lòng hoàn tất thanh toán trong 15 phút.');
+      if (response.booking.review) {
+        upsertReview({
+          id: response.booking.review.id,
+          bookingId: response.booking.id,
+          rating: response.booking.review.rating,
+          title: response.booking.review.title,
+          comment: response.booking.review.comment,
+          createdAt: response.booking.review.createdAt,
+          authorName: user?.name ?? 'Khách hàng',
+        });
+      }
+      return response.booking;
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'Không thể tạo đơn đặt chỗ.');
+      return null;
+    } finally {
+      setIsSavingDraft(false);
+    }
+  };
+
+  const handleStartPayment = async () => {
+    const booking = await persistBookingDraft();
+    if (!booking) {
+      return;
+    }
+
+    setIsStartingPayment(true);
+    setError('');
+
+    try {
+      const refreshed = await updateCheckoutBooking(booking.id, {
+        scheduleId: schedule!.id,
+        contact,
+        passengers,
+        roomCounts,
+        promoCode: promoCode.trim(),
         paymentMethod,
         paymentRatio,
       }, accessToken);
 
-      upsertBooking(bookingResponse.booking);
-      setCreatedBookingId(bookingResponse.booking.id);
-      setCreatedBookingCode(bookingResponse.booking.bookingCode);
+      upsertBooking(refreshed.booking);
+      setCreatedBooking(refreshed.booking);
 
-      const paymentResponse = await createBookingPaymentLink(bookingResponse.booking.id, accessToken);
+      const paymentResponse = await createBookingPaymentLink(booking.id, accessToken);
       setPaymentUrl(paymentResponse.paymentLink.checkoutUrl ?? '');
-      setActiveStep(2);
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Không thể tạo booking.');
+      if (paymentResponse.paymentLink.checkoutUrl) {
+        window.location.href = paymentResponse.paymentLink.checkoutUrl;
+      } else {
+        setError('Không tạo được link thanh toán.');
+      }
+    } catch (paymentError) {
+      setError(paymentError instanceof Error ? paymentError.message : 'Không thể khởi tạo thanh toán.');
     } finally {
-      setIsSubmitting(false);
+      setIsStartingPayment(false);
     }
   };
 
@@ -223,14 +492,14 @@ export default function BookingCheckout() {
             <span className="material-symbols-outlined text-[var(--color-primary)]">arrow_back</span>
           </button>
           <div>
-            <h1 className="font-serif text-2xl text-primary">Thủ tục đặt chỗ</h1>
+            <h1 className="font-serif text-2xl text-primary">Đặt tour</h1>
             <p className="text-xs text-primary/50 font-sans mt-0.5">{tour.title} · {new Date(schedule.date).toLocaleDateString('vi-VN')}</p>
           </div>
         </div>
 
         <div className="mb-8 grid gap-4 rounded-2xl border border-outline-variant/30 bg-white p-5 md:grid-cols-3">
           <StepChip index={1} label="Thông tin" active={activeStep === 0} />
-          <StepChip index={2} label="Thanh toán" active={activeStep === 1} />
+          <StepChip index={2} label="Thanh toán" active={activeStep === 1} complete={activeStep === 2} />
           <StepChip index={3} label="Hoàn tất" active={activeStep === 2} />
         </div>
 
@@ -241,33 +510,56 @@ export default function BookingCheckout() {
                 <section className="bg-white border border-outline-variant/30 p-6 space-y-5">
                   <h2 className="font-headline text-xl text-primary">Thông tin liên hệ</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <input value={contact.name} onChange={(event) => setContact((current) => ({ ...current, name: event.target.value }))} className="w-full border border-outline-variant/50 px-4 py-3 text-sm" placeholder="Nguyễn Văn A" />
-                    <input value={contact.phone} onChange={(event) => setContact((current) => ({ ...current, phone: event.target.value }))} className="w-full border border-outline-variant/50 px-4 py-3 text-sm" placeholder="0901 234 567" />
-                    <input value={contact.email} onChange={(event) => setContact((current) => ({ ...current, email: event.target.value }))} className="w-full border border-outline-variant/50 px-4 py-3 text-sm md:col-span-2" placeholder="email@example.com" />
-                    <textarea value={contact.note} onChange={(event) => setContact((current) => ({ ...current, note: event.target.value }))} className="w-full border border-outline-variant/50 px-4 py-3 text-sm resize-none md:col-span-2" placeholder="Yêu cầu đặc biệt" rows={3} />
+                    <label className="space-y-2">
+                      <span className="text-xs font-medium text-primary/70">Họ tên liên hệ</span>
+                      <input value={contact.name} onChange={(event) => setContact((current) => ({ ...current, name: event.target.value }))} className="w-full border border-outline-variant/50 px-4 py-3 text-sm" placeholder="Nguyễn Văn A" />
+                      {contactErrors.name && <p className="text-xs text-red-600">{contactErrors.name}</p>}
+                    </label>
+                    <label className="space-y-2">
+                      <span className="text-xs font-medium text-primary/70">Số điện thoại</span>
+                      <input value={contact.phone} onChange={(event) => setContact((current) => ({ ...current, phone: event.target.value }))} className="w-full border border-outline-variant/50 px-4 py-3 text-sm" placeholder="0901 234 567" />
+                      {contactErrors.phone && <p className="text-xs text-red-600">{contactErrors.phone}</p>}
+                    </label>
+                    <label className="space-y-2 md:col-span-2">
+                      <span className="text-xs font-medium text-primary/70">Email nhận xác nhận</span>
+                      <input value={contact.email} onChange={(event) => setContact((current) => ({ ...current, email: event.target.value }))} className="w-full border border-outline-variant/50 px-4 py-3 text-sm" placeholder="email@example.com" />
+                      {contactErrors.email && <p className="text-xs text-red-600">{contactErrors.email}</p>}
+                    </label>
+                    <label className="space-y-2 md:col-span-2">
+                      <span className="text-xs font-medium text-primary/70">Ghi chú</span>
+                      <textarea value={contact.note} onChange={(event) => setContact((current) => ({ ...current, note: event.target.value }))} className="w-full border border-outline-variant/50 px-4 py-3 text-sm resize-none" placeholder="Yêu cầu đặc biệt" rows={3} />
+                    </label>
                   </div>
                 </section>
 
                 <section className="bg-white border border-outline-variant/30 p-6 space-y-5">
-                  <h2 className="font-headline text-xl text-primary">Số lượng hành khách</h2>
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <h2 className="font-headline text-xl text-primary">Số lượng hành khách</h2>
+                    <p className="text-sm text-primary/60">Còn {availableSeats} chỗ trống</p>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {(['adult', 'child', 'infant'] as const).map((type) => (
-                      <div key={type} className="border border-outline-variant/30 p-4">
-                        <p className="text-sm font-medium text-primary mb-3">{type === 'adult' ? 'Người lớn' : type === 'child' ? 'Trẻ em' : 'Em bé'}</p>
-                        <div className="flex items-center gap-3">
+                    {([
+                      { type: 'adult' as const, label: 'Người lớn', hint: 'Từ 12 tuổi' },
+                      { type: 'child' as const, label: 'Trẻ em', hint: 'Từ 2 - 11 tuổi' },
+                      { type: 'infant' as const, label: 'Em bé', hint: 'Dưới 2 tuổi' },
+                    ]).map((item) => (
+                      <div key={item.type} className="border border-outline-variant/30 p-4">
+                        <p className="text-sm font-medium text-primary">{item.label}</p>
+                        <p className="text-xs text-primary/45 mt-1">{item.hint}</p>
+                        <div className="flex items-center gap-3 mt-4">
                           <button
                             onClick={() => {
-                              const next = { ...counts, [type]: Math.max(type === 'adult' ? 1 : 0, counts[type] - 1) };
-                              syncPassengerCounts(next);
+                              const minimum = item.type === 'adult' ? 1 : 0;
+                              syncPassengerCounts({ ...counts, [item.type]: Math.max(minimum, counts[item.type] - 1) });
                             }}
-                            className="w-8 h-8 border border-outline-variant/50 flex items-center justify-center"
+                            className="w-9 h-9 border border-outline-variant/50 flex items-center justify-center"
                           >
                             <span className="material-symbols-outlined text-base">remove</span>
                           </button>
-                          <span className="text-lg font-bold w-8 text-center">{counts[type]}</span>
+                          <span className="text-lg font-bold w-8 text-center">{counts[item.type]}</span>
                           <button
-                            onClick={() => syncPassengerCounts({ ...counts, [type]: counts[type] + 1 })}
-                            className="w-8 h-8 border border-outline-variant/50 flex items-center justify-center"
+                            onClick={() => syncPassengerCounts({ ...counts, [item.type]: counts[item.type] + 1 })}
+                            className="w-9 h-9 border border-outline-variant/50 flex items-center justify-center"
                           >
                             <span className="material-symbols-outlined text-base">add</span>
                           </button>
@@ -275,6 +567,7 @@ export default function BookingCheckout() {
                       </div>
                     ))}
                   </div>
+                  {countError && <p className="text-sm text-red-600">{countError}</p>}
                 </section>
 
                 <section className="bg-white border border-outline-variant/30 p-6 space-y-5">
@@ -282,29 +575,57 @@ export default function BookingCheckout() {
                   <div className="space-y-4">
                     {passengers.map((passenger, index) => {
                       const singleRoomChecked = Number(passenger.singleRoomSupplement ?? 0) > 0;
+                      const errors = passengerErrors[index] ?? {};
 
                       return (
                         <div key={`${passenger.type}-${index}`} className="grid grid-cols-1 md:grid-cols-2 gap-4 border border-outline-variant/20 p-4">
-                          <input value={passenger.name} onChange={(event) => updatePassenger(index, 'name', event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3 text-sm" placeholder="Đúng theo CCCD/Passport" />
-                          <input type="date" value={passenger.dob} onChange={(event) => updatePassenger(index, 'dob', event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3 text-sm" />
-                          <select value={passenger.gender} onChange={(event) => updatePassenger(index, 'gender', event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3 text-sm bg-white">
-                            <option value="male">Nam</option>
-                            <option value="female">Nữ</option>
-                          </select>
-                          <input value={passenger.nationality ?? 'Việt Nam'} onChange={(event) => updatePassenger(index, 'nationality', event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3 text-sm" placeholder="Quốc tịch" />
-                          <input value={passenger.cccd ?? ''} onChange={(event) => updatePassenger(index, 'cccd', event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3 text-sm md:col-span-2" placeholder="Số CCCD/Passport/GKS" />
-                          {passenger.type === 'adult' && (
-                            <div className="md:col-span-2 rounded-xl border border-outline-variant/30 bg-[var(--color-surface)] p-4">
-                              <label className="flex items-center gap-3 text-sm text-primary">
-                                <input
-                                  type="checkbox"
-                                  checked={singleRoomChecked}
-                                  onChange={(event) => toggleSingleRoom(index, event.target.checked)}
-                                />
-                                Phòng đơn
-                              </label>
+                          <div className="md:col-span-2 flex items-center justify-between gap-3">
+                            <div>
+                              <p className="font-medium text-primary">{getPassengerTypeLabel(passenger.type)} {index + 1}</p>
+                              <p className="text-xs text-primary/45">Đúng theo giấy tờ tùy thân</p>
                             </div>
-                          )}
+                            {passenger.type === 'adult' && singleRoomSurcharge > 0 && (
+                              <label className="flex items-center gap-2 text-xs text-primary/70">
+                                <input type="checkbox" checked={singleRoomChecked} onChange={(event) => toggleSingleRoom(index, event.target.checked)} />
+                                Phụ thu phòng đơn {formatCurrency(singleRoomSurcharge)}
+                              </label>
+                            )}
+                          </div>
+
+                          <label className="space-y-2">
+                            <span className="text-xs font-medium text-primary/70">Họ tên hành khách</span>
+                            <input value={passenger.name} onChange={(event) => updatePassenger(index, 'name', event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3 text-sm" placeholder="Đúng theo CCCD/Passport" />
+                            {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
+                          </label>
+
+                          <label className="space-y-2">
+                            <span className="text-xs font-medium text-primary/70">Ngày sinh</span>
+                            <input type="date" value={passenger.dob} onChange={(event) => updatePassenger(index, 'dob', event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3 text-sm" />
+                            {errors.dob && <p className="text-xs text-red-600">{errors.dob}</p>}
+                          </label>
+
+                          <label className="space-y-2">
+                            <span className="text-xs font-medium text-primary/70">Giới tính</span>
+                            <select value={passenger.gender} onChange={(event) => updatePassenger(index, 'gender', event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3 text-sm bg-white">
+                              <option value="male">Nam</option>
+                              <option value="female">Nữ</option>
+                            </select>
+                          </label>
+
+                          <label className="space-y-2">
+                            <span className="text-xs font-medium text-primary/70">Quốc tịch</span>
+                            <select value={passenger.nationality ?? 'Việt Nam'} onChange={(event) => updatePassenger(index, 'nationality', event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3 text-sm bg-white">
+                              {NATIONALITY_OPTIONS.map((option) => (
+                                <option key={option} value={option}>{option}</option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className="space-y-2 md:col-span-2">
+                            <span className="text-xs font-medium text-primary/70">CCCD / GKS / Passport</span>
+                            <input value={passenger.cccd ?? ''} onChange={(event) => updatePassenger(index, 'cccd', event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3 text-sm" placeholder="Số giấy tờ" />
+                            {errors.cccd && <p className="text-xs text-red-600">{errors.cccd}</p>}
+                          </label>
                         </div>
                       );
                     })}
@@ -315,7 +636,15 @@ export default function BookingCheckout() {
 
             {activeStep === 1 && (
               <section className="bg-white border border-outline-variant/30 p-6 space-y-6">
-                <h2 className="font-headline text-xl text-primary">Xác nhận thông tin</h2>
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <h2 className="font-headline text-xl text-primary">Thanh toán</h2>
+                    <p className="text-sm text-primary/55 mt-1">Đơn {effectiveBooking?.bookingCode ?? createdBooking?.bookingCode} đã được tạo. Bạn có thể sửa thông tin trước khi thanh toán.</p>
+                  </div>
+                  <button onClick={() => setActiveStep(0)} className="px-4 py-2 border border-outline-variant/50 text-primary text-xs uppercase tracking-[0.15em] hover:bg-[var(--color-surface)] transition-colors">
+                    Quay lại sửa đơn
+                  </button>
+                </div>
 
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-3 rounded-2xl border border-outline-variant/30 p-5">
@@ -326,7 +655,8 @@ export default function BookingCheckout() {
                   </div>
 
                   <div className="space-y-3 rounded-2xl border border-outline-variant/30 p-5">
-                    <p className="text-[10px] uppercase tracking-widest text-primary/45 font-label">Thông tin booking</p>
+                    <p className="text-[10px] uppercase tracking-widest text-primary/45 font-label">Thông tin tour</p>
+                    <SummaryRow label="Mã tour" value={`${schedule.programCode ?? tour.id} - ${schedule.instanceCode ?? schedule.id}`} />
                     <SummaryRow label="Khởi hành" value={new Date(schedule.date).toLocaleDateString('vi-VN')} />
                     <SummaryRow label="Số lượng khách" value={`${totalGuests} khách`} />
                     <SummaryRow label="Phụ thu phòng đơn" value={surchargeTotal > 0 ? formatCurrency(surchargeTotal) : 'Không có'} />
@@ -334,19 +664,34 @@ export default function BookingCheckout() {
                 </div>
 
                 <div className="space-y-3 rounded-2xl border border-outline-variant/30 p-5">
-                  <p className="text-[10px] uppercase tracking-widest text-primary/45 font-label">Tỷ lệ thanh toán</p>
-                  <label className="flex items-center gap-3 text-sm"><input type="radio" checked={paymentRatio === 'deposit'} onChange={() => setPaymentRatio('deposit')} /> Thanh toán 50%</label>
-                  <label className="flex items-center gap-3 text-sm"><input type="radio" checked={paymentRatio === 'full'} onChange={() => setPaymentRatio('full')} /> Thanh toán toàn bộ</label>
+                  <p className="text-[10px] uppercase tracking-widest text-primary/45 font-label">Hình thức thanh toán</p>
+                  <label className={`flex items-start gap-3 text-sm rounded-xl border px-4 py-4 ${isDepositDisabled ? 'border-outline-variant/20 bg-gray-50 text-primary/40' : 'border-outline-variant/30'}`}>
+                    <input type="radio" checked={paymentRatio === 'deposit'} onChange={() => setPaymentRatio('deposit')} disabled={isDepositDisabled} className="mt-0.5" />
+                    <span>
+                      <span className="font-medium text-primary block">Thanh toán 50%</span>
+                      <span className="text-primary/55 text-xs">Áp dụng khi còn ít nhất 7 ngày tới ngày khởi hành.</span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-3 text-sm rounded-xl border border-outline-variant/30 px-4 py-4">
+                    <input type="radio" checked={paymentRatio === 'full'} onChange={() => setPaymentRatio('full')} className="mt-0.5" />
+                    <span>
+                      <span className="font-medium text-primary block">Thanh toán toàn bộ</span>
+                      <span className="text-primary/55 text-xs">Xác nhận số tiền cần thanh toán ngay trên cổng PayOS.</span>
+                    </span>
+                  </label>
                 </div>
 
                 <div className="space-y-3 rounded-2xl border border-outline-variant/30 p-5">
-                  <p className="text-[10px] uppercase tracking-widest text-primary/45 font-label">Cách thanh toán trên cổng PayOS</p>
+                  <p className="text-[10px] uppercase tracking-widest text-primary/45 font-label">Cổng thanh toán</p>
                   <label className="flex items-center gap-3 text-sm"><input type="radio" checked={paymentMethod === 'bank'} onChange={() => setPaymentMethod('bank')} /> Ưu tiên QR hoặc chuyển khoản qua PayOS</label>
                   <label className="flex items-center gap-3 text-sm"><input type="radio" checked={paymentMethod === 'card'} onChange={() => setPaymentMethod('card')} /> Ưu tiên thẻ qua PayOS</label>
-                  <p className="text-xs text-primary/60">
-                    Hệ thống hiện tạo link PayOS thật. VietQR chưa có business flow nội bộ tách riêng ngoài cổng PayOS này.
-                  </p>
                 </div>
+
+                {effectiveBooking?.paymentWindowExpiresAt && (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    Vui lòng hoàn tất thanh toán trước {new Date(effectiveBooking.paymentWindowExpiresAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ngày {new Date(effectiveBooking.paymentWindowExpiresAt).toLocaleDateString('vi-VN')}.
+                  </div>
+                )}
               </section>
             )}
 
@@ -355,108 +700,122 @@ export default function BookingCheckout() {
                 <span className="material-symbols-outlined text-5xl text-emerald-600 mb-4 block" style={{ fontVariationSettings: "'FILL' 1" }}>
                   check_circle
                 </span>
-                <h2 className="font-headline text-2xl text-primary">Hoàn tất đặt chỗ</h2>
-                <p className="text-sm text-primary/60 mt-2">Đơn {createdBookingCode} đã được ghi nhận trên hệ thống backend thật.</p>
+                <h2 className="font-headline text-2xl text-primary">Đặt tour thành công</h2>
+                <p className="text-sm text-primary/60 mt-2">Đơn {effectiveBooking?.bookingCode ?? createdBooking?.bookingCode} đã ghi nhận thanh toán {effectiveBooking?.paymentStatus === 'partial' ? 'một phần' : 'thành công'}.</p>
 
                 <div className="mt-8 grid gap-4 sm:grid-cols-2 text-left">
                   <div className="bg-[var(--color-surface)] p-4">
                     <p className="text-[10px] uppercase tracking-widest text-primary/45 font-label">Mã đơn</p>
-                    <p className="font-serif text-lg text-primary mt-1">{createdBookingCode}</p>
+                    <p className="font-serif text-lg text-primary mt-1">{effectiveBooking?.bookingCode ?? createdBooking?.bookingCode}</p>
                   </div>
                   <div className="bg-[var(--color-surface)] p-4">
-                    <p className="text-[10px] uppercase tracking-widest text-primary/45 font-label">Số tiền cần thanh toán</p>
-                    <p className="font-serif text-lg text-primary mt-1">{formatCurrency(payableAmount)}</p>
+                    <p className="text-[10px] uppercase tracking-widest text-primary/45 font-label">Đã thanh toán</p>
+                    <p className="font-serif text-lg text-primary mt-1">{formatCurrency(effectiveBooking?.paidAmount ?? payableAmount)}</p>
                   </div>
                 </div>
 
                 <div className="mt-8 flex flex-wrap justify-center gap-3">
-                  {paymentUrl && (
+                  <button
+                    onClick={() => {
+                      clearDraftFromStorage();
+                      navigate('/customer/bookings');
+                    }}
+                    className="px-6 py-3 bg-primary text-white font-sans uppercase tracking-[0.15em] text-[11px] font-bold hover:bg-[var(--color-secondary)] transition-colors"
+                  >
+                    Xem lịch sử đặt tour
+                  </button>
+                  {effectiveBooking?.id && (
                     <button
-                      onClick={() => { window.location.href = paymentUrl; }}
-                      className="px-6 py-3 bg-primary text-white font-sans uppercase tracking-[0.15em] text-[11px] font-bold hover:bg-[var(--color-secondary)] transition-colors"
+                      onClick={() => navigate(`/customer/bookings/${effectiveBooking.id}`)}
+                      className="px-6 py-3 border border-outline-variant text-primary font-sans uppercase tracking-[0.15em] text-[11px] font-bold hover:border-primary transition-colors"
                     >
-                      Đi đến cổng thanh toán
+                      Xem chi tiết đơn
                     </button>
                   )}
-                  <button
-                    onClick={() => navigate(`/customer/bookings/${createdBookingId}`)}
-                    className="px-6 py-3 border border-outline-variant text-primary font-sans uppercase tracking-[0.15em] text-[11px] font-bold hover:border-primary transition-colors"
-                  >
-                    Xem đơn
-                  </button>
                 </div>
               </section>
             )}
           </div>
 
-          <div className="w-full lg:w-80 shrink-0">
-            <div className="lg:sticky lg:top-24 bg-white border border-outline-variant/30 overflow-hidden">
+          <div className="w-full lg:w-[360px] shrink-0">
+            <div className="lg:sticky lg:top-24 bg-white border border-outline-variant/30 overflow-hidden shadow-sm">
               <div className="relative">
-                <img alt={tour.title} src={tour.image} className="w-full h-40 object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-                <div className="absolute bottom-3 left-4 right-4">
-                  <p className="text-surface font-serif text-sm font-medium line-clamp-2">{tour.title}</p>
+                <img alt={tour.title} src={tour.image} className="w-full h-44 object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
+                <div className="absolute bottom-4 left-4 right-4">
+                  <p className="text-surface font-serif text-base font-medium line-clamp-2">{tour.title}</p>
                   <p className="text-surface/80 text-xs mt-1">{new Date(schedule.date).toLocaleDateString('vi-VN')}</p>
                 </div>
               </div>
 
-              <div className="p-5 space-y-4">
+              <div className="p-5 space-y-5">
                 <div className="grid grid-cols-3 gap-3">
-                  <input value={String(roomCounts.single)} onChange={(event) => setRoomCounts((current) => ({ ...current, single: Number(event.target.value || 0) }))} type="number" className="border border-outline-variant/50 px-3 py-2 text-sm" placeholder="Phòng đơn" />
-                  <input value={String(roomCounts.double)} onChange={(event) => setRoomCounts((current) => ({ ...current, double: Number(event.target.value || 0) }))} type="number" className="border border-outline-variant/50 px-3 py-2 text-sm" placeholder="Phòng đôi" />
-                  <input value={String(roomCounts.triple)} onChange={(event) => setRoomCounts((current) => ({ ...current, triple: Number(event.target.value || 0) }))} type="number" className="border border-outline-variant/50 px-3 py-2 text-sm" placeholder="Phòng ba" />
+                  <label className="space-y-2">
+                    <span className="text-[10px] uppercase tracking-widest text-primary/45 font-label">Đơn</span>
+                    <input value={String(roomCounts.single)} onChange={(event) => setRoomCounts((current) => ({ ...current, single: Number(event.target.value || 0) }))} type="number" min={0} className="border border-outline-variant/50 px-3 py-2 text-sm w-full" />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="text-[10px] uppercase tracking-widest text-primary/45 font-label">Đôi</span>
+                    <input value={String(roomCounts.double)} onChange={(event) => setRoomCounts((current) => ({ ...current, double: Number(event.target.value || 0) }))} type="number" min={0} className="border border-outline-variant/50 px-3 py-2 text-sm w-full" />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="text-[10px] uppercase tracking-widest text-primary/45 font-label">Ba</span>
+                    <input value={String(roomCounts.triple)} onChange={(event) => setRoomCounts((current) => ({ ...current, triple: Number(event.target.value || 0) }))} type="number" min={0} className="border border-outline-variant/50 px-3 py-2 text-sm w-full" />
+                  </label>
                 </div>
 
                 <div className="space-y-2">
                   <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Mã giảm giá</p>
                   <div className="flex gap-2">
                     <input value={promoCode} onChange={(event) => setPromoCode(event.target.value.toUpperCase())} className="w-full border border-outline-variant/50 px-3 py-2 text-sm" placeholder="Nhập mã..." />
-                    <button onClick={applyPromoCode} className="px-4 py-2 border border-outline-variant/50 text-xs font-semibold text-primary hover:border-primary">Áp dụng</button>
+                    <button onClick={() => void applyPromoCode()} className="px-4 py-2 border border-outline-variant/50 text-xs font-semibold text-primary hover:border-primary">Áp dụng</button>
                   </div>
-                  {appliedPromoCode && <p className="text-sm text-emerald-700">Đã áp dụng {appliedPromoCode}</p>}
+                  {promoMessage && <p className="text-sm text-emerald-700">{promoMessage}</p>}
                 </div>
 
-                <div className="space-y-2 rounded-2xl bg-[var(--color-surface)] p-4">
-                  <SummaryRow label="Tổng hành khách" value={`${totalGuests} khách`} />
+                <div className="space-y-3 rounded-2xl bg-[var(--color-surface)] p-4">
+                  <SummaryRow label="Mã tour" value={`${schedule.programCode ?? tour.id} - ${schedule.instanceCode ?? schedule.id}`} />
+                  <SummaryRow label="Người lớn" value={`${counts.adult} × ${formatCurrency(priceAdult)}`} />
+                  <SummaryRow label="Trẻ em" value={`${counts.child} × ${formatCurrency(priceChild)}`} />
+                  <SummaryRow label="Em bé" value={`${counts.infant} × ${formatCurrency(priceInfant)}`} />
                   <SummaryRow label="Phụ thu phòng đơn" value={surchargeTotal > 0 ? formatCurrency(surchargeTotal) : 'Không có'} />
-                  <SummaryRow label="Tổng cộng" value={formatCurrency(subtotal)} strong />
+                  {discountAmount > 0 && <SummaryRow label="Giảm giá" value={`- ${formatCurrency(discountAmount)}`} />}
+                  <SummaryRow label="Tổng cộng" value={formatCurrency(totalAfterDiscount)} strong />
+                  {activeStep >= 1 && (
+                    <SummaryRow label={paymentRatio === 'deposit' ? 'Thanh toán đợt này' : 'Thanh toán ngay'} value={formatCurrency(payableAmount)} strong />
+                  )}
                 </div>
 
+                {statusMessage && <p className="text-sm text-emerald-700">{statusMessage}</p>}
                 {error && <p className="text-sm text-red-600">{error}</p>}
 
                 {activeStep === 0 && (
                   <button
-                    onClick={goToPaymentStep}
-                    disabled={!infoStepReady}
-                    className={`w-full py-3.5 font-sans uppercase tracking-[0.15em] text-[11px] font-bold transition-all ${
-                      infoStepReady
-                        ? 'bg-primary text-surface hover:bg-[var(--color-secondary)]'
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    }`}
+                    onClick={() => void persistBookingDraft()}
+                    disabled={isSavingDraft}
+                    className={`w-full py-3.5 font-sans uppercase tracking-[0.15em] text-[11px] font-bold transition-all ${!isSavingDraft ? 'bg-primary text-surface hover:bg-[var(--color-secondary)]' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
                   >
-                    Tiếp tục: Thanh toán
+                    {isSavingDraft ? 'Đang tạo đơn...' : 'Tiếp tục thanh toán'}
                   </button>
                 )}
 
                 {activeStep === 1 && (
                   <div className="space-y-3">
                     <button
-                      onClick={() => void handleSubmit()}
-                      disabled={isSubmitting}
-                      className={`w-full py-3.5 font-sans uppercase tracking-[0.15em] text-[11px] font-bold transition-all ${
-                        !isSubmitting
-                          ? 'bg-primary text-surface hover:bg-[var(--color-secondary)]'
-                          : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                      }`}
+                      onClick={() => void handleStartPayment()}
+                      disabled={isStartingPayment}
+                      className={`w-full py-3.5 font-sans uppercase tracking-[0.15em] text-[11px] font-bold transition-all ${!isStartingPayment ? 'bg-primary text-surface hover:bg-[var(--color-secondary)]' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
                     >
-                      {isSubmitting ? 'Đang tạo booking...' : `Thanh toán ${formatCurrency(payableAmount)}`}
+                      {isStartingPayment ? 'Đang chuyển sang PayOS...' : `Thanh toán ${formatCurrency(payableAmount)}`}
                     </button>
-                    <button
-                      onClick={() => setActiveStep(0)}
-                      className="w-full py-3.5 border border-outline-variant/50 text-primary font-sans uppercase tracking-[0.15em] text-[11px] font-bold hover:bg-[var(--color-surface)] transition-colors"
-                    >
-                      Quay lại
-                    </button>
+                    {paymentUrl && (
+                      <button
+                        onClick={() => { window.location.href = paymentUrl; }}
+                        className="w-full py-3 border border-outline-variant/50 text-primary font-sans uppercase tracking-[0.15em] text-[11px] font-bold hover:bg-[var(--color-surface)] transition-colors"
+                      >
+                        Mở lại cổng thanh toán
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

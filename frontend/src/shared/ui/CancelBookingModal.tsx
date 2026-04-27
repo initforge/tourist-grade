@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Booking } from '@entities/booking/data/bookings';
-import { useAuthStore } from '@shared/store/useAuthStore';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
-import { createPublicCancelRequest, updateBooking } from '@shared/lib/api/bookings';
+import { createPublicCancelRequest } from '@shared/lib/api/bookings';
 import { formatCurrency, getRefundAmountEstimate } from '@shared/lib/booking';
 
 interface CancelBookingModalProps {
@@ -13,8 +12,6 @@ interface CancelBookingModalProps {
 
 export function CancelBookingModal({ booking, onClose }: CancelBookingModalProps) {
   const navigate = useNavigate();
-  const user = useAuthStore((state) => state.user);
-  const accessToken = useAuthStore((state) => state.accessToken);
   const upsertBooking = useAppDataStore((state) => state.upsertBooking);
   const [reason, setReason] = useState('');
   const [bankName, setBankName] = useState(booking.bankInfo?.bankName ?? '');
@@ -48,22 +45,10 @@ export function CancelBookingModal({ booking, onClose }: CancelBookingModalProps
         },
       };
 
-      const response = user?.role === 'customer'
-        ? await updateBooking(
-            booking.id,
-            {
-              status: 'pending_cancel',
-              refundStatus: booking.paidAmount > 0 ? 'pending' : 'not_required',
-              cancelledAt: new Date().toISOString(),
-              refundAmount,
-              ...payload,
-            },
-            accessToken,
-          )
-        : await createPublicCancelRequest(booking.id, {
-            contact: booking.contactInfo.email || booking.contactInfo.phone,
-            ...payload,
-          });
+      const response = await createPublicCancelRequest(booking.id, {
+        contact: booking.contactInfo.email || booking.contactInfo.phone,
+        ...payload,
+      });
 
       upsertBooking(response.booking);
       setIsSuccess(true);

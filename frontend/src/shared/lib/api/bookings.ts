@@ -23,6 +23,13 @@ export interface CreateBookingPayload {
   paymentMethod: 'bank' | 'card';
 }
 
+export interface PromoValidationPayload {
+  tourSlug: string;
+  scheduleId: string;
+  promoCode: string;
+  passengers: Passenger[];
+}
+
 export interface PaymentLinkResponse {
   success: boolean;
   paymentLink: {
@@ -40,10 +47,30 @@ export async function createPublicBooking(payload: CreateBookingPayload, token?:
   });
 }
 
+export async function validatePublicPromoCode(payload: PromoValidationPayload, token?: string | null) {
+  return apiRequest<{ success: boolean; promo: { code: string | null; discountAmount: number; totalAmount: number } }>('/bookings/promo/validate', {
+    method: 'POST',
+    token: token ?? undefined,
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function createBookingPaymentLink(bookingId: string, token?: string | null) {
   return apiRequest<PaymentLinkResponse>(`/payments/bookings/${bookingId}/payos-link`, {
     method: 'POST',
     token: token ?? undefined,
+  });
+}
+
+export async function updateCheckoutBooking(
+  bookingId: string,
+  payload: Omit<CreateBookingPayload, 'tourSlug'>,
+  token?: string | null,
+) {
+  return apiRequest<{ success: boolean; booking: Booking }>(`/bookings/${bookingId}/checkout`, {
+    method: 'PUT',
+    token: token ?? undefined,
+    body: JSON.stringify(payload),
   });
 }
 

@@ -4,54 +4,36 @@ import { prisma } from '../lib/prisma.js';
 import { asyncHandler, badRequest, notFound } from '../lib/http.js';
 import { mapService } from '../lib/mappers.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
+import { OPEN_ENDED_DATE, toRequiredDate } from '../lib/coordinator.js';
+
+const priceRowSchema = z.object({
+  unitPrice: z.number().positive(),
+  note: z.string().optional().default(''),
+  effectiveDate: z.string(),
+  endDate: z.string().optional().default(''),
+  createdBy: z.string().min(2).optional().default('Điều phối viên'),
+});
 
 const serviceSchema = z.object({
+  code: z.string().optional(),
   name: z.string().min(2),
-  category: z.enum(['Vé tham quan', 'Các dịch vụ khác']),
+  category: z.enum(['ATTRACTION_TICKET', 'OTHER']),
   unit: z.string().min(1),
-  priceMode: z.enum(['Báo giá', 'Giá niêm yết']),
-  setup: z.enum(['Giá chung', 'Theo độ tuổi', '-']),
-  status: z.enum(['Hoạt động', 'Dừng hoạt động']),
-  description: z.string().default(''),
+  priceMode: z.enum(['QUOTED', 'LISTED']),
+  priceSetup: z.enum(['COMMON', 'BY_AGE', 'NONE']),
+  status: z.enum(['ACTIVE', 'INACTIVE']),
+  description: z.string().optional().default(''),
   supplierName: z.string().optional().default(''),
   contactInfo: z.string().optional().default(''),
   province: z.string().optional().default(''),
-  formulaCount: z.enum(['Theo ngày', 'Giá trị mặc định', 'Nhập tay']).optional(),
+  formulaCount: z.enum(['BY_DAY', 'DEFAULT_VALUE', 'MANUAL']).optional().nullable(),
   formulaCountDefault: z.string().optional().default(''),
-  formulaQuantity: z.enum(['Theo số người', 'Giá trị mặc định', 'Nhập tay']).optional(),
+  formulaQuantity: z.enum(['BY_DAY', 'DEFAULT_VALUE', 'MANUAL']).optional().nullable(),
   formulaQuantityDefault: z.string().optional().default(''),
-  unitPrice: z.number().positive().optional(),
+  prices: z.array(priceRowSchema).optional().default([]),
 });
 
-const priceSchema = z.object({
-  unitPrice: z.number().positive(),
-  note: z.string().default(''),
-  effectiveDate: z.string(),
-  endDate: z.string(),
-  createdBy: z.string().min(2),
-});
-
-function toServiceCategory(value: string) {
-  return value === 'Vé tham quan' ? 'ATTRACTION_TICKET' : 'OTHER';
-}
-
-function toPriceMode(value: string) {
-  return value === 'Báo giá' ? 'QUOTED' : 'LISTED';
-}
-
-function toPriceSetup(value: string) {
-  if (value === 'Theo độ tuổi') return 'BY_AGE';
-  if (value === '-') return 'NONE';
-  return 'COMMON';
-}
-
-function toFormulaOption(value?: string) {
-  if (value === 'Theo ngày') return 'BY_DAY';
-  if (value === 'Giá trị mặc định') return 'DEFAULT_VALUE';
-  if (value === 'Theo số người') return 'DEFAULT_VALUE';
-  if (value === 'Nhập tay') return 'MANUAL';
-  return undefined;
-}
+const priceSchema = priceRowSchema;
 
 export function createServicesRouter() {
   const router = Router();
@@ -77,30 +59,30 @@ export function createServicesRouter() {
 
     const service = await prisma.service.create({
       data: {
-        code: `SV-${Date.now().toString().slice(-6)}`,
+        code: input.data.code ?? `SV-${Date.now().toString().slice(-6)}`,
         name: input.data.name,
-        category: toServiceCategory(input.data.category),
+        category: input.data.category,
         unit: input.data.unit,
-        priceMode: toPriceMode(input.data.priceMode),
-        priceSetup: toPriceSetup(input.data.setup),
-        status: input.data.status === 'Hoạt động' ? 'ACTIVE' : 'INACTIVE',
-        description: input.data.description,
+        priceMode: input.data.priceMode,
+        priceSetup: input.data.priceSetup,
+        status: input.data.status,
+        description: input.data.description || null,
         supplierName: input.data.supplierName || null,
         contactInfo: input.data.contactInfo || null,
         province: input.data.province || null,
-        formulaCount: toFormulaOption(input.data.formulaCount),
+        formulaCount: input.data.formulaCount ?? null,
         formulaCountDefault: input.data.formulaCountDefault || null,
-        formulaQuantity: toFormulaOption(input.data.formulaQuantity),
+        formulaQuantity: input.data.formulaQuantity ?? null,
         formulaQuantityDefault: input.data.formulaQuantityDefault || null,
-        prices: input.data.unitPrice
+        prices: input.data.prices.length > 0
           ? {
-              create: {
-                unitPrice: input.data.unitPrice,
-                note: input.data.supplierName ? `Bảng giá khởi tạo - ${input.data.supplierName}` : 'Bảng giá khởi tạo',
-                effectiveDate: new Date('2026-01-01'),
-                endDate: new Date('2026-12-31'),
-                createdByName: 'Điều phối viên',
-              },
+              create: input.data.prices.map((price) => ({
+                unitPrice: price.unitPrice,
+                note: price.note,
+                effectiveDate: new Date(price.effectiveDate),
+                endDate: toRequiredDate(price.endDate),
+                createdByName: price.createdBy,
+              })),
             }
           : undefined,
       },
@@ -114,7 +96,6 @@ export function createServicesRouter() {
   }));
 
   router.patch('/:id', asyncHandler(async (req, res) => {
-    const id = String(req.params.id);
     const input = serviceSchema.partial().safeParse(req.body);
     if (!input.success) {
       throw badRequest('Invalid service update payload');
@@ -122,7 +103,7 @@ export function createServicesRouter() {
 
     const existing = await prisma.service.findFirst({
       where: {
-        OR: [{ id }, { code: id }],
+        OR: [{ id: String(req.params.id) }, { code: String(req.params.id) }],
       },
       include: { prices: true },
     });
@@ -135,19 +116,19 @@ export function createServicesRouter() {
       where: { id: existing.id },
       data: {
         name: input.data.name ?? existing.name,
-        category: input.data.category ? toServiceCategory(input.data.category) : existing.category,
+        category: input.data.category ?? existing.category,
         unit: input.data.unit ?? existing.unit,
-        priceMode: input.data.priceMode ? toPriceMode(input.data.priceMode) : existing.priceMode,
-        priceSetup: input.data.setup ? toPriceSetup(input.data.setup) : existing.priceSetup,
-        status: input.data.status ? input.data.status === 'Hoạt động' ? 'ACTIVE' : 'INACTIVE' : existing.status,
-        description: input.data.description ?? existing.description,
-        supplierName: input.data.supplierName === undefined ? existing.supplierName : input.data.supplierName || null,
-        contactInfo: input.data.contactInfo === undefined ? existing.contactInfo : input.data.contactInfo || null,
-        province: input.data.province === undefined ? existing.province : input.data.province || null,
-        formulaCount: input.data.formulaCount === undefined ? existing.formulaCount : toFormulaOption(input.data.formulaCount),
-        formulaCountDefault: input.data.formulaCountDefault === undefined ? existing.formulaCountDefault : input.data.formulaCountDefault || null,
-        formulaQuantity: input.data.formulaQuantity === undefined ? existing.formulaQuantity : toFormulaOption(input.data.formulaQuantity),
-        formulaQuantityDefault: input.data.formulaQuantityDefault === undefined ? existing.formulaQuantityDefault : input.data.formulaQuantityDefault || null,
+        priceMode: input.data.priceMode ?? existing.priceMode,
+        priceSetup: input.data.priceSetup ?? existing.priceSetup,
+        status: input.data.status ?? existing.status,
+        description: input.data.description === undefined ? existing.description : (input.data.description || null),
+        supplierName: input.data.supplierName === undefined ? existing.supplierName : (input.data.supplierName || null),
+        contactInfo: input.data.contactInfo === undefined ? existing.contactInfo : (input.data.contactInfo || null),
+        province: input.data.province === undefined ? existing.province : (input.data.province || null),
+        formulaCount: input.data.formulaCount === undefined ? existing.formulaCount : (input.data.formulaCount ?? null),
+        formulaCountDefault: input.data.formulaCountDefault === undefined ? existing.formulaCountDefault : (input.data.formulaCountDefault || null),
+        formulaQuantity: input.data.formulaQuantity === undefined ? existing.formulaQuantity : (input.data.formulaQuantity ?? null),
+        formulaQuantityDefault: input.data.formulaQuantityDefault === undefined ? existing.formulaQuantityDefault : (input.data.formulaQuantityDefault || null),
       },
       include: { prices: true },
     });
@@ -158,8 +139,25 @@ export function createServicesRouter() {
     });
   }));
 
+  router.delete('/:id', asyncHandler(async (req, res) => {
+    const existing = await prisma.service.findFirst({
+      where: {
+        OR: [{ id: String(req.params.id) }, { code: String(req.params.id) }],
+      },
+    });
+
+    if (!existing) {
+      throw notFound('Service not found');
+    }
+
+    await prisma.service.delete({
+      where: { id: existing.id },
+    });
+
+    res.json({ success: true });
+  }));
+
   router.post('/:id/prices', asyncHandler(async (req, res) => {
-    const id = String(req.params.id);
     const input = priceSchema.safeParse(req.body);
     if (!input.success) {
       throw badRequest('Invalid price payload');
@@ -167,12 +165,26 @@ export function createServicesRouter() {
 
     const service = await prisma.service.findFirst({
       where: {
-        OR: [{ id }, { code: id }],
+        OR: [{ id: String(req.params.id) }, { code: String(req.params.id) }],
       },
+      include: { prices: true },
     });
 
     if (!service) {
       throw notFound('Service not found');
+    }
+
+    const effectiveDate = new Date(input.data.effectiveDate);
+    if (!input.data.endDate) {
+      await prisma.servicePrice.updateMany({
+        where: {
+          serviceId: service.id,
+          endDate: OPEN_ENDED_DATE,
+        },
+        data: {
+          endDate: effectiveDate,
+        },
+      });
     }
 
     const price = await prisma.servicePrice.create({
@@ -180,8 +192,8 @@ export function createServicesRouter() {
         serviceId: service.id,
         unitPrice: input.data.unitPrice,
         note: input.data.note,
-        effectiveDate: new Date(input.data.effectiveDate),
-        endDate: new Date(input.data.endDate),
+        effectiveDate,
+        endDate: toRequiredDate(input.data.endDate),
         createdByName: input.data.createdBy,
       },
     });
@@ -193,7 +205,7 @@ export function createServicesRouter() {
         unitPrice: Number(price.unitPrice),
         note: price.note ?? '',
         effectiveDate: price.effectiveDate.toISOString().slice(0, 10),
-        endDate: price.endDate.toISOString().slice(0, 10),
+        endDate: price.endDate.getUTCFullYear() >= 9999 ? '' : price.endDate.toISOString().slice(0, 10),
         createdBy: price.createdByName,
       },
     });

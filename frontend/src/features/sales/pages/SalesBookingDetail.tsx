@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { message } from 'antd';
 import type { Booking, Passenger } from '@entities/booking/data/bookings';
 import { useAuthStore } from '@shared/store/useAuthStore';
+import { isVietnameseNationality } from '@shared/lib/bookingLifecycle';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
 import { updateBooking } from '@shared/lib/api/bookings';
 import { NationalitySelect } from '@shared/ui/NationalitySelect';
@@ -82,11 +84,16 @@ function parseRoomCountsDraft(draft: RoomCountsDraft): RoomCounts {
 
 function getPassengerDocumentError(passenger: Passenger) {
   const documentValue = passenger?.cccd?.trim() ?? '';
+  const requiresVietnameseDocumentValidation = isVietnameseNationality(passenger.nationality);
 
   if (!documentValue) {
     return passenger.type === 'adult'
       ? 'Vui lòng nhập số CCCD/Căn cước.'
       : 'Vui lòng nhập số giấy khai sinh.';
+  }
+
+  if (!requiresVietnameseDocumentValidation) {
+    return null;
   }
 
   if (passenger.type === 'adult') {
@@ -95,9 +102,9 @@ function getPassengerDocumentError(passenger: Passenger) {
       : 'CCCD/Căn cước phải gồm đúng 12 chữ số.';
   }
 
-  return /^[A-Z0-9][A-Z0-9./-]{5,31}$/i.test(documentValue)
+  return /^\d{12}$/.test(documentValue)
     ? null
-    : 'Số GKS chỉ được gồm chữ, số và ký tự / . -, tối thiểu 6 ký tự.';
+    : 'Giấy khai sinh phải gồm đúng 12 chữ số.';
 }
 
 function isValidPassengerDocument(passenger: Passenger) {
@@ -375,28 +382,32 @@ export default function SalesBookingDetail() {
     setShowRefundPopup(false);
   };
 
-  const persistBooking = (
+  const persistBooking = async (
     updater: (current: Booking) => Booking,
     toPatch?: (next: Booking) => Record<string, unknown>,
   ) => {
-    if (!booking) return;
+    if (!booking) return null;
 
     const next = updater(booking);
     setBooking(next);
     upsertBooking(next);
 
-    if (!accessToken) return;
+    if (!accessToken) return next;
 
     const payload = toPatch ? toPatch(next) : next as unknown as Record<string, unknown>;
     setPersistCount(count => count + 1);
     const job = persistQueueRef.current
       .catch(() => undefined)
       .then(() => updateBooking(next.id, payload, accessToken, { keepalive: true }))
-      .then(() => undefined)
+      .then((result) => {
+        setBooking(result.booking);
+        upsertBooking(result.booking);
+        return result.booking;
+      })
       .catch(() => null)
-      .finally(() => setPersistCount(count => Math.max(0, count - 1)))
-      .then(() => undefined);
-    persistQueueRef.current = job;
+      .finally(() => setPersistCount(count => Math.max(0, count - 1)));
+    persistQueueRef.current = job.then(() => undefined);
+    return job;
   };
 
   // refundStatus === 'pending' = yêu cầu hủy đang chờ xử lý
@@ -451,60 +462,71 @@ export default function SalesBookingDetail() {
 
     const now = new Date()?.toISOString();
     const userName = currentUser?.name ?? 'NV Kinh doanh';
-    persistBooking(prev => ({
+    const saved = await persistBooking(prev => ({
       ...prev,
       refundStatus: 'refunded' as const,
       refundBillUrl: persistedBillUrl,
       refundedBy: userName,
       refundedAt: now,
     }));
+    if (!saved) return;
     resetBillDraft(persistedBillUrl);
     setShowRefundPopup(false);
     setShowEmailToast(true);
+    message.success('Đã lưu bill hoàn tiền thành công.');
     setTimeout(() => setShowEmailToast(false), 4000);
   };
 
-  const handleSaveRoomCounts = () => {
-    persistBooking(
+  const handleSaveRoomCounts = async () => {
+    const saved = await persistBooking(
       prev => ({ ...prev, roomCounts: parseRoomCountsDraft(roomCountsDraft) }),
       next => ({ roomCounts: next.roomCounts }),
     );
+    if (saved) {
+      message.success('Đã cập nhật thông tin phòng.');
+    }
   };
 
-  const handleSavePassengers = (updated: Passenger[]) => {
-    persistBooking(
+  const handleSavePassengers = async (updated: Passenger[]) => {
+    const saved = await persistBooking(
       prev => ({ ...prev, passengers: updated }),
       next => ({ passengers: next.passengers }),
     );
+    if (!saved) return;
     setShowPassengerModal(false);
+    message.success('Đã cập nhật danh sách hành khách.');
   };
 
   // Xác nhận đơn đặt → chuyển sang Đã xác nhận
-  const handleConfirmBooking = () => {
+  const handleConfirmBooking = async () => {
     const now = new Date()?.toISOString();
     const userName = currentUser?.name ?? 'NV Kinh doanh';
-    persistBooking(prev => ({
+    const saved = await persistBooking(prev => ({
       ...prev,
       status: 'confirmed' as const,
       roomCounts: parseRoomCountsDraft(roomCountsDraft),
       confirmedBy: userName,
       confirmedAt: now,
     }));
+    if (!saved) return;
     setShowConfirmPopup(false);
+    message.success('Xác nhận đơn đặt tour thành công.');
   };
 
   // Xác nhận hủy → chuyển sang Đã hủy + pending refund
-  const handleConfirmCancel = () => {
+  const handleConfirmCancel = async () => {
     const now = new Date()?.toISOString();
     const userName = currentUser?.name ?? 'NV Kinh doanh';
-    persistBooking(prev => ({
+    const saved = await persistBooking(prev => ({
       ...prev,
       status: 'cancelled' as const,
       refundStatus: 'pending' as const,
       cancelledConfirmedBy: userName,
       cancelledConfirmedAt: now,
     }));
+    if (!saved) return;
     setShowConfirmCancelPopup(false);
+    message.success('Xác nhận yêu cầu hủy tour thành công.');
   };
 
   const handleDownloadPassengers = () => {
@@ -935,15 +957,17 @@ export default function SalesBookingDetail() {
                           const persistedBillUrl = await resolveBillValueForPersistence();
                           if (!persistedBillUrl) return;
                           const now = new Date()?.toISOString();
-                          persistBooking(prev => ({
+                          const saved = await persistBooking(prev => ({
                             ...prev,
                             refundBillUrl: persistedBillUrl,
                             refundBillEditedBy: currentUser?.name ?? 'NV Kinh doanh',
                             refundBillEditedAt: now,
                           }));
+                          if (!saved) return;
                           resetBillDraft(persistedBillUrl);
                           setIsEditingBill(false);
                           setShowEmailToast(true);
+                          message.success('Đã cập nhật bill hoàn tiền.');
                           setTimeout(() => setShowEmailToast(false), 4000);
                         }}
                         disabled={!billFile}
@@ -1173,4 +1197,5 @@ export default function SalesBookingDetail() {
     </div>
   );
 }
+
 

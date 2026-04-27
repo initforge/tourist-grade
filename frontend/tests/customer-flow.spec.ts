@@ -12,11 +12,10 @@ test.describe('Customer + Public Booking Verification', () => {
     await expect(page.getByRole('heading', { name: /Lịch khởi hành/i })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: /Ngày khởi hành/i })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: /Phụ thu phòng đơn/i })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: /Mã tour/i })).toBeVisible();
     await expect(page.getByRole('heading', { name: /Thông tin cần lưu ý/i })).toBeVisible();
     await expect(page.getByRole('heading', { name: /Tour liên quan/i })).toBeVisible();
-    await expect(page.getByText(/Mã tour/i)).toBeVisible();
-    await expect(page.getByText(/Ngày khởi hành/i).last()).toBeVisible();
-    await expect(page.getByText(/Số chỗ còn/i)).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: /Chỗ trống/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Ngày khác/i })).toBeVisible();
 
     const bookButton = page.getByRole('button', { name: /Đặt ngay/i });
@@ -27,7 +26,7 @@ test.describe('Customer + Public Booking Verification', () => {
     await page.getByRole('button', { name: /Giá tour bao gồm/i }).click();
     await expect(page.getByText(/Xe Limousine đưa đón khứ hồi/i)).toBeVisible();
     await page.getByRole('button', { name: /Chính sách hủy tour/i }).click();
-    await expect(page.getByText(/Hoàn/).first()).toBeVisible();
+    await expect(page.getByText(/Hoàn/i).first()).toBeVisible();
   });
 
   test('Row 19: wishlist redirects guests and toggles for logged-in customers', async ({ page }) => {
@@ -61,26 +60,24 @@ test.describe('Customer + Public Booking Verification', () => {
     await page.locator('input[type="date"]').first().fill('1990-01-01');
 
     const passengerSection = page.locator('section').filter({ hasText: /Thông tin hành khách/i });
-    await passengerSection.getByRole('checkbox', { name: /Phòng đơn/i }).check();
+    await passengerSection.getByRole('checkbox').first().check();
 
     await page.getByPlaceholder('Nhập mã...').fill('TRAVELA10');
     await page.getByRole('button', { name: /Áp dụng/i }).click();
     await expect(page.getByText(/Đã áp dụng/i)).toBeVisible();
-    await expect(page.getByText(/Phụ thu phòng đơn/i)).toBeVisible();
+    await expect(page.getByText(/Phụ thu phòng đơn/i).first()).toBeVisible();
 
-    await page.getByRole('button', { name: /Tiếp tục: Thanh toán/i }).first().click();
-    await expect(page.getByRole('heading', { name: /Xác nhận thông tin/i })).toBeVisible();
-    await expect(page.getByText(/Tỷ lệ thanh toán/i)).toBeVisible();
-    await expect(page.getByText(/Cách thanh toán trên cổng PayOS/i)).toBeVisible();
+    await page.getByRole('button', { name: /Tiếp tục thanh toán/i }).first().click();
+    await expect(page.getByRole('heading', { name: /Thanh toán/i })).toBeVisible();
+    await expect(page.getByText(/Hình thức thanh toán/i)).toBeVisible();
     await expect(page.getByText(/Thanh toán 50%/i)).toBeVisible();
     await expect(page.getByText(/Thanh toán toàn bộ/i)).toBeVisible();
     await expect(page.getByText(/Ưu tiên QR hoặc chuyển khoản qua PayOS/i)).toBeVisible();
     await expect(page.getByText(/Ưu tiên thẻ qua PayOS/i)).toBeVisible();
-    await expect(page.getByText(/VietQR chưa có business flow nội bộ tách riêng/i)).toBeVisible();
 
-    await page.getByText(/Thanh toán 50%/i).click();
+    await page.getByText(/Thanh toán toàn bộ/i).click();
     await expect(page.getByRole('button', { name: /Thanh toán ?.*đ/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Quay lại/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Quay lại sửa đơn/i })).toBeVisible();
   });
 
   test('Row 21: customer cancellation stays in a popup and uses the requested submit label', async ({ page }) => {
@@ -119,7 +116,6 @@ test.describe('Customer + Public Booking Verification', () => {
     await resultRegion.getByRole('button', { name: /Thanh toán/i }).click();
     const paymentDialog = page.getByRole('dialog', { name: /Thanh toán/i });
     await expect(paymentDialog).toBeVisible();
-    await expect(paymentDialog.getByText(/Thanh toán hiện được xử lý qua PayOS/i)).toBeVisible();
     await paymentDialog.getByRole('button', { name: /Thanh toán ?.*đ/i }).click();
     await expect(paymentDialog).toHaveCount(0);
 

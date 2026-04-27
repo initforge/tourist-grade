@@ -1,34 +1,23 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { removeWishlistItem } from '@shared/lib/api/wishlist';
 import { useAuthStore } from '@shared/store/useAuthStore';
 import { useRequireAuth } from '@shared/hooks/useAuthGuard';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
-
-const WISHLIST_STORAGE_KEY = '__travela_customer_wishlist';
 
 export default function Wishlist() {
   useRequireAuth('/login?redirect=/customer/wishlist');
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
+  const accessToken = useAuthStore((state) => state.accessToken);
   const tours = useAppDataStore((state) => state.publicTours);
+  const wishlist = useAppDataStore((state) => state.wishlist);
+  const removeWishlistStoreItem = useAppDataStore((state) => state.removeWishlistItem);
 
-  const [wishlistIds, setWishlistIds] = useState<string[]>(() => {
-    try {
-      const raw = localStorage.getItem(WISHLIST_STORAGE_KEY);
-      return raw ? JSON.parse(raw) as string[] : ['T001', 'T003'];
-    } catch {
-      return ['T001', 'T003'];
-    }
-  });
+  const wishlistedTours = tours.filter((tour) => wishlist.some((item) => item.tourId === tour.id));
 
-  const wishlistedTours = tours.filter((tour) => wishlistIds.includes(tour.id));
-
-  const handleRemove = (id: string) => {
-    setWishlistIds((prev) => {
-      const next = prev.filter((item) => item !== id);
-      localStorage.setItem(WISHLIST_STORAGE_KEY, JSON.stringify(next));
-      return next;
-    });
+  const handleRemove = async (id: string) => {
+    await removeWishlistItem(id, accessToken);
+    removeWishlistStoreItem(id);
   };
 
   return (
@@ -55,17 +44,17 @@ export default function Wishlist() {
               onClick={() => navigate('/tours')}
               className="px-8 py-3 bg-[var(--color-primary)] text-white font-sans uppercase tracking-[0.1em] text-xs hover:bg-[var(--color-secondary)] transition-colors"
             >
-              Khám Phá Tour Ngay
+              Khám phá tour ngay
             </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {wishlistedTours.map((tour) => (
-              <div key={tour.id} className="bg-white border border-[#D0C5AF]/40 shadow-sm group animate-in fade-in zoom-in-95 duration-500 relative flex flex-col">
+              <div key={tour.id} className="bg-white border border-[#D0C5AF]/40 shadow-sm group relative flex flex-col">
                 <button
-                  onClick={() => handleRemove(tour.id)}
+                  onClick={() => void handleRemove(tour.id)}
                   className="absolute top-4 right-4 z-10 w-8 h-8 flex items-center justify-center bg-white/80 backdrop-blur-sm rounded-full hover:bg-[#ba1a1a] hover:text-white text-[var(--color-tertiary)] transition-colors shadow-sm"
-                  title="Xóa khỏi Wishlist"
+                  title="Xóa khỏi wishlist"
                 >
                   <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
                     favorite
@@ -92,10 +81,10 @@ export default function Wishlist() {
                     >
                       {tour.title}
                     </h3>
-                    {tour.rating && (
+                    {typeof tour.rating === 'number' && (
                       <div className="flex items-center gap-1 text-xs text-primary/50 mb-3">
                         <span className="material-symbols-outlined text-[14px] text-[var(--color-secondary)]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                        {tour.rating} · {tour.reviewCount} đánh giá
+                        {tour.rating.toFixed(1)} · {tour.reviewCount ?? 0} đánh giá
                       </div>
                     )}
                   </div>

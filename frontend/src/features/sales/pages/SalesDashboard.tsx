@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Button, Checkbox, Modal } from 'antd';
 import { bookingNoteLabel, buildDailyRevenueRows, passengerCountLabel } from '@shared/lib/bookingReports';
+import { isBookingConfirmedForOperations } from '@shared/lib/bookingLifecycle';
 import DailyRevenueLineChart from '@shared/ui/DailyRevenueLineChart';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
 
@@ -110,6 +111,8 @@ function TaskPanel({
 
 export default function SalesDashboard() {
   const bookings = useAppDataStore((state) => state.bookings);
+  const tourPrograms = useAppDataStore((state) => state.tourPrograms);
+  const tourInstances = useAppDataStore((state) => state.tourInstances);
   const [dateFrom, setDateFrom] = useState('2026-03-01');
   const [dateTo, setDateTo] = useState('2026-04-30');
   const [exportModalOpen, setExportModalOpen] = useState(false);
@@ -193,6 +196,31 @@ export default function SalesDashboard() {
       .sort((left, right) => right.count - left.count || right.revenue - left.revenue)
       .slice(0, 5);
   }, [bookingsInRange]);
+
+  const lowestBookingRatios = useMemo(() => {
+    const rows = tourPrograms.map((program) => {
+      const programInstances = tourInstances.filter((instance) => (
+        instance.programId === program.id && inRange(instance.departureDate, dateFrom, dateTo)
+      ));
+      const totalSlots = programInstances.reduce((sum, instance) => sum + instance.expectedGuests, 0);
+      const totalGuests = bookings
+        .filter((booking) => isBookingConfirmedForOperations(booking))
+        .filter((booking) => programInstances.some((instance) => booking.tourId === instance.id || booking.tourName === instance.programName))
+        .reduce((sum, booking) => sum + booking.passengers.length, 0);
+      const ratio = totalSlots > 0 ? totalGuests / totalSlots : 0;
+      return {
+        programId: program.id,
+        programName: program.name,
+        totalGuests,
+        totalSlots,
+        ratio,
+      };
+    }).filter((item) => item.totalSlots > 0);
+
+    return rows
+      .sort((left, right) => left.ratio - right.ratio || left.totalGuests - right.totalGuests || left.programName.localeCompare(right.programName))
+      .slice(0, 5);
+  }, [bookings, dateFrom, dateTo, tourInstances, tourPrograms]);
 
   const reportStats = useMemo(
     () => [
@@ -415,9 +443,48 @@ export default function SalesDashboard() {
             </div>
           </div>
 
-          <div className="bg-white border border-[#D0C5AF]/20 p-6">
-            <div className="flex items-center gap-2 mb-5">
-              <div className="w-1 h-4 bg-blue-500" />
+          <div className="space-y-6">
+            <div className="bg-white border border-[#D0C5AF]/20 p-6">
+              <div className="flex items-center gap-2 mb-5">
+                <div className="w-1 h-4 bg-red-500" />
+                <h3 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">
+                  Top 5 chương trình tour có tỷ lệ book thấp nhất
+                </h3>
+              </div>
+              <div className="space-y-3">
+                {lowestBookingRatios.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-[#2A2421]/40">Không có chương trình tour nào có slot trong khoảng thời gian đã chọn.</div>
+                ) : (
+                  lowestBookingRatios.map((item, index) => {
+                    const ratioPercent = Math.round(item.ratio * 1000) / 10;
+                    return (
+                      <div key={item.programId} className="border border-[#D0C5AF]/15 bg-[#FAFAF5] p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-red-50 text-red-600 text-sm font-bold flex items-center justify-center">
+                            {index + 1}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-[#2A2421]">{item.programName}</p>
+                            <p className="mt-1 text-[11px] text-[#2A2421]/50">{item.totalGuests} khách / {item.totalSlots} slot</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-bold text-red-600">{ratioPercent}%</p>
+                            <p className="text-[10px] text-[#2A2421]/40">Tỷ lệ book</p>
+                          </div>
+                        </div>
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-red-50">
+                          <div className="h-full rounded-full bg-red-500" style={{ width: `${Math.min(100, Math.max(0, ratioPercent))}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white border border-[#D0C5AF]/20 p-6">
+              <div className="flex items-center gap-2 mb-5">
+                <div className="w-1 h-4 bg-blue-500" />
               <h3 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">
                 Báo cáo doanh thu theo ngày
               </h3>
@@ -426,6 +493,7 @@ export default function SalesDashboard() {
               rows={dailyRevenue}
               emptyLabel="Không có doanh thu trong khoảng thời gian đã chọn."
             />
+            </div>
           </div>
         </div>
       </section>

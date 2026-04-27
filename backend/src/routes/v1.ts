@@ -5,12 +5,15 @@ import { createBookingsRouter } from './bookings.js';
 import { createDevRouter } from './dev.js';
 import { createPaymentsRouter } from './payments.js';
 import { createPublicRouter } from './public.js';
+import { createReviewsRouter } from './reviews.js';
 import { createServicesRouter } from './services.js';
+import { createSpecialDaysRouter } from './special-days.js';
 import { createSuppliersRouter } from './suppliers.js';
 import { createTourInstancesRouter } from './tour-instances.js';
 import { createTourProgramsRouter } from './tour-programs.js';
 import { createUsersRouter } from './users.js';
 import { createVouchersRouter } from './vouchers.js';
+import { createWishlistRouter } from './wishlist.js';
 
 export function createV1Router() {
   const router = Router();
@@ -29,8 +32,11 @@ export function createV1Router() {
         'tour-instances',
         'bookings',
         'payments',
+        'wishlist',
+        'reviews',
         'services',
         'suppliers',
+        'special-days',
         'vouchers',
       ],
     });
@@ -44,8 +50,11 @@ export function createV1Router() {
   router.use('/tour-instances', createTourInstancesRouter());
   router.use('/bookings', createBookingsRouter());
   router.use('/payments', createPaymentsRouter());
+  router.use('/wishlist', createWishlistRouter());
+  router.use('/reviews', createReviewsRouter());
   router.use('/services', createServicesRouter());
   router.use('/suppliers', createSuppliersRouter());
+  router.use('/special-days', createSpecialDaysRouter());
   router.use('/vouchers', createVouchersRouter());
   router.use('/dev', createDevRouter());
 

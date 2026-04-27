@@ -83,12 +83,18 @@ export default function ManagerTourEstimateApproval() {
   };
   const handleReject = async (_reason: string) => {
     if (token && instance) {
-      const response = await updateTourInstanceCommand(token, instance.id, 'reject-sale', { reason: _reason });
+      const response = await updateTourInstanceCommand(token, instance.id, 'estimate/reject', { reason: _reason });
       upsertTourInstance(response.tourInstance);
     }
     setShowReject(false);
   };
-  const handleRequestEdit = (_reason: string) => { setShowRequestEdit(false); };
+  const handleRequestEdit = async (_reason: string) => {
+    if (token && instance) {
+      const response = await updateTourInstanceCommand(token, instance.id, 'estimate/request-edit', { reason: _reason });
+      upsertTourInstance(response.tourInstance);
+    }
+    setShowRequestEdit(false);
+  };
 
   if (!instance) {
     return (

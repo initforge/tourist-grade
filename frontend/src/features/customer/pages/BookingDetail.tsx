@@ -3,24 +3,29 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useRequireAuth } from '@shared/hooks/useAuthGuard';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
 import { CancelBookingModal } from '@shared/ui/CancelBookingModal';
+import { TourReviewModal } from '@shared/ui/TourReviewModal';
 import {
   BOOKING_STATUS_LABEL,
   PAYMENT_METHOD_LABEL,
   PAYMENT_STATUS_LABEL,
   canCustomerPay,
   formatCurrency,
+  REFUND_STATUS_LABEL,
 } from '@shared/lib/booking';
 import { createBookingPaymentLink } from '@shared/lib/api/bookings';
+import { useAuthStore } from '@shared/store/useAuthStore';
 
 export default function BookingDetail() {
   useRequireAuth('/login?redirect=/customer/bookings');
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const accessToken = useAuthStore((state) => state.accessToken);
   const bookings = useAppDataStore((state) => state.bookings);
   const publicTours = useAppDataStore((state) => state.publicTours);
   const booking = bookings.find((item) => item.id === id);
   const tour = publicTours.find((item) => item.id === booking?.tourId);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
 
   if (!booking) {
@@ -41,7 +46,7 @@ export default function BookingDetail() {
     setIsPaying(true);
 
     try {
-      const response = await createBookingPaymentLink(booking.id);
+      const response = await createBookingPaymentLink(booking.id, accessToken);
       const checkoutUrl = response.paymentLink.checkoutUrl;
 
       if (checkoutUrl) {
@@ -60,7 +65,7 @@ export default function BookingDetail() {
           className="flex items-center gap-2 text-sm text-[var(--color-primary)] opacity-70 hover:opacity-100 transition-opacity mb-8 font-sans"
         >
           <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-          Lịch sử đặt chỗ
+          Lịch sử đặt tour
         </button>
 
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
@@ -75,6 +80,11 @@ export default function BookingDetail() {
             <span className="px-4 py-2 border text-sm font-medium bg-sky-50 text-sky-700 border-sky-300">
               {PAYMENT_STATUS_LABEL[booking.paymentStatus]}
             </span>
+            {booking.status === 'cancelled' && (
+              <span className="px-4 py-2 border text-sm font-medium bg-rose-50 text-rose-700 border-rose-300">
+                {REFUND_STATUS_LABEL[booking.refundStatus]}
+              </span>
+            )}
           </div>
         </div>
 
@@ -98,8 +108,8 @@ export default function BookingDetail() {
                     <p className="text-xs font-medium text-primary">{booking.passengers.length} người</p>
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase tracking-widest text-primary/50 mb-1">Loại</p>
-                    <p className="text-xs font-medium text-primary">{tour?.category === 'international' ? 'Quốc tế' : 'Trong nước'}</p>
+                    <p className="text-[10px] uppercase tracking-widest text-primary/50 mb-1">Mã tour</p>
+                    <p className="text-xs font-medium text-primary">{`${booking.programCode ?? booking.tourId} - ${booking.instanceCode ?? ''}`}</p>
                   </div>
                 </div>
               </div>
@@ -143,6 +153,44 @@ export default function BookingDetail() {
               </div>
             </section>
 
+            {booking.status === 'cancelled' && booking.bankInfo && (
+              <section className="bg-white border border-[#D0C5AF]/30 p-8 shadow-sm">
+                <h2 className="font-serif text-xl text-[var(--color-primary)] mb-5">Thông tin hoàn tiền</h2>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Ngân hàng</p>
+                    <p className="text-sm font-medium text-primary">{booking.bankInfo.bankName}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Số tài khoản</p>
+                    <p className="text-sm font-medium text-primary">{booking.bankInfo.accountNumber}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Chủ tài khoản</p>
+                    <p className="text-sm font-medium text-primary">{booking.bankInfo.accountHolder}</p>
+                  </div>
+                </div>
+                <div className="mt-5 grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Trạng thái hoàn tiền</p>
+                    <p className="text-sm font-medium text-primary">{REFUND_STATUS_LABEL[booking.refundStatus]}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Số tiền hoàn</p>
+                    <p className="text-sm font-medium text-primary">{formatCurrency(booking.refundAmount ?? 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Bill hoàn tiền</p>
+                    {booking.refundBillUrl ? (
+                      <a href={booking.refundBillUrl} target="_blank" rel="noreferrer" className="text-sm text-[var(--color-secondary)] hover:underline">Xem ảnh bill</a>
+                    ) : (
+                      <p className="text-sm font-medium text-primary">Chưa cập nhật</p>
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
+
             {booking.paymentTransactions.length > 0 && (
               <section className="bg-white border border-[#D0C5AF]/30 p-8 shadow-sm">
                 <h2 className="font-serif text-xl text-[var(--color-primary)] mb-5">Lịch sử thanh toán</h2>
@@ -181,6 +229,12 @@ export default function BookingDetail() {
                   <span>Còn lại</span>
                   <span>{formatCurrency(booking.remainingAmount)}</span>
                 </div>
+                {booking.discountAmount ? (
+                  <div className="flex justify-between text-xs text-emerald-700">
+                    <span>Giảm giá</span>
+                    <span>- {formatCurrency(booking.discountAmount)}</span>
+                  </div>
+                ) : null}
               </div>
 
               <div className="bg-[var(--color-surface)] p-4 space-y-2">
@@ -212,6 +266,15 @@ export default function BookingDetail() {
                   {isPaying ? 'Đang tạo link thanh toán' : `Thanh toán ${formatCurrency(booking.remainingAmount)}`}
                 </button>
               )}
+              {booking.status === 'completed' && !booking.review && (
+                <button
+                  onClick={() => setShowReviewModal(true)}
+                  className="w-full border border-emerald-400 text-emerald-700 font-sans uppercase tracking-[0.1em] text-xs py-4 hover:bg-emerald-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-base">reviews</span>
+                  Đánh giá tour
+                </button>
+              )}
               {['booked', 'pending', 'confirmed'].includes(booking.status) && (
                 <button
                   onClick={() => setShowCancelModal(true)}
@@ -234,6 +297,10 @@ export default function BookingDetail() {
 
       {showCancelModal && (
         <CancelBookingModal booking={booking} onClose={() => setShowCancelModal(false)} />
+      )}
+
+      {showReviewModal && (
+        <TourReviewModal bookingId={booking.id} tourId={booking.tourId} onClose={() => setShowReviewModal(false)} />
       )}
     </div>
   );

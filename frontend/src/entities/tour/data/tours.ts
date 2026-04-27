@@ -1,12 +1,26 @@
 export interface DepartureScheduleEntry {
   id: string;
+  programCode?: string;
+  instanceCode?: string;
   date: string;
   availableSeats: number;
+  totalSlots?: number;
   status: 'open' | 'filling' | 'full' | 'closed';
   priceAdult?: number;
   priceChild?: number;
   priceInfant?: number;
   singleRoomSurcharge?: number;
+  bookingDeadlineAt?: string;
+}
+
+export interface TourReview {
+  id: string;
+  bookingId: string;
+  rating: number;
+  title?: string;
+  comment: string;
+  createdAt: string;
+  authorName: string;
 }
 
 export interface CancellationTier {
@@ -25,6 +39,7 @@ export interface ItineraryDay {
 export interface Tour {
   id: string;
   slug: string;
+  regionKey?: string;
   title: string;
   description: string;
   highlights: string[];
@@ -54,4 +69,5 @@ export interface Tour {
   cancellationPolicy: CancellationTier[];
   rating?: number;
   reviewCount?: number;
+  reviews?: TourReview[];
 }

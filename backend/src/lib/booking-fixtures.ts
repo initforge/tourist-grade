@@ -14,6 +14,8 @@ function isoOffset(days: number) {
 const refundBillSvg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='180' viewBox='0 0 400 180'%3E%3Crect width='400' height='180' fill='%23f8fafc'/%3E%3Crect x='20' y='20' width='360' height='140' fill='%23ffffff' stroke='%23166534'/%3E%3Ctext x='40' y='84' font-size='24' font-family='Arial' fill='%23166534'%3EBill hoan tien%3C/text%3E%3Ctext x='40' y='118' font-size='16' font-family='Arial' fill='%23334155'%3EBK-564738%3C/text%3E%3C/svg%3E";
 
 export async function resetBookingFixtures(prisma: PrismaClient) {
+  await prisma.emailOutbox.deleteMany();
+  await prisma.tourReview.deleteMany();
   await prisma.paymentTransaction.deleteMany();
   await prisma.bookingPassenger.deleteMany();
   await prisma.booking.deleteMany();
@@ -22,7 +24,7 @@ export async function resetBookingFixtures(prisma: PrismaClient) {
     prisma.user.findUnique({ where: { email: 'customer@travela.vn' } }),
     prisma.user.findUnique({ where: { email: 'sales@travela.vn' } }),
     prisma.tourInstance.findMany({
-      where: { code: { in: ['TI001', 'TI002', 'TI004', 'TI005'] } },
+      where: { code: { in: ['TI001', 'TI002', 'TI004', 'TI005', 'TI009', 'TI010'] } },
       select: { id: true, code: true },
     }),
   ]);
@@ -83,7 +85,7 @@ export async function resetBookingFixtures(prisma: PrismaClient) {
     data: {
       id: 'B002',
       bookingCode: 'BK-102938',
-      tourInstanceId: instanceId('TI002'),
+      tourInstanceId: instanceId('TI009'),
       userId: customer.id,
       status: 'PENDING_CANCEL',
       refundStatus: 'PENDING',
@@ -122,7 +124,7 @@ export async function resetBookingFixtures(prisma: PrismaClient) {
     data: {
       id: 'B003',
       bookingCode: 'BK-394821',
-      tourInstanceId: instanceId('TI005'),
+      tourInstanceId: instanceId('TI009'),
       userId: customer.id,
       status: 'PENDING',
       refundStatus: 'NONE',
@@ -222,9 +224,41 @@ export async function resetBookingFixtures(prisma: PrismaClient) {
 
   await prisma.booking.create({
     data: {
+      id: 'B013',
+      bookingCode: 'BK-130013',
+      tourInstanceId: instanceId('TI004'),
+      userId: customer.id,
+      status: 'COMPLETED',
+      refundStatus: 'NONE',
+      paymentMethod: 'VNPAY',
+      paymentType: 'ONLINE',
+      paymentStatus: 'PAID',
+      contactName: 'Đặng Gia T',
+      contactEmail: 'danggia.t@gmail.com',
+      contactPhone: '0966 222 555',
+      totalAmount: 9400000,
+      paidAmount: 9400000,
+      remainingAmount: 0,
+      createdAt: toDate('2026-03-16T08:30:00Z'),
+      passengers: {
+        create: [
+          { type: 'ADULT', fullName: 'Đặng Gia T', gender: 'MALE', dateOfBirth: toDate('1991-04-14'), cccd: '001091041234', nationality: 'Việt Nam' },
+          { type: 'ADULT', fullName: 'Lưu Mai U', gender: 'FEMALE', dateOfBirth: toDate('1993-09-19'), cccd: '001093091234', nationality: 'Việt Nam' },
+        ],
+      },
+      paymentTransactions: {
+        create: [
+          { amount: 9400000, method: 'VNPAY', status: 'PAID', paidAt: toDate('2026-03-16T08:45:00Z'), transactionRef: 'VNP17000011' },
+        ],
+      },
+    },
+  });
+
+  await prisma.booking.create({
+    data: {
       id: 'B009',
       bookingCode: 'BK-401928',
-      tourInstanceId: instanceId('TI002'),
+      tourInstanceId: instanceId('TI009'),
       userId: customer.id,
       status: 'CONFIRMED',
       refundStatus: 'NONE',
@@ -260,7 +294,7 @@ export async function resetBookingFixtures(prisma: PrismaClient) {
     data: {
       id: 'B010',
       bookingCode: 'BK-509182',
-      tourInstanceId: instanceId('TI002'),
+      tourInstanceId: instanceId('TI009'),
       userId: customer.id,
       status: 'PENDING',
       refundStatus: 'NONE',
@@ -277,12 +311,49 @@ export async function resetBookingFixtures(prisma: PrismaClient) {
       createdAt: toDate('2026-03-26T20:30:00Z'),
       passengers: {
         create: [
-          { type: 'ADULT', fullName: 'Cao Đức S', gender: 'MALE', dateOfBirth: toDate('1989-11-02'), cccd: '001089011234', nationality: 'Việt Nam', singleRoomSupplement: 800000 },
+          { type: 'ADULT', fullName: 'Cao Đức S', gender: 'MALE', dateOfBirth: toDate('1989-11-02'), cccd: 'P1234567', nationality: 'Nhật Bản', singleRoomSupplement: 800000 },
         ],
       },
       paymentTransactions: {
         create: [
           { amount: 16000000, method: 'STRIPE', status: 'PAID', paidAt: toDate('2026-03-26T20:40:00Z'), transactionRef: 'STR17000002' },
+        ],
+      },
+    },
+  });
+
+  await prisma.booking.create({
+    data: {
+      id: 'B014',
+      bookingCode: 'BK-140014',
+      tourInstanceId: instanceId('TI010'),
+      userId: customer.id,
+      status: 'CONFIRMED',
+      refundStatus: 'NONE',
+      paymentMethod: 'PAYOS',
+      paymentType: 'ONLINE',
+      paymentStatus: 'PARTIAL',
+      contactName: 'Ngô Thanh V',
+      contactEmail: 'ngothanhv@gmail.com',
+      contactPhone: '0908 111 444',
+      roomCountsJson: { single: 1, double: 0, triple: 0 },
+      totalAmount: 9600000,
+      paidAmount: 4800000,
+      remainingAmount: 4800000,
+      payloadJson: {
+        paymentRatio: 'deposit',
+      },
+      confirmedById: sales.id,
+      confirmedAt: toDate('2026-04-10T10:30:00Z'),
+      createdAt: toDate('2026-04-10T09:45:00Z'),
+      passengers: {
+        create: [
+          { type: 'ADULT', fullName: 'Ngô Thanh V', gender: 'MALE', dateOfBirth: toDate('1989-02-17'), cccd: '001089021234', nationality: 'Việt Nam', singleRoomSupplement: 500000 },
+        ],
+      },
+      paymentTransactions: {
+        create: [
+          { amount: 4800000, method: 'PAYOS', status: 'PAID', paidAt: toDate('2026-04-10T10:00:00Z'), transactionRef: 'PAYOS17000014', orderCode: '17000014' },
         ],
       },
     },
@@ -412,6 +483,78 @@ export async function resetBookingFixtures(prisma: PrismaClient) {
   });
 }
 
+export async function resetCustomerPublicFixtures(prisma: PrismaClient) {
+  await prisma.tourReview.deleteMany();
+  await prisma.wishlistItem.deleteMany();
+
+  const [customer, programs, bookings] = await Promise.all([
+    prisma.user.findUnique({ where: { email: 'customer@travela.vn' } }),
+    prisma.tourProgram.findMany({
+      where: { code: { in: ['TP001', 'TP002', 'TP003'] } },
+      select: { id: true, code: true },
+    }),
+    prisma.booking.findMany({
+      where: { id: { in: ['B004', 'B008'] } },
+      include: {
+        tourInstance: true,
+      },
+    }),
+  ]);
+
+  if (!customer) {
+    throw new Error('Customer fixture user is missing. Run the full seed first.');
+  }
+
+  const programIdByCode = new Map(programs.map((program) => [program.code, program.id]));
+
+  await prisma.wishlistItem.createMany({
+    data: [
+      {
+        userId: customer.id,
+        tourProgramId: programIdByCode.get('TP001') ?? '',
+      },
+      {
+        userId: customer.id,
+        tourProgramId: programIdByCode.get('TP003') ?? '',
+      },
+    ].filter((item) => item.tourProgramId),
+  });
+
+  const reviewPayloads = [
+    {
+      bookingId: 'B004',
+      rating: 5,
+      title: 'Du thuyen sach, lich trinh gon',
+      comment: 'Lich trinh ro rang, du thuyen sach va doi ngu cham soc doan rat ky.',
+    },
+    {
+      bookingId: 'B008',
+      rating: 4,
+      title: 'Nghi duong yen tinh',
+      comment: 'Phong dep, resort yen tinh, dich vu spa tot. Mong co them lua chon bua toi ngoai troi.',
+    },
+  ];
+
+  for (const reviewPayload of reviewPayloads) {
+    const booking = bookings.find((item) => item.id === reviewPayload.bookingId);
+    if (!booking) {
+      continue;
+    }
+
+    await prisma.tourReview.create({
+      data: {
+        bookingId: booking.id,
+        userId: customer.id,
+        tourProgramId: booking.tourInstance.programId,
+        tourInstanceId: booking.tourInstanceId,
+        rating: reviewPayload.rating,
+        title: reviewPayload.title,
+        comment: reviewPayload.comment,
+      },
+    });
+  }
+}
+
 export async function resetTourWorkflowFixtures(prisma: PrismaClient) {
   await Promise.all([
     prisma.tourInstance.updateMany({
@@ -502,7 +645,102 @@ export async function resetTourWorkflowFixtures(prisma: PrismaClient) {
         refundTotal: null,
       },
     }),
+    prisma.tourInstance.updateMany({
+      where: { code: 'TI010' },
+      data: {
+        status: 'DANG_MO_BAN',
+        cancelledAt: null,
+        cancelReason: null,
+        refundTotal: null,
+      },
+    }),
   ]);
+}
+
+export async function resetTourProgramFixtures(prisma: PrismaClient) {
+  const tp1 = await prisma.tourProgram.findUnique({ where: { code: 'TP001' } });
+  const tp2 = await prisma.tourProgram.findUnique({ where: { code: 'TP002' } });
+  const tp3 = await prisma.tourProgram.findUnique({ where: { code: 'TP003' } });
+  const tp4 = await prisma.tourProgram.findUnique({ where: { code: 'TP004' } });
+
+  if (tp1) {
+    const publicContent = ((tp1.publicContentJson as Record<string, unknown> | null) ?? {});
+    await prisma.tourProgram.update({
+      where: { id: tp1.id },
+      data: {
+        status: 'ACTIVE',
+        publicContentJson: {
+          ...publicContent,
+          inactiveReason: null,
+          rejectionReason: null,
+          approvalStatus: 'approved',
+        },
+      },
+    });
+  }
+
+  if (tp2) {
+    const publicContent = ((tp2.publicContentJson as Record<string, unknown> | null) ?? {});
+    await prisma.tourProgram.update({
+      where: { id: tp2.id },
+      data: {
+        status: 'ACTIVE',
+        publicContentJson: {
+          ...publicContent,
+          inactiveReason: null,
+          rejectionReason: null,
+          approvalStatus: 'approved',
+        },
+      },
+    });
+  }
+
+  if (tp3) {
+    const publicContent = ((tp3.publicContentJson as Record<string, unknown> | null) ?? {});
+    await prisma.tourProgram.update({
+      where: { id: tp3.id },
+      data: {
+        status: 'DRAFT',
+        publicContentJson: {
+          ...publicContent,
+          inactiveReason: null,
+          rejectionReason: null,
+          approvalStatus: 'pending',
+        },
+      },
+    });
+  }
+
+  if (tp4) {
+    const publicContent = ((tp4.publicContentJson as Record<string, unknown> | null) ?? {});
+    await prisma.tourProgram.update({
+      where: { id: tp4.id },
+      data: {
+        status: 'INACTIVE',
+        publicContentJson: {
+          ...publicContent,
+          inactiveReason: 'Tạm dừng để cập nhật lại giá phòng và đối tác vận chuyển',
+          rejectionReason: null,
+          approvalStatus: 'approved',
+        },
+      },
+    });
+  }
+}
+
+export async function resetSpecialDayFixtures(prisma: PrismaClient) {
+  await prisma.specialDay.deleteMany();
+  await prisma.specialDay.createMany({
+    data: [
+      { code: 'SD001', name: 'Tết Nguyên Đán 2026', occasion: 'Lễ Tết', startDate: toDate('2026-02-17'), endDate: toDate('2026-02-23'), note: 'Kỳ nghỉ Tết âm lịch' },
+      { code: 'SD002', name: 'Giỗ Tổ Hùng Vương', occasion: 'Lễ quốc gia', startDate: toDate('2026-04-06'), endDate: toDate('2026-04-06'), note: 'Giỗ Tổ Hùng Vương' },
+      { code: 'SD003', name: 'Giải phóng Miền Nam', occasion: 'Lễ quốc gia', startDate: toDate('2026-04-30'), endDate: toDate('2026-04-30'), note: '30/4' },
+      { code: 'SD004', name: 'Quốc tế Lao động', occasion: 'Lễ quốc gia', startDate: toDate('2026-05-01'), endDate: toDate('2026-05-01'), note: '1/5' },
+      { code: 'SD005', name: 'Quốc khánh', occasion: 'Lễ quốc gia', startDate: toDate('2026-09-02'), endDate: toDate('2026-09-02'), note: '2/9' },
+      { code: 'SD006', name: 'Mùa thu Nhật Bản', occasion: 'Mùa lễ quốc tế', startDate: toDate('2026-10-15'), endDate: toDate('2026-10-28'), note: 'Mùa lá đỏ' },
+      { code: 'SD007', name: 'Giáng Sinh', occasion: 'Lễ quốc tế', startDate: toDate('2026-12-25'), endDate: toDate('2026-12-25'), note: 'Noel' },
+    ],
+  });
 }
 
 export async function resetVoucherFixtures(prisma: PrismaClient) {
@@ -596,6 +834,21 @@ export async function resetVoucherFixtures(prisma: PrismaClient) {
     status: 'ACTIVE',
     description: 'Giảm 500K cho đơn hàng cao cấp',
     approvedById: manager.id,
+  });
+
+  await createVoucher({
+    id: 'VOU-13',
+    code: 'TRAVELA10',
+    type: 'PERCENT',
+    valueAmount: 10,
+    startsAt: '2026-01-01',
+    endsAt: '2026-12-31',
+    usageLimit: 500,
+    usedCount: 12,
+    status: 'ACTIVE',
+    description: 'Giam 10% cho tour Ha Long dang mo ban',
+    approvedById: manager.id,
+    targetCodes: ['TP001'],
   });
 
   await createVoucher({

@@ -1,8 +1,25 @@
 import { Router } from 'express';
+import { buildPublicTour } from '../lib/public-tours.js';
 import { prisma } from '../lib/prisma.js';
 import { asyncHandler, notFound } from '../lib/http.js';
 import { mapBlogPost } from '../lib/mappers.js';
 import { normalizePayload } from '../lib/text.js';
+
+const publicInstanceInclude = {
+  bookings: {
+    include: {
+      passengers: true,
+    },
+  },
+} as const;
+
+const publicReviewInclude = {
+  user: {
+    select: {
+      fullName: true,
+    },
+  },
+} as const;
 
 export function createPublicRouter() {
   const router = Router();
@@ -12,36 +29,48 @@ export function createPublicRouter() {
       where: {
         status: 'ACTIVE',
       },
+      include: {
+        instances: {
+          include: publicInstanceInclude,
+          orderBy: { departureDate: 'asc' },
+        },
+        reviews: {
+          include: publicReviewInclude,
+          orderBy: { createdAt: 'desc' },
+        },
+      },
       orderBy: { code: 'asc' },
     });
 
     res.json(normalizePayload({
       success: true,
-      tours: programs
-        .map((item) => item.publicContentJson)
-        .filter(Boolean),
+      tours: programs.map((program) => buildPublicTour(program, program.instances, program.reviews)),
     }));
   }));
 
   router.get('/tours/:slug', asyncHandler(async (req, res) => {
     const slug = String(req.params.slug);
-    const programs = await prisma.tourProgram.findMany({
-      where: {
-        status: 'ACTIVE',
+    const program = await prisma.tourProgram.findUnique({
+      where: { slug },
+      include: {
+        instances: {
+          include: publicInstanceInclude,
+          orderBy: { departureDate: 'asc' },
+        },
+        reviews: {
+          include: publicReviewInclude,
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
 
-    const tour = programs
-      .map((item) => item.publicContentJson as { slug?: string } | null)
-      .find((item) => item?.slug === slug);
-
-    if (!tour) {
+    if (!program || program.status !== 'ACTIVE') {
       throw notFound('Tour not found');
     }
 
     res.json(normalizePayload({
       success: true,
-      tour,
+      tour: buildPublicTour(program, program.instances, program.reviews),
     }));
   }));
 

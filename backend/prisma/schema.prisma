@@ -39,6 +39,7 @@ enum TourProgramStatus {
 enum TourInstanceStatus {
   CHO_DUYET_BAN
   YEU_CAU_CHINH_SUA
+  TU_CHOI_BAN
   DANG_MO_BAN
   CHUA_DU_KIEN
   DA_HUY
@@ -146,6 +147,12 @@ enum FormulaOption {
   MANUAL
 }
 
+enum EmailOutboxStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
 model User {
   id                 String         @id @default(cuid())
   email              String         @unique
@@ -165,11 +172,16 @@ model User {
   approvedInstances  TourInstance[] @relation("InstanceApprovedBy")
   assignedInstances  TourInstance[] @relation("InstanceAssignedCoordinator")
   confirmedBookings  Booking[]      @relation("BookingConfirmedBy")
+  cancelledConfirmedBookings Booking[] @relation("BookingCancelledConfirmedBy")
   refundedBookings   Booking[]      @relation("BookingRefundedBy")
+  refundBillEditedBookings Booking[] @relation("BookingRefundBillEditedBy")
   createdVouchers    Voucher[]      @relation("VoucherCreatedBy")
   approvedVouchers   Voucher[]      @relation("VoucherApprovedBy")
   rejectedVouchers   Voucher[]      @relation("VoucherRejectedBy")
+  wishlistItems      WishlistItem[]
+  tourReviews        TourReview[]
   refreshTokens      RefreshToken[]
+  emailOutboxEntries EmailOutbox[]  @relation("EmailOutboxCreatedBy")
 }
 
 model RefreshToken {
@@ -213,6 +225,8 @@ model TourProgram {
   updatedBy         User?             @relation("ProgramUpdatedBy", fields: [updatedById], references: [id])
   instances         TourInstance[]
   voucherTargets    VoucherTarget[]
+  wishlistItems     WishlistItem[]
+  reviews           TourReview[]
 
   @@index([status])
 }
@@ -262,6 +276,7 @@ model TourInstance {
   createdBy             User               @relation("InstanceCreatedBy", fields: [createdById], references: [id])
   approvedBy            User?              @relation("InstanceApprovedBy", fields: [approvedById], references: [id])
   bookings              Booking[]
+  reviews               TourReview[]
 
   @@index([programId, status])
   @@index([departureDate])
@@ -294,17 +309,24 @@ model Booking {
   cancelledAt            DateTime?
   confirmedById          String?
   confirmedAt            DateTime?
+  cancelledConfirmedById String?
+  cancelledConfirmedAt   DateTime?
   refundedById           String?
   refundedAt             DateTime?
+  refundBillEditedById   String?
+  refundBillEditedAt     DateTime?
   createdAt              DateTime       @default(now())
   updatedAt              DateTime       @updatedAt
 
   tourInstance           TourInstance   @relation(fields: [tourInstanceId], references: [id], onDelete: Restrict)
   customer               User?          @relation("CustomerBookings", fields: [userId], references: [id])
   confirmedBy            User?          @relation("BookingConfirmedBy", fields: [confirmedById], references: [id])
+  cancelledConfirmedBy   User?          @relation("BookingCancelledConfirmedBy", fields: [cancelledConfirmedById], references: [id])
   refundedBy             User?          @relation("BookingRefundedBy", fields: [refundedById], references: [id])
+  refundBillEditedBy     User?          @relation("BookingRefundBillEditedBy", fields: [refundBillEditedById], references: [id])
   passengers             BookingPassenger[]
   paymentTransactions    PaymentTransaction[]
+  review                 TourReview?
 
   @@index([tourInstanceId, status])
   @@index([userId])
@@ -342,6 +364,41 @@ model PaymentTransaction {
   booking         Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
   @@index([bookingId])
+}
+
+model EmailOutbox {
+  id            String           @id @default(cuid())
+  template      String
+  recipient     String
+  subject       String
+  payloadJson   Json
+  status        EmailOutboxStatus @default(PENDING)
+  bookingId     String?
+  voucherId     String?
+  createdById   String?
+  sentAt        DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  createdBy     User?            @relation("EmailOutboxCreatedBy", fields: [createdById], references: [id])
+
+  @@index([template, createdAt])
+  @@index([bookingId])
+  @@index([voucherId])
+}
+
+model SpecialDay {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  occasion    String
+  startDate   DateTime
+  endDate     DateTime
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([startDate, endDate])
 }
 
 model Voucher {
@@ -510,4 +567,38 @@ model BlogPost {
   publishedAt      DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+}
+
+model WishlistItem {
+  id            String      @id @default(cuid())
+  userId        String
+  tourProgramId String
+  createdAt     DateTime    @default(now())
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tourProgram   TourProgram @relation(fields: [tourProgramId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tourProgramId])
+  @@index([userId, createdAt])
+}
+
+model TourReview {
+  id             String       @id @default(cuid())
+  bookingId      String       @unique
+  userId         String?
+  tourProgramId  String
+  tourInstanceId String
+  rating         Int
+  title          String?
+  comment        String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  booking        Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tourProgram    TourProgram  @relation(fields: [tourProgramId], references: [id], onDelete: Cascade)
+  tourInstance   TourInstance @relation(fields: [tourInstanceId], references: [id], onDelete: Cascade)
+
+  @@index([tourProgramId, createdAt])
+  @@index([tourInstanceId, createdAt])
 }

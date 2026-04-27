@@ -5,6 +5,7 @@ export { default as TourEstimate } from './TourEstimate';
 export { default as TourGenerationRules } from './TourGenerationRules';
 export { default as TourInstances } from './TourInstances';
 export { default as TourProgramDetail } from './TourProgramDetail';
+export { default as TourProgramEdit } from './TourProgramEdit';
 export { default as TourPrograms } from './TourPrograms';
 export { default as TourProgramWizard } from './TourProgramWizard';
 export { default as TourReceiveDispatch } from './TourReceiveDispatch';

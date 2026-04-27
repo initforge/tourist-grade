@@ -215,20 +215,12 @@ export default function CoordinatorTourPrograms() {
                       <td className="px-5 py-4 text-sm font-bold text-secondary">{fmtPrice(program?.pricingConfig?.sellPriceAdult)}</td>
                       <td className="px-5 py-4 text-sm text-primary/70">{program?.createdBy}</td>
                       <td className="px-5 py-4">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => navigate(`/coordinator/tour-programs/${program?.id}`)}
-                            className="px-3 py-1.5 border border-outline-variant/40 text-[10px] uppercase tracking-widest font-bold text-primary hover:bg-surface transition-colors"
-                          >
-                            Xem chi tiết
-                          </button>
-                          <button
-                            onClick={() => setProgramToStop(program)}
-                            className="px-3 py-1.5 border border-red-300 text-red-600 text-[10px] uppercase tracking-widest font-bold hover:bg-red-50 transition-colors"
-                          >
-                            Ngừng kinh doanh
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => navigate(`/coordinator/tour-programs/${program?.id}`)}
+                          className="px-3 py-1.5 border border-outline-variant/40 text-[10px] uppercase tracking-widest font-bold text-primary hover:bg-surface transition-colors"
+                        >
+                          Xem chi tiết
+                        </button>
                       </td>
                     </>
                   )}

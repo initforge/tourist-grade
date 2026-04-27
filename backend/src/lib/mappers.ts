@@ -10,12 +10,14 @@ import type {
   Role,
   Service,
   ServicePrice,
+  SpecialDay,
   Supplier,
   SupplierServicePrice,
   SupplierServiceVariant,
   TourGuide,
   TourInstance,
   TourProgram,
+  TourReview,
   TourTransport,
   TourType,
   User,
@@ -24,6 +26,8 @@ import type {
   VoucherTarget,
   VoucherStatus,
 } from '@prisma/client';
+import { toDateKey, unwrapEstimatePayload } from './coordinator.js';
+import { getBookingCreatedExpiryAt, getFinalPaymentDueAt } from './customer.js';
 
 function toNumber(value: { toNumber?: () => number } | number | null | undefined) {
   if (typeof value === 'number') {
@@ -104,8 +108,11 @@ export function mapTourProgram(program: TourProgram) {
     title: string;
     description: string;
     meals: string[];
+    accommodationPoint?: string;
   }>;
-  const pricingConfig = program.pricingConfigJson as Record<string, unknown>;
+  const publicContent = (program.publicContentJson as Record<string, unknown> | null) ?? {};
+  const pricingPayload = program.pricingConfigJson as Record<string, unknown>;
+  const pricingConfig = (pricingPayload['pricingConfig'] as Record<string, unknown> | undefined) ?? pricingPayload;
 
   return {
     id: program.code,
@@ -119,25 +126,37 @@ export function mapTourProgram(program: TourProgram) {
     transport: formatTourTransport(program.transport),
     arrivalPoint: program.arrivalPoint ?? undefined,
     tourType: formatTourType(program.tourType),
+    lodgingStandard: publicContent['lodgingStandard'] ?? undefined,
     routeDescription: program.description ?? '',
     holiday: program.holidayLabel ?? undefined,
-    selectedDates: (program.publicContentJson as { selectedDates?: string[] } | null)?.selectedDates ?? [],
-    weekdays: (program.publicContentJson as { weekdays?: string[] } | null)?.weekdays ?? [],
-    yearRoundStartDate: (program.publicContentJson as { yearRoundStartDate?: string } | null)?.yearRoundStartDate ?? '',
-    yearRoundEndDate: (program.publicContentJson as { yearRoundEndDate?: string } | null)?.yearRoundEndDate ?? '',
-    coverageMonths: (program.publicContentJson as { coverageMonths?: number } | null)?.coverageMonths ?? 3,
+    selectedDates: (publicContent['selectedDates'] as string[] | undefined) ?? [],
+    weekdays: (publicContent['weekdays'] as string[] | undefined) ?? [],
+    yearRoundStartDate: (publicContent['yearRoundStartDate'] as string | undefined) ?? '',
+    yearRoundEndDate: (publicContent['yearRoundEndDate'] as string | undefined) ?? '',
+    coverageMonths: (publicContent['coverageMonths'] as number | undefined) ?? 3,
     bookingDeadline: program.bookingDeadline,
     status: program.status.toLowerCase(),
-    inactiveReason: (program.publicContentJson as { inactiveReason?: string } | null)?.inactiveReason,
+    inactiveReason: (publicContent['inactiveReason'] as string | undefined) ?? undefined,
+    rejectionReason: (publicContent['rejectionReason'] as string | undefined) ?? undefined,
+    approvalStatus: (publicContent['approvalStatus'] as string | undefined) ?? undefined,
     itinerary,
     pricingConfig,
+    draftPricingTables: pricingPayload['draftPricingTables'] ?? undefined,
+    draftManualPricing: pricingPayload['draftManualPricing'] ?? undefined,
+    draftPricingOverrides: pricingPayload['draftPricingOverrides'] ?? undefined,
+    draftPreviewRows: (publicContent['draftPreviewRows'] as unknown[] | undefined) ?? [],
     createdBy: program.createdById,
     createdAt: program.createdAt.toISOString(),
     updatedAt: program.updatedAt.toISOString(),
+    submittedAt: (publicContent['submittedAt'] as string | undefined) ?? undefined,
+    approvedAt: (publicContent['approvedAt'] as string | undefined) ?? undefined,
+    rejectedAt: (publicContent['rejectedAt'] as string | undefined) ?? undefined,
   };
 }
 
 export function mapTourInstance(instance: TourInstance & { program?: TourProgram }) {
+  const wrappedEstimate = unwrapEstimatePayload(instance.costEstimateJson ?? undefined);
+
   return {
     id: instance.code,
     programId: instance.program?.code ?? instance.programId,
@@ -154,8 +173,9 @@ export function mapTourInstance(instance: TourInstance & { program?: TourProgram
     priceInfant: toOptionalNumber(instance.priceInfant),
     minParticipants: instance.minParticipants,
     bookingDeadline: instance.bookingDeadlineAt.toISOString().slice(0, 10),
-    costEstimate: instance.costEstimateJson ?? undefined,
+    costEstimate: wrappedEstimate.estimate ?? undefined,
     settlement: instance.settlementJson ?? undefined,
+    assignedGuide: wrappedEstimate.assignedGuide ?? undefined,
     assignedCoordinatorId: instance.assignedCoordinatorId ?? undefined,
     createdBy: instance.createdById,
     createdAt: instance.createdAt.toISOString(),
@@ -220,10 +240,13 @@ function mapSupplierServiceLine(
     priceMode: item.priceMode === 'QUOTED' ? 'Báo giá' : item.priceMode === 'LISTED' ? 'Niêm yết' : undefined,
     menu: item.menu ?? undefined,
     note: item.note ?? undefined,
+    formulaCount: item.isMealService ? 'Giá trị mặc định' : undefined,
+    formulaCountDefault: item.isMealService ? '1' : undefined,
+    formulaQuantity: item.isMealService ? 'Theo số người' : undefined,
     prices: item.prices.map((price) => ({
       id: price.id,
-      fromDate: price.fromDate.toISOString().slice(0, 10),
-      toDate: price.toDate.toISOString().slice(0, 10),
+      fromDate: toDateKey(price.fromDate),
+      toDate: toDateKey(price.toDate),
       unitPrice: toNumber(price.unitPrice),
       note: price.note ?? '',
       createdBy: price.createdByName,
@@ -272,8 +295,8 @@ export function mapService(service: Service & { prices: ServicePrice[] }) {
       id: price.id,
       unitPrice: toNumber(price.unitPrice),
       note: price.note ?? '',
-      effectiveDate: price.effectiveDate.toISOString().slice(0, 10),
-      endDate: price.endDate.toISOString().slice(0, 10),
+      effectiveDate: toDateKey(price.effectiveDate),
+      endDate: toDateKey(price.endDate),
       createdBy: price.createdByName,
     })),
   };
@@ -340,6 +363,14 @@ export function mapBooking(
   booking: Booking & {
     passengers: BookingPassenger[];
     paymentTransactions: PaymentTransaction[];
+    tourInstance: TourInstance & {
+      program: Pick<TourProgram, 'code'>;
+    };
+    review?: Pick<TourReview, 'id' | 'rating' | 'title' | 'comment' | 'createdAt'> | null;
+    confirmedBy?: Pick<User, 'fullName'> | null;
+    cancelledConfirmedBy?: Pick<User, 'fullName'> | null;
+    refundedBy?: Pick<User, 'fullName'> | null;
+    refundBillEditedBy?: Pick<User, 'fullName'> | null;
   },
   options: {
     tourId: string;
@@ -348,15 +379,22 @@ export function mapBooking(
     tourDate: string;
   },
 ) {
+  const effectiveStatus =
+    booking.status === 'BOOKED'
+      ? (booking.confirmedAt ? 'CONFIRMED' : 'PENDING')
+      : booking.status;
+
   return {
     id: booking.id,
     bookingCode: booking.bookingCode,
     tourId: options.tourId,
+    programCode: booking.tourInstance.program.code,
+    instanceCode: booking.tourInstance.code,
     tourName: options.tourName,
     tourDate: options.tourDate,
     tourDuration: options.tourDuration,
     userId: booking.userId ?? undefined,
-    status: formatBookingStatus(booking.status),
+    status: formatBookingStatus(effectiveStatus),
     refundStatus: formatRefundStatus(booking.refundStatus),
     refundBillUrl: booking.refundBillUrl ?? undefined,
     passengers: booking.passengers.map((passenger) => ({
@@ -397,18 +435,62 @@ export function mapBooking(
     promoCode: (booking.payloadJson as { promoCode?: string } | null)?.promoCode,
     discountAmount: toOptionalNumber(booking.discountAmount),
     createdAt: booking.createdAt.toISOString(),
+    paymentWindowExpiresAt:
+      ((booking.payloadJson as { paymentWindowExpiresAt?: string } | null)?.paymentWindowExpiresAt)
+      ?? getBookingCreatedExpiryAt(booking.createdAt).toISOString(),
+    finalPaymentDueAt:
+      ((booking.payloadJson as { finalPaymentDueAt?: string } | null)?.finalPaymentDueAt)
+      ?? getFinalPaymentDueAt(booking.tourInstance.departureDate).toISOString(),
     cancellationReason: booking.cancellationReason ?? undefined,
     cancelledAt: booking.cancelledAt?.toISOString(),
     roomCounts: (booking.roomCountsJson as { single: number; double: number; triple: number } | null) ?? undefined,
-    confirmedBy: (booking.payloadJson as { confirmedBy?: string } | null)?.confirmedBy ?? booking.confirmedById ?? undefined,
+    confirmedBy:
+      booking.confirmedBy?.fullName
+      ?? (booking.payloadJson as { confirmedBy?: string } | null)?.confirmedBy
+      ?? booking.confirmedById
+      ?? undefined,
     confirmedAt: booking.confirmedAt?.toISOString(),
-    cancelledConfirmedBy: (booking.payloadJson as { cancelledConfirmedBy?: string } | null)?.cancelledConfirmedBy,
-    cancelledConfirmedAt: (booking.payloadJson as { cancelledConfirmedAt?: string } | null)?.cancelledConfirmedAt,
-    refundedBy: (booking.payloadJson as { refundedBy?: string } | null)?.refundedBy ?? booking.refundedById ?? undefined,
+    cancelledConfirmedBy:
+      booking.cancelledConfirmedBy?.fullName
+      ?? (booking.payloadJson as { cancelledConfirmedBy?: string } | null)?.cancelledConfirmedBy
+      ?? booking.cancelledConfirmedById
+      ?? undefined,
+    cancelledConfirmedAt:
+      booking.cancelledConfirmedAt?.toISOString()
+      ?? (booking.payloadJson as { cancelledConfirmedAt?: string } | null)?.cancelledConfirmedAt,
+    refundedBy:
+      booking.refundedBy?.fullName
+      ?? (booking.payloadJson as { refundedBy?: string } | null)?.refundedBy
+      ?? booking.refundedById
+      ?? undefined,
     refundedAt: booking.refundedAt?.toISOString(),
-    refundBillEditedBy: (booking.payloadJson as { refundBillEditedBy?: string } | null)?.refundBillEditedBy,
-    refundBillEditedAt: (booking.payloadJson as { refundBillEditedAt?: string } | null)?.refundBillEditedAt,
+    refundBillEditedBy:
+      booking.refundBillEditedBy?.fullName
+      ?? (booking.payloadJson as { refundBillEditedBy?: string } | null)?.refundBillEditedBy
+      ?? booking.refundBillEditedById
+      ?? undefined,
+    refundBillEditedAt:
+      booking.refundBillEditedAt?.toISOString()
+      ?? (booking.payloadJson as { refundBillEditedAt?: string } | null)?.refundBillEditedAt,
     refundAmount: toOptionalNumber(booking.refundAmount),
+    review: booking.review ? {
+      id: booking.review.id,
+      rating: booking.review.rating,
+      title: booking.review.title ?? '',
+      comment: booking.review.comment,
+      createdAt: booking.review.createdAt.toISOString(),
+    } : undefined,
+  };
+}
+
+export function mapSpecialDay(day: SpecialDay) {
+  return {
+    id: day.code,
+    name: day.name,
+    occasion: day.occasion,
+    startDate: day.startDate.toISOString().slice(0, 10),
+    endDate: day.endDate.toISOString().slice(0, 10),
+    note: day.note ?? '',
   };
 }
 
@@ -422,5 +504,21 @@ export function mapBlogPost(post: BlogPost) {
     contentMarkdown: post.contentMarkdown,
     coverImageUrl: post.coverImageUrl ?? '',
     publishedAt: post.publishedAt?.toISOString() ?? null,
+  };
+}
+
+export function mapTourReview(
+  review: TourReview & {
+    user?: Pick<User, 'fullName'> | null;
+  },
+) {
+  return {
+    id: review.id,
+    bookingId: review.bookingId,
+    rating: review.rating,
+    title: review.title ?? '',
+    comment: review.comment,
+    createdAt: review.createdAt.toISOString(),
+    authorName: review.user?.fullName ?? 'Khach hang',
   };
 }

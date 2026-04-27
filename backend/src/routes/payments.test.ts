@@ -4,8 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = {
   booking: {
+    findMany: vi.fn(),
     findUnique: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
   },
   paymentTransaction: {
     create: vi.fn(),
@@ -48,6 +50,8 @@ function createTestApp() {
 describe('payments routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.booking.updateMany.mockResolvedValue({ count: 0 });
+    prismaMock.booking.findMany.mockResolvedValue([]);
     prismaMock.paymentTransaction.findMany.mockResolvedValue([]);
   });
 
@@ -62,7 +66,13 @@ describe('payments routes', () => {
       contactName: 'Nguyen Van A',
       contactEmail: 'nguyenvana@gmail.com',
       contactPhone: '0988888888',
-      tourInstance: {},
+      status: 'BOOKED',
+      tourInstance: {
+        code: 'TI001',
+        program: {
+          slug: 'kham-pha-vinh-ha-long-du-thuyen-5-sao',
+        },
+      },
     });
     payosClientMock.createPaymentLink.mockResolvedValue({
       checkoutUrl: 'https://pay.payos.vn/checkout/demo',
@@ -100,7 +110,13 @@ describe('payments routes', () => {
       contactName: 'Nguyen Van A',
       contactEmail: 'nguyenvana@gmail.com',
       contactPhone: '0988888888',
-      tourInstance: {},
+      status: 'PENDING',
+      tourInstance: {
+        code: 'TI003',
+        program: {
+          slug: 'amanoi-ninh-thuan',
+        },
+      },
     });
     prismaMock.paymentTransaction.findMany.mockResolvedValue([{
       id: 'TX_UNPAID',
@@ -151,6 +167,7 @@ describe('payments routes', () => {
       bookingId: 'B001',
       status: 'UNPAID',
       booking: {
+        status: 'PENDING',
         paidAmount: 4500000,
         totalAmount: 9000000,
       },
@@ -171,6 +188,7 @@ describe('payments routes', () => {
     expect(prismaMock.booking.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'B001' },
       data: {
+        status: 'PENDING',
         paidAmount: 9000000,
         remainingAmount: 0,
         paymentStatus: 'PAID',
@@ -191,6 +209,7 @@ describe('payments routes', () => {
       bookingId: 'B001',
       status: 'PAID',
       booking: {
+        status: 'PENDING',
         paidAmount: 9000000,
         totalAmount: 9000000,
       },
@@ -218,6 +237,7 @@ describe('payments routes', () => {
       bookingId: 'B003',
       status: 'UNPAID',
       booking: {
+        status: 'PENDING',
         paidAmount: 28000000,
         totalAmount: 56000000,
       },
@@ -248,6 +268,7 @@ describe('payments routes', () => {
       bookingId: 'B003',
       status: 'CANCELLED',
       booking: {
+        status: 'PENDING',
         paidAmount: 28000000,
         totalAmount: 56000000,
       },
@@ -273,7 +294,13 @@ describe('payments routes', () => {
       contactName: 'Nguyen Van A',
       contactEmail: 'nguyenvana@gmail.com',
       contactPhone: '0988888888',
-      tourInstance: {},
+      status: 'PENDING',
+      tourInstance: {
+        code: 'TI001',
+        program: {
+          slug: 'kham-pha-vinh-ha-long-du-thuyen-5-sao',
+        },
+      },
     });
 
     const response = await request(createTestApp()).post('/bookings/B001/payos-link');

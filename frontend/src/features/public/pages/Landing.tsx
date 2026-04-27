@@ -19,6 +19,9 @@ export default function Landing() {
   const domesticTours = publicTours.filter((tour) => tour.category === 'domestic').slice(0, 4);
   const featuredTours = publicTours.slice(0, 4);
   const heroTour = publicTours[0];
+  const highlightedReviews = publicTours
+    .flatMap((tour) => (tour.reviews ?? []).slice(0, 1).map((review) => ({ ...review, tourTitle: tour.title })))
+    .slice(0, 3);
 
   const submitSearch = () => {
     const params = new URLSearchParams();
@@ -94,6 +97,24 @@ export default function Landing() {
 
       <section className="public-section bg-surface">
         <div className="public-container">
+          <div className="grid gap-4 md:grid-cols-3 mb-10">
+            <div className="public-floating-card p-5">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-secondary font-semibold mb-2">Lịch khởi hành</p>
+              <p className="font-headline text-3xl text-primary">{publicTours.reduce((sum, tour) => sum + tour.departureSchedule.length, 0)}</p>
+              <p className="text-sm text-primary/55 mt-2">Lấy trực tiếp từ dữ liệu điều phối đang mở bán.</p>
+            </div>
+            <div className="public-floating-card p-5">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-secondary font-semibold mb-2">Đánh giá thật</p>
+              <p className="font-headline text-3xl text-primary">{publicTours.reduce((sum, tour) => sum + (tour.reviewCount ?? 0), 0)}</p>
+              <p className="text-sm text-primary/55 mt-2">Hiển thị theo tour đã hoàn thành và đã gửi đánh giá.</p>
+            </div>
+            <div className="public-floating-card p-5">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-secondary font-semibold mb-2">Theo dõi booking</p>
+              <p className="font-headline text-3xl text-primary">3 bước</p>
+              <p className="text-sm text-primary/55 mt-2">Điền thông tin, thanh toán, quay lại kiểm tra trạng thái ngay.</p>
+            </div>
+          </div>
+
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
             <div>
               <span className="text-secondary font-serif italic text-xl mb-3 block">Dữ liệu từ hệ thống</span>
@@ -147,6 +168,40 @@ export default function Landing() {
                 </div>
               </Link>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="public-section bg-surface">
+        <div className="public-container">
+          <div className="flex items-end justify-between gap-6 mb-8">
+            <div>
+              <span className="text-secondary font-serif italic text-xl mb-3 block">Trải nghiệm từ khách thật</span>
+              <h2 className="font-headline text-3xl md:text-4xl tracking-tighter text-primary">Nhận xét mới nhất</h2>
+            </div>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-3">
+            {highlightedReviews.length > 0 ? highlightedReviews.map((review) => (
+              <article key={review.id} className="public-floating-card p-6">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <p className="font-semibold text-primary">{review.authorName}</p>
+                  <div className="flex text-secondary">
+                    {Array.from({ length: review.rating }).map((_, index) => (
+                      <span key={index} className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
+                        star
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-sm text-primary/75 leading-relaxed mb-4 line-clamp-4">{review.comment}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-primary/45">{review.tourTitle}</p>
+              </article>
+            )) : (
+              <div className="md:col-span-3 public-floating-card p-6 text-sm text-primary/55">
+                Chưa có đủ dữ liệu đánh giá để hiển thị nổi bật trên trang chủ.
+              </div>
+            )}
           </div>
         </div>
       </section>
