@@ -282,7 +282,7 @@ export default function BookingDetail() {
                   </button>
                 )
               )}
-              {['booked', 'pending', 'confirmed'].includes(booking.status) && (
+              {['pending', 'confirmed'].includes(booking.status) && (
                 <button
                   onClick={() => setShowCancelModal(true)}
                   className="w-full border border-red-400 text-red-600 font-sans uppercase tracking-[0.1em] text-xs py-4 hover:bg-red-50 transition-colors flex items-center justify-center gap-2"

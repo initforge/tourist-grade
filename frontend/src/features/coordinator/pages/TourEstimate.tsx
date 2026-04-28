@@ -885,7 +885,7 @@ export default function TourEstimate() {
   const [guestPopup, setGuestPopup] = useState<Booking | null>(null);
 
   const relatedBookings = bookings.filter((booking) => (
-    booking.tourId === instance.id || booking.tourName === instance.programName
+    booking.instanceCode === instance.id || (!booking.instanceCode && booking.tourId === instance.id)
   ));
   const manifestBookings = relatedBookings.filter(isBookingConfirmedForOperations);
   const financialBookings = relatedBookings.filter(isBookingFinanciallyRelevantForOperations);

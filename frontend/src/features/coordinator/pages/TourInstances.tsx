@@ -147,7 +147,7 @@ export default function TourInstances() {
   const getProgram = (programId: string) => tourPrograms.find((program) => program.id === programId);
 
   const getTourBookings = (instance: TourInstance) => bookings.filter((booking) => isBookingConfirmedForOperations(booking) && (
-    booking.tourId === instance.id || booking.tourName === instance.programName
+    booking.instanceCode === instance.id || (!booking.instanceCode && booking.tourId === instance.id)
   ));
 
   const getRequiredLanguages = (instance: TourInstance) => {

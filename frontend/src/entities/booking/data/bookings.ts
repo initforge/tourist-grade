@@ -36,7 +36,7 @@ export interface Booking {
   tourDate: string;
   tourDuration: string;
   userId?: string;
-  status: 'booked' | 'pending' | 'pending_cancel' | 'confirmed' | 'completed' | 'cancelled';
+  status: 'pending' | 'pending_cancel' | 'confirmed' | 'completed' | 'cancelled';
   refundStatus: 'none' | 'pending' | 'refunded' | 'not_required';
   refundBillUrl?: string;
   passengers: Passenger[];

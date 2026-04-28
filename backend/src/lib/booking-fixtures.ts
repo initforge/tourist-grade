@@ -365,7 +365,7 @@ export async function resetBookingFixtures(prisma: PrismaClient) {
       bookingCode: 'BK-773420',
       tourInstanceId: instanceId('TI001'),
       userId: customer.id,
-      status: 'BOOKED',
+      status: 'PENDING',
       refundStatus: 'NONE',
       paymentMethod: 'VNPAY',
       paymentType: 'ONLINE',

@@ -8,6 +8,42 @@ async function resetFixtures(request: APIRequestContext) {
   await request.post(`${apiBase}/dev/reset-booking-fixtures`);
 }
 
+async function getRoleAccessToken(request: APIRequestContext, role: 'sales' | 'coordinator' | 'manager') {
+  const credentials = {
+    sales: { email: 'sales@travela.vn', password: '123456' },
+    coordinator: { email: 'coordinator@travela.vn', password: '123456' },
+    manager: { email: 'manager@travela.vn', password: '123456' },
+  }[role];
+  const response = await request.post(`${apiBase}/auth/login`, { data: credentials });
+  expect(response.ok()).toBeTruthy();
+  const payload = await response.json();
+  return payload.accessToken as string;
+}
+
+async function getBookingDetail(request: APIRequestContext, token: string, bookingId: string) {
+  const response = await request.get(`${apiBase}/bookings/${bookingId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(response.ok()).toBeTruthy();
+  const payload = await response.json();
+  return payload.booking as {
+    status: string;
+    confirmedAt?: string;
+    bookingCode: string;
+  };
+}
+
+async function getCoordinatorManifest(request: APIRequestContext, token: string, instanceCode: string) {
+  const response = await request.get(`${apiBase}/bootstrap`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(response.ok()).toBeTruthy();
+  const payload = await response.json();
+  return (payload.data.bookings as Array<{ bookingCode: string; status: string; instanceCode?: string }>).filter(
+    (booking) => booking.instanceCode === instanceCode,
+  );
+}
+
 async function getEmailOutbox(
   request: APIRequestContext,
   options: {
@@ -57,7 +93,8 @@ async function openPassengerEditor(page: Page) {
 async function openCoordinatorGuestList(page: Page) {
   await page.goto('/coordinator/tours/TI009/estimate');
   await page.waitForLoadState('domcontentloaded');
-  await page.locator('button').filter({ hasText: /Danh/ }).first().click();
+  await expect(page.getByRole('heading', { name: /Dự Toán|Dự toán/i })).toBeVisible();
+  await page.getByRole('button', { name: /Danh sách khách hàng/i }).click();
   await expect(page.locator('tbody')).toContainText(/BK-\d+/i);
 }
 
@@ -76,6 +113,8 @@ test.beforeEach(async ({ request }) => {
 });
 
 test('sales confirms a paid booking, stores audit fields, moves it to confirmed, exposes manifest to coordinator, and queues email', async ({ page, request }) => {
+  const salesToken = await getRoleAccessToken(request, 'sales');
+  const coordinatorToken = await getRoleAccessToken(request, 'coordinator');
   await loginAsRole(page, 'sales', '/sales/bookings/B003?tab=pending_confirm');
 
   const confirmButton = page.getByRole('button', { name: /Xác nhận đơn đặt/i });
@@ -92,6 +131,21 @@ test('sales confirms a paid booking, stores audit fields, moves it to confirmed,
   await expect(page.getByText(/Xác nhận đơn đặt tour thành công/i)).toBeVisible();
   await expect(page.getByText(/Người xác nhận đơn đặt/i)).toBeVisible();
   await expect(page.getByText(/Đã xác nhận/i).first()).toBeVisible();
+
+  await expect
+    .poll(async () => {
+      const booking = await getBookingDetail(request, salesToken, 'B003');
+      return `${booking.status}:${Boolean(booking.confirmedAt)}`;
+    }, { timeout: 15000, intervals: [500, 1000, 2000] })
+    .toBe('confirmed:true');
+
+  await expect
+    .poll(async () => {
+      const bookings = await getCoordinatorManifest(request, coordinatorToken, 'TI009');
+      const target = bookings.find((booking) => booking.bookingCode === 'BK-394821');
+      return target?.status ?? 'missing';
+    }, { timeout: 15000, intervals: [500, 1000, 2000] })
+    .toBe('confirmed');
 
   await page.goto('/sales/bookings?tab=pending_confirm');
   await expect(page.locator('tbody')).not.toContainText('BK-394821');

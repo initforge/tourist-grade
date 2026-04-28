@@ -70,6 +70,17 @@ function Wait-HttpOk($url, $seconds = 60) {
   throw "Không gọi được $url sau $seconds giây."
 }
 
+function Confirm-PayOSWebhook($token, $attempts = 5) {
+  for ($attempt = 1; $attempt -le $attempts; $attempt++) {
+    try {
+      return Invoke-RestMethod -Method Post -Uri 'http://localhost:4000/api/v1/payments/payos/confirm-webhook' -Headers @{ Authorization = "Bearer $token" }
+    } catch {
+      if ($attempt -eq $attempts) { throw }
+      Start-Sleep -Seconds (2 * $attempt)
+    }
+  }
+}
+
 Write-Step 'Kiểm tra file backend\.env'
 $envPath = Ensure-EnvFile
 
@@ -130,6 +141,9 @@ $webhookUrl = "$tunnelUrl/api/v1/payments/payos/webhook"
 Write-Step "Ghi PAYOS_WEBHOOK_URL vào backend\.env"
 Set-EnvValue $envPath 'PAYOS_WEBHOOK_URL' $webhookUrl
 
+Write-Step 'Đợi tunnel public nhận backend'
+Wait-HttpOk "$tunnelUrl/health" 60
+
 Write-Step 'Restart backend để nhận webhook URL mới'
 docker compose up -d --build backend
 Wait-HttpOk 'http://localhost:4000/health' 90
@@ -138,7 +152,7 @@ Write-Step 'Confirm webhook với PayOS'
 try {
   $loginBody = @{ email = 'admin@travela.vn'; password = '123456' } | ConvertTo-Json
   $login = Invoke-RestMethod -Method Post -Uri 'http://localhost:4000/api/v1/auth/login' -ContentType 'application/json' -Body $loginBody
-  $confirm = Invoke-RestMethod -Method Post -Uri 'http://localhost:4000/api/v1/payments/payos/confirm-webhook' -Headers @{ Authorization = "Bearer $($login.accessToken)" }
+  $confirm = Confirm-PayOSWebhook $login.accessToken
   Write-Host "PayOS webhook confirmed: $($confirm.webhookUrl)" -ForegroundColor Green
 } catch {
   Write-Warning "Backend đã chạy và webhook URL đã ghi, nhưng PayOS confirm chưa thành công: $($_.Exception.Message)"

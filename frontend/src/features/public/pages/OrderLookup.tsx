@@ -216,7 +216,7 @@ export default function OrderLookup() {
                     </button>
                   )}
 
-                  {['booked', 'pending', 'confirmed'].includes(foundBooking.status) && (
+                  {['pending', 'confirmed'].includes(foundBooking.status) && (
                     <button
                       onClick={() => setShowCancelModal(true)}
                       className="px-6 py-2.5 border border-red-400 text-red-600 font-sans uppercase tracking-wider text-[10px] hover:bg-red-50 transition-colors flex items-center gap-2"

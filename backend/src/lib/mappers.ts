@@ -383,11 +383,6 @@ export function mapBooking(
     tourDate: string;
   },
 ) {
-  const effectiveStatus =
-    booking.status === 'BOOKED'
-      ? (booking.confirmedAt ? 'CONFIRMED' : 'PENDING')
-      : booking.status;
-
   return {
     id: booking.id,
     bookingCode: booking.bookingCode,
@@ -398,7 +393,7 @@ export function mapBooking(
     tourDate: options.tourDate,
     tourDuration: options.tourDuration,
     userId: booking.userId ?? undefined,
-    status: formatBookingStatus(effectiveStatus),
+    status: formatBookingStatus(booking.status),
     refundStatus: formatRefundStatus(booking.refundStatus),
     refundBillUrl: booking.refundBillUrl ?? undefined,
     passengers: booking.passengers.map((passenger) => ({

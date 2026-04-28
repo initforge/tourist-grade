@@ -29,7 +29,7 @@ export default function BookingHistory() {
   const [payBookingId, setPayBookingId] = useState<string | null>(null);
 
   const statusMap: Record<typeof activeTab, Booking['status'][]> = {
-    upcoming: ['booked', 'pending', 'pending_cancel', 'confirmed'],
+    upcoming: ['pending', 'pending_cancel', 'confirmed'],
     completed: ['completed'],
     cancelled: ['cancelled'],
   };
@@ -187,7 +187,7 @@ export default function BookingHistory() {
                         )
                       )}
 
-                      {['booked', 'pending', 'confirmed'].includes(booking.status) && (
+                      {['pending', 'confirmed'].includes(booking.status) && (
                         <button
                           onClick={() => setCancelBooking(booking)}
                           className="px-6 py-2 border border-red-400 text-red-600 font-sans uppercase tracking-[0.1em] text-[10px] hover:bg-red-50 transition-colors flex items-center gap-1.5"

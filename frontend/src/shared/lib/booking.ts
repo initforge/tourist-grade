@@ -1,9 +1,8 @@
 import type { Booking } from '@entities/booking/data/bookings';
 
 export const BOOKING_STATUS_LABEL: Record<Booking['status'], string> = {
-  booked: 'Đã đặt',
-  pending: 'Chờ xác nhận',
-  pending_cancel: 'Chờ xác nhận hủy',
+  pending: 'Cần xác nhận đặt',
+  pending_cancel: 'Cần xác nhận hủy',
   confirmed: 'Đã xác nhận',
   completed: 'Hoàn thành',
   cancelled: 'Đã hủy',
@@ -44,7 +43,7 @@ export function getRefundAmountEstimate(booking: Booking) {
 }
 
 export function canCustomerCancel(booking: Booking) {
-  return ['booked', 'pending', 'confirmed'].includes(booking.status) && new Date(booking.tourDate) > new Date();
+  return ['pending', 'confirmed'].includes(booking.status) && new Date(booking.tourDate) > new Date();
 }
 
 export function getBookingPaymentWindowExpiresAt(booking: Booking) {

@@ -3,6 +3,10 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = {
+  paymentTransaction: {
+    findFirst: vi.fn(),
+    update: vi.fn(),
+  },
   tourProgram: {
     findFirst: vi.fn(),
   },
@@ -26,6 +30,10 @@ const prismaMock = {
   $transaction: vi.fn(),
 };
 
+const payosClientMock = {
+  getPaymentLinkInformation: vi.fn(),
+};
+
 vi.mock('../lib/prisma.js', () => ({
   prisma: prismaMock,
 }));
@@ -40,6 +48,10 @@ vi.mock('../middleware/auth.js', () => ({
     next();
   },
   authenticateOptional: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
+}));
+
+vi.mock('../lib/payos.js', () => ({
+  getPayOSClient: () => payosClientMock,
 }));
 
 const { createBookingsRouter } = await import('./bookings.js');
@@ -127,6 +139,7 @@ describe('bookings routes', () => {
     prismaMock.voucher.findFirst.mockResolvedValue(null);
     prismaMock.booking.updateMany.mockResolvedValue({ count: 0 });
     prismaMock.booking.findMany.mockResolvedValue([]);
+    prismaMock.paymentTransaction.findFirst.mockResolvedValue(null);
     prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => Promise<unknown>) => callback(prismaMock));
   });
 
@@ -153,6 +166,94 @@ describe('bookings routes', () => {
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
     expect(response.body.booking.contactInfo.email).toBe('LeVanC@Example.com');
+  });
+
+  it('synchronizes a paid PayOS booking during lookup when the webhook has not updated the database yet', async () => {
+    const unpaidBooking = {
+      ...createBookingFixture(),
+      id: 'B500',
+      bookingCode: 'BK-500000',
+      paymentMethod: 'PAYOS',
+      paymentStatus: 'UNPAID',
+      paidAmount: 0,
+      remainingAmount: 56000000,
+      paymentTransactions: [],
+    };
+    prismaMock.booking.findFirst
+      .mockResolvedValueOnce(unpaidBooking)
+      .mockResolvedValueOnce({
+        ...unpaidBooking,
+        paymentStatus: 'PAID',
+        paidAmount: 56000000,
+        remainingAmount: 0,
+      });
+    prismaMock.paymentTransaction.findFirst.mockResolvedValue({
+      id: 'TX500',
+      bookingId: 'B500',
+      status: 'UNPAID',
+      orderCode: '500001',
+      transactionRef: 'plink_500',
+      amount: 56000000,
+      booking: {
+        id: 'B500',
+        bookingCode: 'BK-500000',
+        contactEmail: 'LeVanC@Example.com',
+        status: 'PENDING',
+        paidAmount: 0,
+        totalAmount: 56000000,
+      },
+    });
+    payosClientMock.getPaymentLinkInformation.mockResolvedValue({
+      id: 'plink_500',
+      orderCode: 500001,
+      amount: 56000000,
+      amountPaid: 56000000,
+      amountRemaining: 0,
+      status: 'PAID',
+      createdAt: '2026-04-28T10:00:00.000Z',
+      transactions: [{
+        reference: 'PAYOS-500',
+        amount: 56000000,
+        accountNumber: '1234567890',
+        description: 'Thanh toan',
+        transactionDateTime: '2026-04-28T10:01:00.000Z',
+        virtualAccountName: 'TRAVELA',
+        virtualAccountNumber: '999999999',
+        counterAccountBankId: 'VCB',
+        counterAccountBankName: 'Vietcombank',
+        counterAccountName: 'LE VAN C',
+        counterAccountNumber: '1234567890',
+      }],
+      cancellationReason: null,
+      canceledAt: null,
+    });
+    prismaMock.booking.update.mockResolvedValue({
+      id: 'B500',
+      bookingCode: 'BK-500000',
+      contactEmail: 'LeVanC@Example.com',
+      status: 'PENDING',
+      paidAmount: 56000000,
+      remainingAmount: 0,
+      paymentStatus: 'PAID',
+      totalAmount: 56000000,
+    });
+
+    const response = await request(createTestApp())
+      .get('/lookup')
+      .query({ bookingCode: 'BK-500000', contact: 'levanc@example.com' });
+
+    expect(response.status).toBe(200);
+    expect(prismaMock.paymentTransaction.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'TX500' },
+      data: expect.objectContaining({ status: 'PAID' }),
+    }));
+    expect(prismaMock.emailOutbox.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        template: 'booking_payment_received',
+        bookingId: 'B500',
+      }),
+    }));
+    expect(response.body.booking.paymentStatus).toBe('paid');
   });
 
   it('creates a cancel request with the expected refund amount and default reason', async () => {
@@ -255,7 +356,7 @@ describe('bookings routes', () => {
       ...createBookingFixture(),
       id: 'B900',
       bookingCode: 'BK-900001',
-      status: 'BOOKED',
+      status: 'PENDING',
       paymentStatus: 'UNPAID',
       tourInstance: {
         ...createBookingFixture().tourInstance,
@@ -322,11 +423,159 @@ describe('bookings routes', () => {
     expect(response.status).toBe(201);
     expect(prismaMock.booking.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
+        status: 'PENDING',
         totalAmount: 7200000,
         remainingAmount: 7200000,
         discountAmount: 0,
       }),
     }));
     expect(response.body.booking.totalAmount).toBe(7200000);
+  });
+
+  it('allows checkout updates to reuse seats already held by the same booking', async () => {
+    const existingBooking = {
+      ...createBookingFixture(),
+      id: 'B777',
+      bookingCode: 'BK-777777',
+      status: 'PENDING',
+      paymentStatus: 'UNPAID',
+      tourInstance: {
+        ...createBookingFixture().tourInstance,
+        code: 'TI009',
+        program: {
+          ...createBookingFixture().tourInstance.program,
+          slug: 'kham-pha-vinh-ha-long-du-thuyen-5-sao',
+        },
+      },
+      passengers: [
+        {
+          id: 'PX1',
+          bookingId: 'B777',
+          type: 'ADULT',
+          fullName: 'Khach cu',
+          dateOfBirth: new Date('1990-01-01T00:00:00.000Z'),
+          gender: 'MALE',
+          cccd: '001090123456',
+          nationality: 'Viá»‡t Nam',
+          singleRoomSupplement: 0,
+          createdAt: new Date('2026-04-28T00:00:00.000Z'),
+        },
+      ],
+    };
+
+    prismaMock.booking.findFirst.mockResolvedValue(existingBooking);
+    prismaMock.tourProgram.findFirst.mockResolvedValue({
+      id: 'program-1',
+      code: 'TP001',
+      slug: 'kham-pha-vinh-ha-long-du-thuyen-5-sao',
+      publicContentJson: {
+        id: 'T001',
+        slug: 'kham-pha-vinh-ha-long-du-thuyen-5-sao',
+        departureSchedule: [
+          {
+            id: 'DS001-2',
+            instanceCode: 'TI009',
+            date: '2026-05-22',
+            priceAdult: 72000,
+            priceChild: 36000,
+            priceInfant: 0,
+            availableSeats: 1,
+          },
+        ],
+      },
+    });
+    prismaMock.tourInstance.findFirst.mockResolvedValue({
+      id: 'instance-1',
+      code: 'TI009',
+      programId: 'program-1',
+      departureDate: new Date('2026-05-22T00:00:00.000Z'),
+      bookingDeadlineAt: new Date('2026-05-10T00:00:00.000Z'),
+      expectedGuests: 3,
+      minParticipants: 1,
+      priceAdult: { toNumber: () => 7200000 },
+      priceChild: { toNumber: () => 3600000 },
+      priceInfant: { toNumber: () => 0 },
+      bookings: [
+        {
+          id: 'B777',
+          status: 'PENDING',
+          passengers: [{ id: 'PX1' }],
+        },
+        {
+          id: 'B778',
+          status: 'PENDING',
+          passengers: [{ id: 'PX2' }],
+        },
+      ],
+    });
+    prismaMock.booking.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+      ...existingBooking,
+      ...data,
+      totalAmount: 14400000,
+      remainingAmount: 14400000,
+      passengers: [
+        {
+          id: 'PX1',
+          bookingId: 'B777',
+          type: 'ADULT',
+          fullName: 'Khach 1',
+          dateOfBirth: new Date('1990-01-01T00:00:00.000Z'),
+          gender: 'MALE',
+          cccd: '001090123456',
+          nationality: 'Viá»‡t Nam',
+          singleRoomSupplement: 0,
+          createdAt: new Date('2026-04-28T00:00:00.000Z'),
+        },
+        {
+          id: 'PX2',
+          bookingId: 'B777',
+          type: 'ADULT',
+          fullName: 'Khach 2',
+          dateOfBirth: new Date('1991-02-02T00:00:00.000Z'),
+          gender: 'FEMALE',
+          cccd: '001091123456',
+          nationality: 'Viá»‡t Nam',
+          singleRoomSupplement: 0,
+          createdAt: new Date('2026-04-28T00:00:00.000Z'),
+        },
+      ],
+    }));
+
+    const response = await request(createTestApp())
+      .put('/B777/checkout')
+      .send({
+        scheduleId: 'DS001-2',
+        contact: {
+          name: 'Le Van C',
+          phone: '0912345678',
+          email: 'LeVanC@Example.com',
+          note: '',
+        },
+        passengers: [
+          {
+            type: 'adult',
+            name: 'Khach 1',
+            dob: '1990-01-01',
+            gender: 'male',
+            cccd: '001090123456',
+            nationality: 'Viá»‡t Nam',
+          },
+          {
+            type: 'adult',
+            name: 'Khach 2',
+            dob: '1991-02-02',
+            gender: 'female',
+            cccd: '001091123456',
+            nationality: 'Viá»‡t Nam',
+          },
+        ],
+        roomCounts: { single: 0, double: 1, triple: 0 },
+        promoCode: '',
+        paymentRatio: 'full',
+        paymentMethod: 'bank',
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.booking.totalAmount).toBe(14400000);
   });
 });

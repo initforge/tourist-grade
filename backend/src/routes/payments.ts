@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { expireOverdueDepositBookings, expireUnpaidBookings } from '../lib/booking-lifecycle.js';
+import { applySuccessfulPayOSTransaction, isPayOSCancelledStatus, isPayOSPaidStatus } from '../lib/payos-bookings.js';
 import { prisma } from '../lib/prisma.js';
 import { asyncHandler, badRequest, notFound } from '../lib/http.js';
 import { authenticate } from '../middleware/auth.js';
@@ -8,15 +9,6 @@ import { env } from '../config/env.js';
 
 function buildPayOSDescription(bookingCode: string) {
   return `Thanh toan ${bookingCode.replaceAll('-', '')}`.slice(0, 25);
-}
-
-function isPayOSPaidStatus(status: unknown) {
-  const normalized = String(status ?? '').toUpperCase();
-  return normalized === 'PAID' || normalized === '00';
-}
-
-function isPayOSCancelledStatus(status: unknown) {
-  return ['CANCELLED', 'CANCELED'].includes(String(status ?? '').toUpperCase());
 }
 
 function getPayOSWebhookStatus(paymentData: unknown) {
@@ -180,32 +172,19 @@ export function createPaymentsRouter() {
     } else if (transaction.status === 'CANCELLED') {
       // Ignore stale webhooks from superseded PayOS links so old payment requests cannot change the booking.
     } else if (transaction.status !== 'PAID' && (isPayOSPaidStatus(webhookStatus) || isPayOSPaidStatus(webhookCode))) {
-      const nextPaidAmount = Number(transaction.booking.paidAmount) + Number(paymentData.amount);
-      const totalAmount = Number(transaction.booking.totalAmount);
-      const nextBookingStatus =
-        transaction.booking.status === 'BOOKED' || transaction.booking.status === 'PENDING'
-          ? 'PENDING'
-          : transaction.booking.status;
-
-      await prisma.paymentTransaction.update({
-        where: { id: transaction.id },
-        data: {
-          status: 'PAID',
-          paidAt: new Date(paymentData.transactionDateTime),
-          transactionRef: paymentData.reference,
-          payloadJson: req.body,
+      await prisma.$transaction((tx) => applySuccessfulPayOSTransaction(
+        tx,
+        transaction,
+        {
+          amount: Number(paymentData.amount),
+          reference: paymentData.reference,
+          transactionDateTime: paymentData.transactionDateTime,
+          paymentLinkId: paymentData.paymentLinkId,
+          status: webhookStatus ?? webhookCode,
         },
-      });
-
-      await prisma.booking.update({
-        where: { id: transaction.bookingId },
-        data: {
-          status: nextBookingStatus,
-          paidAmount: nextPaidAmount,
-          remainingAmount: Math.max(totalAmount - nextPaidAmount, 0),
-          paymentStatus: nextPaidAmount >= totalAmount ? 'PAID' : 'PARTIAL',
-        },
-      });
+        req.body,
+        'webhook',
+      ));
     }
 
     res.json({
@@ -225,7 +204,16 @@ export function createPaymentsRouter() {
       throw badRequest('PAYOS_WEBHOOK_URL is missing');
     }
 
-    const result = await client.confirmWebhook(env.PAYOS_WEBHOOK_URL);
+    let result: unknown;
+    try {
+      result = await client.confirmWebhook(env.PAYOS_WEBHOOK_URL);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'PayOS webhook confirmation failed';
+      if (/webhook url invalid/i.test(message)) {
+        throw badRequest('Webhook URL invalid. Endpoint is reachable, but PayOS rejected this public URL. Quick trycloudflare tunnels are often refused; use a stable named tunnel or domain and retry.');
+      }
+      throw error;
+    }
 
     res.json({
       success: true,

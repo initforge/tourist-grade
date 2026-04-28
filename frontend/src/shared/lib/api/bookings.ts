@@ -33,6 +33,8 @@ export interface PromoValidationPayload {
 export interface PaymentLinkResponse {
   success: boolean;
   paymentLink: {
+    amount?: number;
+    orderCode?: number;
     checkoutUrl?: string;
     qrCode?: string;
     paymentLinkId?: string;
@@ -81,6 +83,12 @@ export async function lookupBooking(bookingCode: string, contact: string) {
   });
 
   return apiRequest<{ success: boolean; booking: Booking }>(`/bookings/lookup?${query.toString()}`);
+}
+
+export async function getBookingDetail(bookingId: string, token: string) {
+  return apiRequest<{ success: boolean; booking: Booking }>(`/bookings/${bookingId}`, {
+    token,
+  });
 }
 
 export async function updateBooking(

@@ -19,7 +19,6 @@ const PASSENGER_TYPE: Record<string, string> = {
 const ORDER_STATUS_LABEL: Record<string, string> = {
   pending: 'Cần xác nhận đơn đặt',
   pending_cancel: 'Cần xác nhận hủy',
-  booked: 'Đã đặt',
   confirmed: 'Đã xác nhận',
   completed: 'Hoàn thành',
   cancelled: 'Đã hủy',
@@ -27,7 +26,6 @@ const ORDER_STATUS_LABEL: Record<string, string> = {
 const ORDER_STATUS_STYLE: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-700 border-amber-300',
   pending_cancel: 'bg-orange-100 text-orange-700 border-orange-300',
-  booked: 'bg-indigo-100 text-indigo-700 border-indigo-300',
   confirmed: 'bg-blue-100 text-blue-700 border-blue-300',
   completed: 'bg-emerald-100 text-emerald-700 border-emerald-300',
   cancelled: 'bg-red-100 text-red-700 border-red-300',
@@ -389,10 +387,10 @@ export default function SalesBookingDetail() {
     if (!booking) return null;
 
     const next = updater(booking);
-    setBooking(next);
-    upsertBooking(next);
-
-    if (!accessToken) return next;
+    if (!accessToken) {
+      message.error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để lưu thay đổi.');
+      return null;
+    }
 
     const payload = toPatch ? toPatch(next) : next as unknown as Record<string, unknown>;
     setPersistCount(count => count + 1);
@@ -404,7 +402,10 @@ export default function SalesBookingDetail() {
         upsertBooking(result.booking);
         return result.booking;
       })
-      .catch(() => null)
+      .catch(() => {
+        message.error('Không thể lưu thay đổi đơn booking. Vui lòng thử lại.');
+        return null;
+      })
       .finally(() => setPersistCount(count => Math.max(0, count - 1)));
     persistQueueRef.current = job.then(() => undefined);
     return job;

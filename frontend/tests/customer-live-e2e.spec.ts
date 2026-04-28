@@ -345,12 +345,15 @@ test('customer history shows upcoming payment notes, auto-cancels unpaid and ove
   await page.goto('/customer/bookings');
   await page.getByRole('button', { name: /Đã hoàn thành/i }).click();
   await expect(page.locator('body')).toContainText('BK-130013');
-  await page.locator('div').filter({ hasText: 'BK-130013' }).getByRole('button', { name: /Đánh giá tour/i }).click();
+  const reviewedCard = page.locator('div.bg-white').filter({ hasText: 'BK-130013' }).first();
+  await reviewedCard.getByRole('button', { name: /Đánh giá tour/i }).click();
   await page.getByLabel(/Tiêu đề/i).fill('Trải nghiệm ổn');
   const reviewComment = `Đánh giá live E2E ${Date.now()}`;
   await page.getByLabel(/Nội dung đánh giá/i).fill(`${reviewComment} với dịch vụ đúng như mô tả.`);
   await page.getByRole('button', { name: /Gửi đánh giá/i }).click();
-  await expect(page.getByRole('button', { name: /Đánh giá tour/i })).toHaveCount(0);
+  await expect(reviewedCard.getByRole('button', { name: /Xem đánh giá/i })).toBeVisible();
+  const unreviewedCard = page.locator('div.bg-white').filter({ hasText: 'BK-291045' }).first();
+  await expect(unreviewedCard.getByRole('button', { name: /Đánh giá tour/i })).toBeVisible();
 
   await expect.poll(async () => {
     const response = await request.get(`${apiBase}/public/tours/kham-pha-vinh-ha-long-du-thuyen-5-sao`);

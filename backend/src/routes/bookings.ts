@@ -23,6 +23,7 @@ import {
 import { queueEmail } from '../lib/email-outbox.js';
 import { asyncHandler, badRequest, notFound, unauthorized } from '../lib/http.js';
 import { mapBooking } from '../lib/mappers.js';
+import { syncBookingPaymentWithPayOS } from '../lib/payos-bookings.js';
 import { prisma } from '../lib/prisma.js';
 import { authenticate, authenticateOptional, type AuthenticatedRequest } from '../middleware/auth.js';
 
@@ -80,7 +81,7 @@ const promoValidationSchema = z.object({
 });
 
 const updateBookingSchema = z.object({
-  status: z.enum(['booked', 'pending', 'pending_cancel', 'confirmed', 'completed', 'cancelled']).optional(),
+  status: z.enum(['pending', 'pending_cancel', 'confirmed', 'completed', 'cancelled']).optional(),
   refundStatus: z.enum(['none', 'pending', 'refunded', 'not_required']).optional(),
   cancellationReason: z.string().optional().nullable(),
   cancelledAt: z.string().optional().nullable(),
@@ -399,6 +400,7 @@ function buildBookableSchedule(
   },
   instance: BookableInstance,
   publicContent: Record<string, unknown>,
+  bookingsForAvailability: BookableInstance['bookings'] = instance.bookings,
 ) {
   const departureDateKey = instance.departureDate.toISOString().slice(0, 10);
   return {
@@ -411,7 +413,7 @@ function buildBookableSchedule(
       typeof schedule.singleRoomSurcharge === 'number'
         ? schedule.singleRoomSurcharge
         : resolveSingleRoomSurcharge(publicContent, departureDateKey),
-    availableSeats: calculateAvailableSeats(instance, instance.bookings),
+    availableSeats: calculateAvailableSeats(instance, bookingsForAvailability),
     totalSlots: instance.expectedGuests,
     bookingDeadlineAt: instance.bookingDeadlineAt.toISOString(),
     instanceCode: instance.code,
@@ -444,7 +446,11 @@ async function resolveVoucher(programId: string, promoCode: string) {
   return voucher;
 }
 
-async function buildBookingDraft(program: Awaited<ReturnType<typeof resolveProgramBySlug>>, input: BookingDraftInput) {
+async function buildBookingDraft(
+  program: Awaited<ReturnType<typeof resolveProgramBySlug>>,
+  input: BookingDraftInput,
+  options: { excludeBookingId?: string } = {},
+) {
   const { publicContent, schedule } = resolveScheduleFromPublicContent(program, input.scheduleId);
   const instance = schedule
     ? await resolveInstanceForSchedule(program.id, schedule)
@@ -453,7 +459,10 @@ async function buildBookingDraft(program: Awaited<ReturnType<typeof resolveProgr
     id: input.scheduleId,
     date: instance.departureDate.toISOString().slice(0, 10),
   };
-  const bookableSchedule = buildBookableSchedule(resolvedSchedule, instance, publicContent);
+  const bookingsForAvailability = options.excludeBookingId
+    ? instance.bookings.filter((booking) => booking.id !== options.excludeBookingId)
+    : instance.bookings;
+  const bookableSchedule = buildBookableSchedule(resolvedSchedule, instance, publicContent, bookingsForAvailability);
 
   if (!phonePattern.test(input.contact.phone.replace(/\s+/g, ''))) {
     throw badRequest('So dien thoai khong hop le');
@@ -540,7 +549,7 @@ export function createBookingsRouter() {
     const contactRaw = String(req.query.contact ?? '').trim();
     const contact = normalizeContact(contactRaw);
 
-    const booking = await prisma.booking.findFirst({
+    let booking = await prisma.booking.findFirst({
       where: { bookingCode },
       include: bookingInclude,
     });
@@ -555,6 +564,14 @@ export function createBookingsRouter() {
 
     if (!matchesContact) {
       throw notFound('Booking not found');
+    }
+
+    if (booking.paymentMethod === 'PAYOS' && booking.paymentStatus === 'UNPAID') {
+      await syncBookingPaymentWithPayOS(prisma, booking.id);
+      booking = await prisma.booking.findFirst({
+        where: { id: booking.id },
+        include: bookingInclude,
+      }) ?? booking;
     }
 
     res.json({
@@ -609,7 +626,7 @@ export function createBookingsRouter() {
           bookingCode: `BK-${Math.floor(Math.random() * 900000 + 100000)}`,
           tourInstanceId: draft.instance.id,
           userId: req.auth?.role === 'customer' ? req.auth.sub : null,
-          status: 'BOOKED',
+          status: 'PENDING',
           refundStatus: 'NONE',
           paymentMethod: 'PAYOS',
           paymentType: 'ONLINE',
@@ -693,6 +710,8 @@ export function createBookingsRouter() {
     const draft = await buildBookingDraft(program, {
       ...input.data,
       tourSlug: booking.tourInstance.program.slug,
+    }, {
+      excludeBookingId: booking.id,
     });
 
     const updated = await prisma.booking.update({
@@ -804,11 +823,21 @@ export function createBookingsRouter() {
       ? { userId: req.auth.sub }
       : {};
 
-    const bookings = await prisma.booking.findMany({
+    let bookings = await prisma.booking.findMany({
       where,
       include: bookingInclude,
       orderBy: { createdAt: 'desc' },
     });
+
+    const unpaidPayOSBookings = bookings.filter((booking) => booking.paymentMethod === 'PAYOS' && booking.paymentStatus === 'UNPAID');
+    if (unpaidPayOSBookings.length > 0) {
+      await Promise.allSettled(unpaidPayOSBookings.map((booking) => syncBookingPaymentWithPayOS(prisma, booking.id)));
+      bookings = await prisma.booking.findMany({
+        where,
+        include: bookingInclude,
+        orderBy: { createdAt: 'desc' },
+      });
+    }
 
     res.json({
       success: true,
@@ -819,7 +848,7 @@ export function createBookingsRouter() {
   router.get('/:id', asyncHandler(async (req: AuthenticatedRequest, res) => {
     await runBookingExpiryJobs();
 
-    const booking = await findBookingByIdOrCode(String(req.params.id));
+    let booking = await findBookingByIdOrCode(String(req.params.id));
 
     if (!booking) {
       throw notFound('Booking not found');
@@ -827,6 +856,11 @@ export function createBookingsRouter() {
 
     if (req.auth?.role === 'customer' && booking.userId !== req.auth.sub) {
       throw unauthorized();
+    }
+
+    if (booking.paymentMethod === 'PAYOS' && booking.paymentStatus === 'UNPAID') {
+      await syncBookingPaymentWithPayOS(prisma, booking.id);
+      booking = await findBookingByIdOrCode(booking.id) ?? booking;
     }
 
     res.json({

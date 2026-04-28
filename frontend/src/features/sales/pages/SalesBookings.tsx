@@ -51,7 +51,6 @@ const PAYMENT_STYLE: Record<string, string> = {
 const ORDER_STATUS_LABEL: Record<string, string> = {
   pending:        'Cần xác nhận đơn đặt',
   pending_cancel: 'Cần xác nhận hủy',
-  booked:         'Đã đặt',
   confirmed:      'Đã xác nhận',
   completed:      'Hoàn thành',
   cancelled:      'Đã hủy',
@@ -59,7 +58,6 @@ const ORDER_STATUS_LABEL: Record<string, string> = {
 const ORDER_STATUS_STYLE: Record<string, string> = {
   pending:        'bg-amber-100 text-amber-700',
   pending_cancel: 'bg-orange-100 text-orange-700',
-  booked:         'bg-indigo-100 text-indigo-700',
   confirmed:      'bg-blue-100 text-blue-700',
   completed:      'bg-emerald-100 text-emerald-700',
   cancelled:      'bg-red-100 text-red-700',

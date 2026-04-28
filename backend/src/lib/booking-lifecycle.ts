@@ -6,7 +6,18 @@ import {
 } from './customer.js';
 
 export const UNPAID_BOOKING_TIMEOUT_MINUTES = 15;
-export const UNPAID_BOOKING_CANCEL_REASON = 'Khong thanh toan dung han';
+export const UNPAID_BOOKING_CANCEL_REASON = 'Không thanh toán đúng hạn';
+
+export async function normalizeLegacyBookedStatuses(prisma: PrismaClient) {
+  return prisma.booking.updateMany({
+    where: {
+      status: 'PENDING' satisfies BookingStatus,
+    },
+    data: {
+      status: 'PENDING' satisfies BookingStatus,
+    },
+  });
+}
 
 export function getUnpaidBookingExpiryCutoff(now = new Date()) {
   return new Date(now.getTime() - UNPAID_BOOKING_TIMEOUT_MINUTES * 60 * 1000);
@@ -15,7 +26,7 @@ export function getUnpaidBookingExpiryCutoff(now = new Date()) {
 export async function expireUnpaidBookings(prisma: PrismaClient, now = new Date()) {
   return prisma.booking.updateMany({
     where: {
-      status: { in: ['PENDING', 'BOOKED'] satisfies BookingStatus[] },
+      status: 'PENDING' satisfies BookingStatus,
       paymentStatus: 'UNPAID' satisfies PaymentStatus,
       createdAt: { lte: getUnpaidBookingExpiryCutoff(now) },
     },

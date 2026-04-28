@@ -5,6 +5,7 @@ import type { DepartureScheduleEntry } from '@entities/tour/data/tours';
 import {
   createBookingPaymentLink,
   createPublicBooking,
+  getBookingDetail,
   lookupBooking,
   updateCheckoutBooking,
   validatePublicPromoCode,
@@ -165,12 +166,20 @@ export default function BookingCheckout() {
   const [countError, setCountError] = useState('');
 
   const effectiveBooking = createdBooking ?? (bookingIdParam ? bookings.find((item) => item.id === bookingIdParam) ?? null : null);
+  const checkoutBooking = createdBooking ?? effectiveBooking;
+  const checkoutBookingId = checkoutBooking?.id ?? ((bookingIdParam && accessToken) ? bookingIdParam : '');
 
   const priceAdult = schedule?.priceAdult ?? tour?.price.adult ?? 0;
   const priceChild = schedule?.priceChild ?? tour?.price.child ?? 0;
   const priceInfant = schedule?.priceInfant ?? tour?.price.infant ?? 0;
   const singleRoomSurcharge = schedule?.singleRoomSurcharge ?? 0;
   const availableSeats = schedule?.availableSeats ?? 0;
+  const existingHeldSeats =
+    effectiveBooking
+    && (effectiveBooking.instanceCode === (schedule?.instanceCode ?? schedule?.id) || effectiveBooking.tourDate === schedule?.date)
+      ? effectiveBooking.passengers.length
+      : 0;
+  const selectableSeatLimit = availableSeats + existingHeldSeats;
 
   const totalGuests = counts.adult + counts.child + counts.infant;
   const surchargeTotal = passengers.reduce((sum, passenger) => sum + (passenger.singleRoomSupplement ?? 0), 0);
@@ -208,6 +217,32 @@ export default function BookingCheckout() {
   }, [isDepositDisabled, schedule, slug, tour]);
 
   useEffect(() => {
+    if (!bookingIdParam || createdBooking || effectiveBooking || !accessToken) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void getBookingDetail(bookingIdParam, accessToken)
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+        upsertBooking(response.booking);
+        setCreatedBooking(response.booking);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError('Không thể tải lại đơn đặt chỗ hiện tại.');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, bookingIdParam, createdBooking, effectiveBooking, upsertBooking]);
+
+  useEffect(() => {
     if (isDepositDisabled && paymentRatio === 'deposit') {
       setPaymentRatio('full');
     }
@@ -229,10 +264,10 @@ export default function BookingCheckout() {
       discountAmount,
       paymentMethod,
       paymentRatio,
-      booking: createdBooking,
+      booking: checkoutBooking,
       activeStep,
     });
-  }, [activeStep, contact, counts, createdBooking, discountAmount, passengers, paymentMethod, paymentRatio, promoCode, roomCounts, schedule, slug, tour]);
+  }, [activeStep, checkoutBooking, contact, counts, discountAmount, passengers, paymentMethod, paymentRatio, promoCode, roomCounts, schedule, slug, tour]);
 
   useEffect(() => {
     if (!bookingIdParam || !payosState) {
@@ -294,8 +329,8 @@ export default function BookingCheckout() {
   };
 
   const syncPassengerCounts = (next: Counts) => {
-    if (next.adult + next.child + next.infant > availableSeats) {
-      setCountError(`Số lượng hành khách không được vượt quá ${availableSeats} chỗ trống.`);
+    if (next.adult + next.child + next.infant > selectableSeatLimit) {
+      setCountError(`Số lượng hành khách không được vượt quá ${selectableSeatLimit} chỗ trống.`);
       return;
     }
 
@@ -334,8 +369,8 @@ export default function BookingCheckout() {
 
     if (totalGuests <= 0) {
       setCountError('Cần có ít nhất một hành khách.');
-    } else if (totalGuests > availableSeats) {
-      setCountError(`Số lượng hành khách không được vượt quá ${availableSeats} chỗ trống.`);
+    } else if (totalGuests > selectableSeatLimit) {
+      setCountError(`Số lượng hành khách không được vượt quá ${selectableSeatLimit} chỗ trống.`);
     } else {
       setCountError('');
     }
@@ -346,7 +381,7 @@ export default function BookingCheckout() {
     return Object.keys(nextContactErrors).length === 0
       && Object.keys(nextPassengerErrors).length === 0
       && totalGuests > 0
-      && totalGuests <= availableSeats;
+      && totalGuests <= selectableSeatLimit;
   };
 
   const applyPromoCode = async () => {
@@ -399,8 +434,8 @@ export default function BookingCheckout() {
         paymentRatio,
       };
 
-      const response = createdBooking
-        ? await updateCheckoutBooking(createdBooking.id, {
+      const response = checkoutBookingId
+        ? await updateCheckoutBooking(checkoutBookingId, {
             scheduleId: schedule.id,
             contact,
             passengers,
@@ -414,7 +449,7 @@ export default function BookingCheckout() {
       upsertBooking(response.booking);
       setCreatedBooking(response.booking);
       setActiveStep(1);
-      setStatusMessage(createdBooking ? 'Đã cập nhật đơn đặt chỗ.' : 'Đã tạo đơn đặt chỗ. Vui lòng hoàn tất thanh toán trong 15 phút.');
+      setStatusMessage(checkoutBookingId ? 'Đã cập nhật đơn đặt chỗ.' : 'Đã tạo đơn đặt chỗ. Vui lòng hoàn tất thanh toán trong 15 phút.');
       if (response.booking.review) {
         upsertReview({
           id: response.booking.review.id,
@@ -535,7 +570,7 @@ export default function BookingCheckout() {
                 <section className="bg-white border border-outline-variant/30 p-6 space-y-5">
                   <div className="flex items-center justify-between gap-4 flex-wrap">
                     <h2 className="font-headline text-xl text-primary">Số lượng hành khách</h2>
-                    <p className="text-sm text-primary/60">Còn {availableSeats} chỗ trống</p>
+                    <p className="text-sm text-primary/60">Còn {selectableSeatLimit} chỗ trống</p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {([

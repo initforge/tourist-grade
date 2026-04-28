@@ -3,6 +3,7 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = {
+  $transaction: vi.fn(),
   booking: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
@@ -14,6 +15,9 @@ const prismaMock = {
     findMany: vi.fn(),
     findFirst: vi.fn(),
     update: vi.fn(),
+  },
+  emailOutbox: {
+    create: vi.fn(),
   },
 };
 
@@ -53,6 +57,7 @@ describe('payments routes', () => {
     prismaMock.booking.updateMany.mockResolvedValue({ count: 0 });
     prismaMock.booking.findMany.mockResolvedValue([]);
     prismaMock.paymentTransaction.findMany.mockResolvedValue([]);
+    prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => Promise<unknown>) => callback(prismaMock));
   });
 
   it('creates a PayOS link using the deposit amount when payment ratio is deposit', async () => {
@@ -66,7 +71,7 @@ describe('payments routes', () => {
       contactName: 'Nguyen Van A',
       contactEmail: 'nguyenvana@gmail.com',
       contactPhone: '0988888888',
-      status: 'BOOKED',
+      status: 'PENDING',
       tourInstance: {
         code: 'TI001',
         program: {
@@ -167,10 +172,23 @@ describe('payments routes', () => {
       bookingId: 'B001',
       status: 'UNPAID',
       booking: {
+        id: 'B001',
+        bookingCode: 'BK-582910',
+        contactEmail: 'nguyenvana@gmail.com',
         status: 'PENDING',
         paidAmount: 4500000,
         totalAmount: 9000000,
       },
+    });
+    prismaMock.booking.update.mockResolvedValue({
+      id: 'B001',
+      bookingCode: 'BK-582910',
+      contactEmail: 'nguyenvana@gmail.com',
+      status: 'PENDING',
+      paidAmount: 9000000,
+      remainingAmount: 0,
+      paymentStatus: 'PAID',
+      totalAmount: 9000000,
     });
 
     const response = await request(createTestApp())
@@ -193,6 +211,12 @@ describe('payments routes', () => {
         remainingAmount: 0,
         paymentStatus: 'PAID',
       },
+    }));
+    expect(prismaMock.emailOutbox.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        template: 'booking_payment_received',
+        bookingId: 'B001',
+      }),
     }));
   });
 

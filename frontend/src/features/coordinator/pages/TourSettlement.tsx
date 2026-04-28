@@ -95,7 +95,7 @@ export default function TourSettlement() {
   const [rows, setRows] = useState<SettlementRow[]>(() => buildRows(instance));
 
   const actualRevenue = useMemo(() => {
-    const tourBookings = bookings.filter((booking: Booking) => booking.tourId === instance.id || booking.tourName === instance.programName);
+    const tourBookings = bookings.filter((booking: Booking) => booking.instanceCode === instance.id || (!booking.instanceCode && booking.tourId === instance.id));
     const activeRevenue = tourBookings
       .filter((booking) => booking.status !== 'cancelled')
       .reduce((sum, booking) => sum + booking.totalAmount, 0);
