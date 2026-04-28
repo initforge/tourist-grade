@@ -1,5 +1,7 @@
-﻿param(
-  [switch]$SkipCloudflaredInstall
+param(
+  [switch]$SkipCloudflaredInstall,
+  [string]$TunnelName = 'travela-payos',
+  [string]$TunnelHostname = 'payos.myproxypal.click'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -30,13 +32,13 @@ function Find-Cloudflared {
 function Ensure-EnvFile {
   $envPath = Join-Path $repoRoot 'backend\.env'
   if (!(Test-Path $envPath)) {
-    throw "Thiếu file backend\.env. Hãy đặt file .env được gửi riêng vào tourist-grade\backend\.env rồi chạy lại."
+    throw "Missing backend\\.env at $envPath"
   }
 
   $content = Get-Content $envPath -Raw
   foreach ($key in @('PAYOS_CLIENT_ID', 'PAYOS_API_KEY', 'PAYOS_CHECKSUM_KEY')) {
     if ($content -notmatch "(?m)^$key=.+") {
-      throw "backend\.env thiếu $key. Hãy kiểm tra file .env được gửi riêng."
+      throw "backend\\.env is missing $key"
     }
   }
 
@@ -67,7 +69,7 @@ function Wait-HttpOk($url, $seconds = 60) {
     } catch {}
     Start-Sleep -Seconds 2
   } while ((Get-Date) -lt $deadline)
-  throw "Không gọi được $url sau $seconds giây."
+  throw "Could not reach $url after $seconds seconds."
 }
 
 function Confirm-PayOSWebhook($token, $attempts = 5) {
@@ -81,34 +83,102 @@ function Confirm-PayOSWebhook($token, $attempts = 5) {
   }
 }
 
-Write-Step 'Kiểm tra file backend\.env'
+function Invoke-Cloudflared($cloudflaredPath, $arguments) {
+  $tempDir = Join-Path $repoRoot '.local'
+  if (!(Test-Path $tempDir)) { New-Item -ItemType Directory $tempDir | Out-Null }
+  $stdout = Join-Path $tempDir ('cloudflared-call-' + [guid]::NewGuid().ToString() + '.out.log')
+  $stderr = Join-Path $tempDir ('cloudflared-call-' + [guid]::NewGuid().ToString() + '.err.log')
+
+  try {
+    $process = Start-Process -FilePath $cloudflaredPath -ArgumentList $arguments -RedirectStandardOutput $stdout -RedirectStandardError $stderr -Wait -PassThru -WindowStyle Hidden
+    $outText = if (Test-Path $stdout) { Get-Content $stdout -Raw } else { '' }
+    $errText = if (Test-Path $stderr) { Get-Content $stderr -Raw } else { '' }
+    return @{
+      ExitCode = $process.ExitCode
+      StdOut = $outText
+      StdErr = $errText
+    }
+  } finally {
+    Remove-Item $stdout, $stderr -ErrorAction SilentlyContinue
+  }
+}
+
+function Get-TunnelInfo($cloudflaredPath, $name) {
+  $result = Invoke-Cloudflared $cloudflaredPath @('tunnel', 'list', '--output', 'json')
+  if (!$result.StdOut) { return $null }
+  $jsonText = $result.StdOut.Trim()
+  if (!$jsonText.StartsWith('[')) { return $null }
+  $tunnels = $jsonText | ConvertFrom-Json
+  return $tunnels | Where-Object { $_.name -eq $name } | Select-Object -First 1
+}
+
+function Ensure-NamedTunnel($cloudflaredPath, $name, $hostname) {
+  $certPath = Join-Path $env:USERPROFILE '.cloudflared\cert.pem'
+  if (!(Test-Path $certPath)) {
+    throw "Missing Cloudflare cert at $certPath. Run: cloudflared tunnel login"
+  }
+
+  $tunnel = Get-TunnelInfo $cloudflaredPath $name
+  if (!$tunnel) {
+    Write-Host "Creating named tunnel $name ..."
+    $createResult = Invoke-Cloudflared $cloudflaredPath @('tunnel', 'create', $name)
+    if ($createResult.ExitCode -ne 0) {
+      throw "cloudflared tunnel create failed: $($createResult.StdErr.Trim())"
+    }
+    $tunnel = Get-TunnelInfo $cloudflaredPath $name
+  }
+
+  if (!$tunnel) {
+    throw "Could not create named tunnel $name."
+  }
+
+  $credentialsFile = Join-Path $env:USERPROFILE ".cloudflared\$($tunnel.id).json"
+  if (!(Test-Path $credentialsFile)) {
+    throw "Missing tunnel credentials file: $credentialsFile"
+  }
+
+  $routeResult = Invoke-Cloudflared $cloudflaredPath @('tunnel', 'route', 'dns', $name, $hostname)
+  if ($routeResult.ExitCode -ne 0 -and $routeResult.StdErr -notmatch 'already exists') {
+    throw "cloudflared tunnel route dns failed: $($routeResult.StdErr.Trim())"
+  }
+
+  return @{
+    Id = $tunnel.id
+    Name = $name
+    Hostname = $hostname
+    CredentialsFile = $credentialsFile
+  }
+}
+
+Write-Step 'Check backend env'
 $envPath = Ensure-EnvFile
 
-Write-Step 'Kiểm tra Docker'
+Write-Step 'Check Docker'
 docker version | Out-Null
 
-Write-Step 'Kiểm tra cloudflared'
+Write-Step 'Check cloudflared'
 $cloudflared = Find-Cloudflared
 if (!$cloudflared -and !$SkipCloudflaredInstall) {
-  Write-Host 'Chưa thấy cloudflared, đang cài bằng winget...'
+  Write-Host 'cloudflared not found, installing with winget...'
   winget install --id Cloudflare.cloudflared --accept-package-agreements --accept-source-agreements
   $cloudflared = Find-Cloudflared
 }
 if (!$cloudflared) {
-  throw 'Không tìm thấy cloudflared. Cài Cloudflare Tunnel rồi chạy lại: winget install --id Cloudflare.cloudflared'
+  throw 'cloudflared not found. Install it first: winget install --id Cloudflare.cloudflared'
 }
 Write-Host "cloudflared: $cloudflared"
 
-Write-Step 'Build và chạy Docker stack'
+Write-Step 'Build and start Docker stack'
 docker compose up -d --build
 Wait-HttpOk 'http://localhost:4000/health' 90
 
-Write-Step 'Bật Cloudflare tunnel cho backend local'
+Write-Step 'Start named Cloudflare tunnel'
 $logDir = Join-Path $repoRoot '.local'
 if (!(Test-Path $logDir)) { New-Item -ItemType Directory $logDir | Out-Null }
 $outLog = Join-Path $logDir 'cloudflared.out.log'
 $errLog = Join-Path $logDir 'cloudflared.err.log'
 $pidFile = Join-Path $logDir 'cloudflared.pid'
+$configPath = Join-Path $logDir 'cloudflared.config.yml'
 
 if (Test-Path $pidFile) {
   $oldPid = Get-Content $pidFile -ErrorAction SilentlyContinue
@@ -118,50 +188,48 @@ if (Test-Path $pidFile) {
 }
 Remove-Item $outLog, $errLog -ErrorAction SilentlyContinue
 
-$process = Start-Process -FilePath $cloudflared -ArgumentList @('tunnel', '--url', 'http://localhost:4000') -RedirectStandardOutput $outLog -RedirectStandardError $errLog -WindowStyle Hidden -PassThru
+$tunnel = Ensure-NamedTunnel $cloudflared $TunnelName $TunnelHostname
+$config = @"
+tunnel: $($tunnel.Id)
+credentials-file: $($tunnel.CredentialsFile)
+ingress:
+  - hostname: $($tunnel.Hostname)
+    service: http://localhost:4000
+  - service: http_status:404
+"@
+Set-Content -Encoding UTF8 $configPath $config
+
+$process = Start-Process -FilePath $cloudflared -ArgumentList @('tunnel', '--config', $configPath, 'run', $TunnelName) -RedirectStandardOutput $outLog -RedirectStandardError $errLog -WindowStyle Hidden -PassThru
 Set-Content -Encoding UTF8 $pidFile $process.Id
 
-$tunnelUrl = $null
-$deadline = (Get-Date).AddSeconds(60)
-do {
-  Start-Sleep -Seconds 2
-  $logs = ''
-  if (Test-Path $outLog) { $logs += Get-Content $outLog -Raw -ErrorAction SilentlyContinue }
-  if (Test-Path $errLog) { $logs += "`n" + (Get-Content $errLog -Raw -ErrorAction SilentlyContinue) }
-  $match = [regex]::Match($logs, 'https://[a-zA-Z0-9-]+\.trycloudflare\.com')
-  if ($match.Success) { $tunnelUrl = $match.Value; break }
-} while ((Get-Date) -lt $deadline)
-
-if (!$tunnelUrl) {
-  throw "Không lấy được Cloudflare tunnel URL. Xem log: $errLog"
-}
+$tunnelUrl = "https://$TunnelHostname"
 Write-Host "Tunnel URL: $tunnelUrl" -ForegroundColor Green
 
 $webhookUrl = "$tunnelUrl/api/v1/payments/payos/webhook"
-Write-Step "Ghi PAYOS_WEBHOOK_URL vào backend\.env"
+Write-Step 'Write PAYOS_WEBHOOK_URL to backend env'
 Set-EnvValue $envPath 'PAYOS_WEBHOOK_URL' $webhookUrl
 
-Write-Step 'Đợi tunnel public nhận backend'
+Write-Step 'Wait for public tunnel health'
 Wait-HttpOk "$tunnelUrl/health" 60
 
-Write-Step 'Restart backend để nhận webhook URL mới'
+Write-Step 'Restart backend for new webhook URL'
 docker compose up -d --build backend
 Wait-HttpOk 'http://localhost:4000/health' 90
 
-Write-Step 'Confirm webhook với PayOS'
+Write-Step 'Confirm webhook with PayOS'
 try {
   $loginBody = @{ email = 'admin@travela.vn'; password = '123456' } | ConvertTo-Json
   $login = Invoke-RestMethod -Method Post -Uri 'http://localhost:4000/api/v1/auth/login' -ContentType 'application/json' -Body $loginBody
   $confirm = Confirm-PayOSWebhook $login.accessToken
   Write-Host "PayOS webhook confirmed: $($confirm.webhookUrl)" -ForegroundColor Green
 } catch {
-  Write-Warning "Backend đã chạy và webhook URL đã ghi, nhưng PayOS confirm chưa thành công: $($_.Exception.Message)"
-  Write-Warning 'Nếu gặp Webhook URL invalid, giữ tunnel đang chạy rồi thử lại sau hoặc đổi tunnel/domain.'
+  Write-Warning "Webhook URL was written, but PayOS confirm still failed: $($_.Exception.Message)"
+  Write-Warning 'Named tunnel is running. Check DNS propagation and PayOS config if needed.'
 }
 
-Write-Step 'Hoàn tất'
+Write-Step 'Done'
 Write-Host 'Frontend: http://localhost:8080' -ForegroundColor Green
 Write-Host 'Backend:  http://localhost:4000/health' -ForegroundColor Green
 Write-Host "Webhook:  $webhookUrl" -ForegroundColor Green
-Write-Host 'Cloudflare tunnel đang chạy nền. Muốn tắt thì chạy:' -ForegroundColor Yellow
+Write-Host 'To stop the tunnel:' -ForegroundColor Yellow
 Write-Host "Stop-Process -Id $($process.Id)" -ForegroundColor Yellow

@@ -135,6 +135,13 @@ export function createPaymentsRouter() {
     });
   }));
 
+  router.get('/payos/webhook', asyncHandler(async (_req, res) => {
+    res.json({
+      success: true,
+      message: 'PayOS webhook endpoint is reachable',
+    });
+  }));
+
   router.post('/payos/webhook', asyncHandler(async (req, res) => {
     await expireOverdueDepositBookings(prisma);
     const client = getPayOSClient();
@@ -156,7 +163,12 @@ export function createPaymentsRouter() {
     });
 
     if (!transaction) {
-      throw notFound('Payment transaction not found');
+      res.json({
+        error: 0,
+        message: 'Webhook acknowledged',
+        data: null,
+      });
+      return;
     }
 
     if (isPayOSCancelledStatus(webhookStatus) || isPayOSCancelledStatus(webhookCode)) {
