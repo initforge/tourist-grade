@@ -31,14 +31,18 @@ function Find-Cloudflared {
 
 function Ensure-EnvFile {
   $envPath = Join-Path $repoRoot 'backend\.env'
+  $internalEnvPath = Join-Path $repoRoot 'backend\internal.local.env'
   if (!(Test-Path $envPath)) {
-    $internalEnvPath = Join-Path $repoRoot 'backend\internal.local.env'
     if (Test-Path $internalEnvPath) {
       Copy-Item $internalEnvPath $envPath -Force
       Write-Host "Created backend\\.env from internal.local.env" -ForegroundColor Green
     } else {
       throw "Missing backend\\.env at $envPath"
     }
+  }
+
+  if (Test-Path $internalEnvPath) {
+    Sync-InternalEnvValues $envPath $internalEnvPath
   }
 
   $content = Get-Content $envPath -Raw
@@ -79,6 +83,36 @@ function Set-EnvValue($path, $key, $value) {
   }
   if (!$found) { $next += "$key=$value" }
   Set-Content -Encoding UTF8 $path $next
+}
+
+function Sync-InternalEnvValues($envPath, $internalEnvPath) {
+  $internalMap = Get-EnvMap $internalEnvPath
+  if ($internalMap.Count -eq 0) { return }
+  $currentMap = Get-EnvMap $envPath
+  $keysToSync = @(
+    'PAYOS_CLIENT_ID',
+    'PAYOS_API_KEY',
+    'PAYOS_CHECKSUM_KEY',
+    'PAYOS_RETURN_URL',
+    'PAYOS_CANCEL_URL',
+    'PAYOS_WEBHOOK_URL',
+    'CLOUDFLARE_TUNNEL_ID',
+    'CLOUDFLARE_TUNNEL_NAME',
+    'CLOUDFLARE_TUNNEL_HOSTNAME',
+    'CLOUDFLARE_TUNNEL_CREDENTIALS_BASE64'
+  )
+
+  $changed = $false
+  foreach ($key in $keysToSync) {
+    if ($internalMap.ContainsKey($key) -and $currentMap[$key] -ne $internalMap[$key]) {
+      Set-EnvValue $envPath $key $internalMap[$key]
+      $changed = $true
+    }
+  }
+
+  if ($changed) {
+    Write-Host "Synced internal local env keys into backend\\.env" -ForegroundColor Green
+  }
 }
 
 function Write-Utf8NoBom($path, $content) {
