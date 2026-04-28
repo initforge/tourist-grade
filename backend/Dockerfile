@@ -10,7 +10,8 @@ COPY prisma ./prisma
 COPY src ./src
 
 RUN npm run prisma:generate
+RUN npm run build
 
 EXPOSE 4000
 
-CMD ["sh", "-c", "npm run prisma:push -- --accept-data-loss && npm run prisma:seed && npm run dev"]
+CMD ["sh", "-c", "npm run prisma:push -- --accept-data-loss && npm run prisma:seed && npm run start"]
