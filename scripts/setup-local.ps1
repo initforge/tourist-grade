@@ -32,7 +32,13 @@ function Find-Cloudflared {
 function Ensure-EnvFile {
   $envPath = Join-Path $repoRoot 'backend\.env'
   if (!(Test-Path $envPath)) {
-    throw "Missing backend\\.env at $envPath"
+    $internalEnvPath = Join-Path $repoRoot 'backend\internal.local.env'
+    if (Test-Path $internalEnvPath) {
+      Copy-Item $internalEnvPath $envPath -Force
+      Write-Host "Created backend\\.env from internal.local.env" -ForegroundColor Green
+    } else {
+      throw "Missing backend\\.env at $envPath"
+    }
   }
 
   $content = Get-Content $envPath -Raw
