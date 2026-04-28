@@ -45,6 +45,21 @@ function Ensure-EnvFile {
   return $envPath
 }
 
+function Get-EnvMap($path) {
+  $map = @{}
+  foreach ($rawLine in Get-Content $path) {
+    $line = $rawLine.Trim()
+    if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith('#')) {
+      continue
+    }
+    $parts = $line -split '=', 2
+    if ($parts.Count -eq 2) {
+      $map[$parts[0].Trim()] = $parts[1]
+    }
+  }
+  return $map
+}
+
 function Set-EnvValue($path, $key, $value) {
   $lines = Get-Content $path
   $found = $false
@@ -58,6 +73,11 @@ function Set-EnvValue($path, $key, $value) {
   }
   if (!$found) { $next += "$key=$value" }
   Set-Content -Encoding UTF8 $path $next
+}
+
+function Write-Utf8NoBom($path, $content) {
+  $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+  [System.IO.File]::WriteAllText($path, $content, $utf8NoBom)
 }
 
 function Wait-HttpOk($url, $seconds = 60) {
@@ -260,6 +280,63 @@ function Get-TunnelInfo($cloudflaredPath, $name) {
   return $tunnels | Where-Object { $_.name -eq $name } | Select-Object -First 1
 }
 
+function Get-MachineTunnelName($baseName) {
+  $hostName = if ($env:COMPUTERNAME) { $env:COMPUTERNAME } else { 'host' }
+  $userName = if ($env:USERNAME) { $env:USERNAME } else { 'user' }
+  $suffix = ("$hostName-$userName").ToLower() -replace '[^a-z0-9-]', '-'
+  $suffix = $suffix.Trim('-')
+  if ([string]::IsNullOrWhiteSpace($suffix)) {
+    $suffix = 'local'
+  }
+  return "$baseName-$suffix"
+}
+
+function Get-SecretTunnel($envSettings, $defaultName, $defaultHostname) {
+  $tunnelId = $envSettings['CLOUDFLARE_TUNNEL_ID']
+  $credentialsBase64 = $envSettings['CLOUDFLARE_TUNNEL_CREDENTIALS_BASE64']
+  $hostname = $envSettings['CLOUDFLARE_TUNNEL_HOSTNAME']
+  $configuredName = $envSettings['CLOUDFLARE_TUNNEL_NAME']
+
+  if ([string]::IsNullOrWhiteSpace($tunnelId) -and [string]::IsNullOrWhiteSpace($credentialsBase64) -and [string]::IsNullOrWhiteSpace($hostname)) {
+    return $null
+  }
+
+  foreach ($requiredKey in @('CLOUDFLARE_TUNNEL_ID', 'CLOUDFLARE_TUNNEL_HOSTNAME', 'CLOUDFLARE_TUNNEL_CREDENTIALS_BASE64')) {
+    if ([string]::IsNullOrWhiteSpace($envSettings[$requiredKey])) {
+      throw "backend\\.env is missing $requiredKey. For internal one-command setup, provide CLOUDFLARE_TUNNEL_ID, CLOUDFLARE_TUNNEL_HOSTNAME, and CLOUDFLARE_TUNNEL_CREDENTIALS_BASE64 together."
+    }
+  }
+
+  try {
+    $decoded = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($credentialsBase64))
+    $json = $decoded | ConvertFrom-Json
+  } catch {
+    throw 'CLOUDFLARE_TUNNEL_CREDENTIALS_BASE64 is not valid base64 JSON.'
+  }
+
+  if (!$json.TunnelID -or !$json.TunnelSecret -or !$json.AccountTag) {
+    throw 'CLOUDFLARE_TUNNEL_CREDENTIALS_BASE64 does not contain a valid Cloudflare tunnel credentials JSON payload.'
+  }
+  if ($json.TunnelID -ne $tunnelId) {
+    throw "CLOUDFLARE_TUNNEL_ID ($tunnelId) does not match TunnelID inside CLOUDFLARE_TUNNEL_CREDENTIALS_BASE64 ($($json.TunnelID))."
+  }
+
+  $cloudflaredDir = Join-Path $repoRoot '.local\cloudflared'
+  if (!(Test-Path $cloudflaredDir)) {
+    New-Item -ItemType Directory -Path $cloudflaredDir -Force | Out-Null
+  }
+  $credentialsFile = Join-Path $cloudflaredDir "$tunnelId.json"
+  Write-Utf8NoBom $credentialsFile $decoded
+
+  return @{
+    Id = $tunnelId
+    Name = if ([string]::IsNullOrWhiteSpace($configuredName)) { $defaultName } else { $configuredName }
+    Hostname = $hostname
+    CredentialsFile = $credentialsFile
+    ManagedBySecret = $true
+  }
+}
+
 function Ensure-NamedTunnel($cloudflaredPath, $name, $hostname) {
   $certPath = Join-Path $env:USERPROFILE '.cloudflared\cert.pem'
   $certInfo = Get-CloudflareCertInfo $certPath
@@ -267,33 +344,52 @@ function Ensure-NamedTunnel($cloudflaredPath, $name, $hostname) {
     throw "$($certInfo.Reason)`nFix: delete $certPath, run 'cloudflared tunnel login', finish browser authorization, then rerun scripts/setup-local.ps1"
   }
 
-  $tunnel = Get-TunnelInfo $cloudflaredPath $name
-  if (!$tunnel) {
-    Write-Host "Creating named tunnel $name ..."
-    $createResult = Invoke-Cloudflared $cloudflaredPath @('tunnel', 'create', $name)
-    if ($createResult.ExitCode -ne 0) {
-      throw "cloudflared tunnel create failed: $($createResult.StdErr.Trim())"
+  $selectedName = $name
+  $tunnel = Get-TunnelInfo $cloudflaredPath $selectedName
+  $credentialsFile = $null
+
+  if ($tunnel) {
+    $credentialsFile = Join-Path $env:USERPROFILE ".cloudflared\$($tunnel.id).json"
+    if (!(Test-Path $credentialsFile)) {
+      $machineTunnelName = Get-MachineTunnelName $name
+      Write-Warning "Tunnel '$selectedName' exists in Cloudflare account, but credentials file is missing on this machine."
+      Write-Warning "Creating/using machine-specific tunnel '$machineTunnelName' instead and repointing DNS hostname '$hostname' to it."
+      $selectedName = $machineTunnelName
+      $tunnel = Get-TunnelInfo $cloudflaredPath $selectedName
+      if ($tunnel) {
+        $credentialsFile = Join-Path $env:USERPROFILE ".cloudflared\$($tunnel.id).json"
+      } else {
+        $credentialsFile = $null
+      }
     }
-    $tunnel = Get-TunnelInfo $cloudflaredPath $name
   }
 
   if (!$tunnel) {
-    throw "Could not create named tunnel $name."
+    Write-Host "Creating named tunnel $selectedName ..."
+    $createResult = Invoke-Cloudflared $cloudflaredPath @('tunnel', 'create', $selectedName)
+    if ($createResult.ExitCode -ne 0) {
+      throw "cloudflared tunnel create failed: $($createResult.StdErr.Trim())"
+    }
+    $tunnel = Get-TunnelInfo $cloudflaredPath $selectedName
+  }
+
+  if (!$tunnel) {
+    throw "Could not create named tunnel $selectedName."
   }
 
   $credentialsFile = Join-Path $env:USERPROFILE ".cloudflared\$($tunnel.id).json"
   if (!(Test-Path $credentialsFile)) {
-    throw "Missing tunnel credentials file: $credentialsFile"
+    throw "Missing tunnel credentials file: $credentialsFile`nFix: re-run 'cloudflared tunnel login' or delete stale tunnel '$selectedName' and run setup again."
   }
 
-  $routeResult = Invoke-Cloudflared $cloudflaredPath @('tunnel', 'route', 'dns', $name, $hostname)
+  $routeResult = Invoke-Cloudflared $cloudflaredPath @('tunnel', 'route', 'dns', $selectedName, $hostname)
   if ($routeResult.ExitCode -ne 0 -and $routeResult.StdErr -notmatch 'already exists') {
     throw "cloudflared tunnel route dns failed: $($routeResult.StdErr.Trim())"
   }
 
   return @{
     Id = $tunnel.id
-    Name = $name
+    Name = $selectedName
     Hostname = $hostname
     CredentialsFile = $credentialsFile
   }
@@ -301,6 +397,7 @@ function Ensure-NamedTunnel($cloudflaredPath, $name, $hostname) {
 
 Write-Step 'Check backend env'
 $envPath = Ensure-EnvFile
+$envSettings = Get-EnvMap $envPath
 
 Write-Step 'Check Docker'
 (Invoke-Docker @('version')).Output | Out-Null
@@ -341,7 +438,14 @@ if (Test-Path $pidFile) {
 }
 Remove-Item $outLog, $errLog -ErrorAction SilentlyContinue
 
-$tunnel = Ensure-NamedTunnel $cloudflared $TunnelName $TunnelHostname
+$secretTunnel = Get-SecretTunnel $envSettings $TunnelName $TunnelHostname
+if ($secretTunnel) {
+  Write-Host "Using internal Cloudflare tunnel credentials from backend\\.env for hostname $($secretTunnel.Hostname)." -ForegroundColor Green
+  $tunnel = $secretTunnel
+} else {
+  $tunnel = Ensure-NamedTunnel $cloudflared $TunnelName $TunnelHostname
+}
+
 $config = @"
 tunnel: $($tunnel.Id)
 credentials-file: $($tunnel.CredentialsFile)
@@ -350,12 +454,12 @@ ingress:
     service: http://localhost:4000
   - service: http_status:404
 "@
-Set-Content -Encoding UTF8 $configPath $config
+Write-Utf8NoBom $configPath $config
 
-$process = Start-Process -FilePath $cloudflared -ArgumentList @('tunnel', '--config', $configPath, 'run', $TunnelName) -RedirectStandardOutput $outLog -RedirectStandardError $errLog -WindowStyle Hidden -PassThru
+$process = Start-Process -FilePath $cloudflared -ArgumentList @('tunnel', '--config', $configPath, 'run') -RedirectStandardOutput $outLog -RedirectStandardError $errLog -WindowStyle Hidden -PassThru
 Set-Content -Encoding UTF8 $pidFile $process.Id
 
-$tunnelUrl = "https://$TunnelHostname"
+$tunnelUrl = "https://$($tunnel.Hostname)"
 Write-Host "Tunnel URL: $tunnelUrl" -ForegroundColor Green
 
 $webhookUrl = "$tunnelUrl/api/v1/payments/payos/webhook"

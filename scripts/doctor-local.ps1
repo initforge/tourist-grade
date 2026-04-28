@@ -88,6 +88,22 @@ function Get-CloudflareCertInfo($certPath) {
   }
 }
 
+function Get-EnvMap($path) {
+  $map = @{}
+  if (!(Test-Path $path)) { return $map }
+  foreach ($rawLine in Get-Content $path) {
+    $line = $rawLine.Trim()
+    if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith('#')) {
+      continue
+    }
+    $parts = $line -split '=', 2
+    if ($parts.Count -eq 2) {
+      $map[$parts[0].Trim()] = $parts[1]
+    }
+  }
+  return $map
+}
+
 function Show-Block($name, $result) {
   Write-Info("--- $name ---")
   Write-Info("ExitCode: $($result.ExitCode)")
@@ -137,9 +153,24 @@ Write-Section 'Env file'
 $envPath = Join-Path $repoRoot 'backend\.env'
 if (Test-Path $envPath) {
   $content = Get-Content $envPath -Raw
+  $envMap = Get-EnvMap $envPath
   foreach ($key in @('PAYOS_CLIENT_ID', 'PAYOS_API_KEY', 'PAYOS_CHECKSUM_KEY', 'PAYOS_WEBHOOK_URL')) {
     $present = [bool]($content -match "(?m)^$key=")
     Write-Info("$key present: $present")
+  }
+  foreach ($key in @('CLOUDFLARE_TUNNEL_ID', 'CLOUDFLARE_TUNNEL_NAME', 'CLOUDFLARE_TUNNEL_HOSTNAME', 'CLOUDFLARE_TUNNEL_CREDENTIALS_BASE64')) {
+    $present = [bool]$envMap[$key]
+    Write-Info("$key present: $present")
+  }
+  if ($envMap['CLOUDFLARE_TUNNEL_ID'] -and $envMap['CLOUDFLARE_TUNNEL_CREDENTIALS_BASE64']) {
+    try {
+      $decoded = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($envMap['CLOUDFLARE_TUNNEL_CREDENTIALS_BASE64']))
+      $json = $decoded | ConvertFrom-Json
+      Write-Info("secret tunnel credentials valid: $([bool]($json.TunnelID -and $json.TunnelSecret -and $json.AccountTag))")
+      Write-Info("secret tunnel id match: $([bool]($json.TunnelID -eq $envMap['CLOUDFLARE_TUNNEL_ID']))")
+    } catch {
+      Write-Info('secret tunnel credentials valid: False')
+    }
   }
 } else {
   Write-Info("Missing $envPath")
