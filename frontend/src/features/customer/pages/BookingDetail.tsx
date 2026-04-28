@@ -266,14 +266,21 @@ export default function BookingDetail() {
                   {isPaying ? 'Đang tạo link thanh toán' : `Thanh toán ${formatCurrency(booking.remainingAmount)}`}
                 </button>
               )}
-              {booking.status === 'completed' && !booking.review && (
-                <button
-                  onClick={() => setShowReviewModal(true)}
-                  className="w-full border border-emerald-400 text-emerald-700 font-sans uppercase tracking-[0.1em] text-xs py-4 hover:bg-emerald-50 transition-colors flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined text-base">reviews</span>
-                  Đánh giá tour
-                </button>
+              {booking.status === 'completed' && (
+                booking.review ? (
+                  <div className="w-full border border-sky-300 bg-sky-50 text-sky-700 font-sans uppercase tracking-[0.1em] text-xs py-4 flex items-center justify-center gap-2">
+                    <span className="material-symbols-outlined text-base">visibility</span>
+                    Đã có đánh giá
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowReviewModal(true)}
+                    className="w-full border border-emerald-400 text-emerald-700 font-sans uppercase tracking-[0.1em] text-xs py-4 hover:bg-emerald-50 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-base">reviews</span>
+                    Đánh giá tour
+                  </button>
+                )
               )}
               {['booked', 'pending', 'confirmed'].includes(booking.status) && (
                 <button

@@ -706,7 +706,12 @@ export default function AdminSuppliers() {
       return;
     }
 
-    if (token) {
+    if (!token) {
+      message.error('Phiên đăng nhập đã hết hạn. Không thể lưu nhà cung cấp.');
+      return;
+    }
+
+    {
       const payload: SupplierPayload = {
         name: supplierForm.name,
         phone: supplierForm.phone,
@@ -778,8 +783,9 @@ export default function AdminSuppliers() {
       return;
     }
 
-    if (!editingSupplier) return;
-    persistSuppliers(supplierRows.map(supplier => supplier.id === editingSupplier.id ? {
+    const currentEditingSupplier = editingSupplier;
+    if (!currentEditingSupplier) return;
+    persistSuppliers(supplierRows.map(supplier => supplier.id === currentEditingSupplier!.id ? {
       ...supplier,
       name: supplierForm.name,
       phone: supplierForm.phone,
@@ -799,7 +805,12 @@ export default function AdminSuppliers() {
   };
 
   const deleteSupplier = (supplierId: string) => {
-    if (token) {
+    if (!token) {
+      message.error('Phiên đăng nhập đã hết hạn. Không thể xóa nhà cung cấp.');
+      return;
+    }
+
+    {
       void (async () => {
         try {
           await deleteSupplierRequest(token, supplierId);
@@ -850,7 +861,12 @@ export default function AdminSuppliers() {
       return;
     }
 
-    if (token) {
+    if (!token) {
+      message.error('Phiên đăng nhập đã hết hạn. Không thể lưu hướng dẫn viên.');
+      return;
+    }
+
+    {
       const payload = toApiGuidePayload(guideForm);
       void (async () => {
         try {
@@ -903,8 +919,9 @@ export default function AdminSuppliers() {
       return;
     }
 
-    if (!editingGuide) return;
-    persistGuides(guideRows.map(guide => guide.id === editingGuide.id ? {
+    const currentEditingGuide = editingGuide;
+    if (!currentEditingGuide) return;
+    persistGuides(guideRows.map(guide => guide.id === currentEditingGuide!.id ? {
       ...guide,
       name: guideForm.name,
       gender: guideForm.gender,
@@ -925,7 +942,12 @@ export default function AdminSuppliers() {
   };
 
   const deleteGuide = (guideId: string) => {
-    if (token) {
+    if (!token) {
+      message.error('Phiên đăng nhập đã hết hạn. Không thể xóa hướng dẫn viên.');
+      return;
+    }
+
+    {
       void (async () => {
         try {
           await deleteGuideRequest(token, guideId);
@@ -943,7 +965,12 @@ export default function AdminSuppliers() {
   };
 
   const applyQuoteChanges = (priceMap: Record<string, number>, reason: string, fromDate: string, toDate: string) => {
-    if (token && quoteSupplier) {
+    if (!token) {
+      message.error('Phiên đăng nhập đã hết hạn. Không thể cập nhật bảng giá nhà cung cấp.');
+      return;
+    }
+
+    if (quoteSupplier) {
       void (async () => {
         try {
           const response = await addSupplierBulkPrices(token, quoteSupplier.id, {
@@ -963,10 +990,11 @@ export default function AdminSuppliers() {
       return;
     }
 
-    if (!quoteSupplier) return;
+    const quoteSupplierId = '';
+    if (!quoteSupplierId) return;
     persistSuppliers(supplierRows.map(supplier => {
-      if (supplier.id !== quoteSupplier.id) return supplier;
-      const applyToLines = (lines: SupplierServiceLine[]) => lines.map(service => {
+      if (supplier.id !== quoteSupplierId) return supplier;
+      const applyToLines = (lines: SupplierServiceLine[]) => lines.map((service: SupplierServiceLine) => {
         const nextValue = priceMap[service.id];
         if (!nextValue || nextValue <= 0) return service;
         const existingPrices = !toDate ? closeOpenEndedPrices(service.prices, fromDate) : service.prices;

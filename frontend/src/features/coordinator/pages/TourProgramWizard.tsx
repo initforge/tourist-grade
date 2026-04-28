@@ -201,7 +201,7 @@ function formatMoney(value: number) {
 }
 
 function roundToThousand(value: number) {
-  return Math.round(value / 1000) * 1000;
+  return Math.ceil(value / 1000) * 1000;
 }
 
 function isValidDateKey(value: string) {
@@ -330,6 +330,7 @@ export default function AdminTourProgramWizard({
   const existingPrograms = useAppDataStore(state => state.tourPrograms);
   const existingTourInstances = useAppDataStore(state => state.tourInstances);
   const specialDays = useAppDataStore(state => state.specialDays);
+  const provinces = useAppDataStore(state => state.provinces);
   const token = useAuthStore(state => state.accessToken);
   const enforceCreateRules = !initialProgram && !readOnly;
   const minimumYearRoundStartDate = useMemo(() => toDateKey(addCalendarMonths(new Date(), 1)), []);
@@ -399,12 +400,24 @@ export default function AdminTourProgramWizard({
   const [previewEdits, setPreviewEdits] = useState<Record<string, Partial<PreviewRow>>>(() => initialProgram ? previewEditMapFromProgram(initialProgram) : {});
   const dayCount = typeof form?.days === 'number' ? form.days : 0;
   const nightCount = typeof form?.nights === 'number' ? form.nights : 0;
-  const airportProvinceSet = useMemo(() => new Set<string>([...(PROVINCES_WITH_AIRPORT as readonly string[])]), []);
+  const provinceNames = useMemo(
+    () => (provinces.length > 0 ? provinces.map((province) => province.name) : [...VIETNAM_PROVINCES]),
+    [provinces],
+  );
+  const airportProvinceSet = useMemo(
+    () => new Set<string>(
+      provinces.length > 0
+        ? provinces.filter((province) => province.hasAirport).map((province) => province.name)
+        : [...PROVINCES_WITH_AIRPORT],
+    ),
+    [provinces],
+  );
   const airportSightseeingSpots = useMemo(
     () => form?.sightseeingSpots?.filter(spot => airportProvinceSet.has(spot)),
     [airportProvinceSet, form?.sightseeingSpots],
   );
   const shouldShowTransportSelector = airportProvinceSet.has(form?.departurePoint) && airportSightseeingSpots.length > 0;
+  const singleSightseeingSpot = form?.sightseeingSpots?.length === 1 ? form.sightseeingSpots[0] : '';
   const availableHolidays = useMemo(
     () => enforceCreateRules
       ? holidayOptions?.filter(holiday => holiday?.date >= minimumHolidayStartDate)
@@ -419,6 +432,20 @@ export default function AdminTourProgramWizard({
     && form?.weekdays?.length > 0;
   const shouldShowYearRoundDeparturePreview = form?.tourType === 'quanh_nam'
     && Boolean(form?.yearRoundStartDate && form?.yearRoundEndDate && form?.weekdays?.length > 0);
+
+  useEffect(() => {
+    if (!singleSightseeingSpot || nightCount <= 0 || readOnly) {
+      return;
+    }
+
+    setForm((current) => {
+      const nextItinerary = current.itinerary.map((day, index) => (
+        index < nightCount ? { ...day, accommodationPoint: singleSightseeingSpot } : day
+      ));
+      const unchanged = nextItinerary.every((day, index) => day.accommodationPoint === current.itinerary[index]?.accommodationPoint);
+      return unchanged ? current : { ...current, itinerary: nextItinerary };
+    });
+  }, [nightCount, readOnly, singleSightseeingSpot]);
 
   const updateForm = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     if (readOnly) return;
@@ -1048,7 +1075,7 @@ export default function AdminTourProgramWizard({
                       className="w-full border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none"
                     >
                       <option value="">Chọn tỉnh/thành</option>
-                      {VIETNAM_PROVINCES?.map(p => (
+                      {provinceNames.map(p => (
                         <option key={p} value={p}>{p}</option>
                       ))}
                     </select>
@@ -1079,7 +1106,7 @@ export default function AdminTourProgramWizard({
                           className="text-xs border-none outline-none bg-transparent text-primary/40 min-w-[80px]"
                         >
                           <option value="">+ Thêm</option>
-                          {VIETNAM_PROVINCES?.filter(p => !form?.sightseeingSpots?.includes(p))?.map(p => (
+                          {provinceNames.filter(p => !form?.sightseeingSpots?.includes(p)).map(p => (
                             <option key={p} value={p}>{p}</option>
                           ))}
                         </select>
@@ -1556,7 +1583,7 @@ export default function AdminTourProgramWizard({
                       </div>
                     </div>
 
-                    {idx < nightCount && (
+                    {idx < nightCount && form?.sightseeingSpots?.length > 1 && (
                       <div>
                         <label className="text-[10px] uppercase tracking-widest text-primary/60 font-label block mb-1">
                           Địa điểm lưu trú
@@ -1679,7 +1706,7 @@ export default function AdminTourProgramWizard({
             <section className="sticky bottom-4 z-10 bg-white border border-[var(--color-secondary)]/50 shadow-sm p-5">
               <h3 className="font-semibold text-sm text-primary mb-3 bg-amber-50 inline-block px-3 py-1">Tính toán dự kiến</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                {(['adult', 'child', 'infant', 'singleSupplement'] as EditablePriceKey[])?.map(key => (
+                {(['adult'] as EditablePriceKey[]).map(key => (
                   <div key={key} className="space-y-2 min-w-0">
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm">{editablePriceLabels[key]}</span>
@@ -1719,12 +1746,6 @@ export default function AdminTourProgramWizard({
                   <span className="text-sm">Tỷ lệ lợi nhuận thực tế</span>
                   <div className="border border-outline-variant/40 bg-[var(--color-surface)] px-3 py-2 text-right text-sm font-medium">
                     {actualProfitRate.toFixed(1)}% (lưu tính tour sau: {roundedActualProfitRate}%)
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <span className="text-sm">Số khách tối thiểu để triển khai</span>
-                  <div className="border border-outline-variant/40 bg-[var(--color-surface)] px-3 py-2 text-right text-sm font-medium">
-                    {minimumOperatingGuests > 0 ? formatMoney(minimumOperatingGuests) : '-'}
                   </div>
                 </div>
               </div>

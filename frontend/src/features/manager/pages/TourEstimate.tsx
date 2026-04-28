@@ -107,7 +107,7 @@ export default function TourEstimate() {
             <span className="material-symbols-outlined text-[14px]">chevron_right</span>
             <span className="text-[var(--color-primary)] font-bold">{id ?? instance?.id}</span>
           </nav>
-          <h1 className="font-serif text-3xl text-[var(--color-primary)]">Lập Dự Toán Chi Ph?</h1>
+          <h1 className="font-serif text-3xl text-[var(--color-primary)]">Lập Dự Toán Chi Phí</h1>
           <p className="text-sm text-[var(--color-primary)]/50 mt-1">{instance?.programName} ? {instance?.departureDate}</p>
         </div>
         <div className="flex gap-4">

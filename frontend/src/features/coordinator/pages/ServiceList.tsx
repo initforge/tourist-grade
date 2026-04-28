@@ -11,7 +11,7 @@ type AddCategory = 'Vé tham quan' | 'Các dịch vụ khác';
 type PriceMode = 'Báo giá' | 'Giá niêm yết';
 type PriceSetup = 'Giá chung' | 'Theo độ tuổi' | '-';
 type ServiceStatus = 'Hoạt động' | 'Dừng hoạt động';
-type Province = 'Đà Nẵng' | 'Hà Nội' | 'Quảng Ninh' | 'Lào Cai' | 'Ninh Bình';
+type Province = string;
 type CountFormulaOption = 'Theo ngày' | 'Giá trị mặc định' | 'Nhập tay';
 type QuantityFormulaOption = 'Theo số người' | 'Giá trị mặc định' | 'Nhập tay';
 
@@ -130,7 +130,7 @@ const initialServices: ServiceRow[] = [
   },
 ];
 
-function emptyDraft(category: AddCategory): ServiceDraft {
+function emptyDraft(category: AddCategory, province: Province = 'Đà Nẵng'): ServiceDraft {
   return {
     name: '',
     category,
@@ -144,7 +144,7 @@ function emptyDraft(category: AddCategory): ServiceDraft {
     generalPrice: '',
     adultPrice: '',
     childPrice: '',
-    province: 'Đà Nẵng',
+    province,
     formulaCount: category === 'Vé tham quan' ? 'Giá trị mặc định' : 'Theo ngày',
     formulaCountDefault: category === 'Vé tham quan' ? '1' : '',
     formulaQuantity: category === 'Vé tham quan' ? 'Theo số người' : 'Theo số người',
@@ -288,20 +288,27 @@ function toApiFormula(option?: CountFormulaOption | QuantityFormulaOption) {
 }
 
 export default function ServiceList() {
+  const provinces = useAppDataStore(state => state.provinces);
   const role = useAuthStore(state => state?.user?.role || 'guest');
   const token = useAuthStore(state => state?.accessToken);
   const currentUser = useAuthStore(state => state?.user?.name || 'Điều phối viên');
   const services = useAppDataStore(state => state.services);
   const initializeProtected = useAppDataStore(state => state.initializeProtected);
   const setServices = useAppDataStore(state => state.setServices);
+  const provinceOptions = useMemo(
+    () => (provinces.length > 0 ? provinces.map((province) => province.name as Province) : ['Đà Nẵng', 'Hà Nội', 'Quảng Ninh', 'Lào Cai', 'Ninh Bình']),
+    [provinces],
+  );
+  const defaultProvince = provinceOptions[0] ?? 'Đà Nẵng';
 
   const serviceRows = services.length > 0 ? services : initialServices;
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [priceEditor, setPriceEditor] = useState<{ serviceId: string; priceId?: string } | null>(null);
-  const [draft, setDraft] = useState<ServiceDraft>(emptyDraft('Vé tham quan'));
+  const [draft, setDraft] = useState<ServiceDraft>(emptyDraft('Vé tham quan', defaultProvince));
   const [errors, setErrors] = useState<DraftErrors>({});
   const [nextCategory, setNextCategory] = useState<AddCategory>('Vé tham quan');
 
@@ -335,7 +342,7 @@ export default function ServiceList() {
 
   const openCreateModal = () => {
     setNextCategory('Vé tham quan');
-    setDraft(emptyDraft('Vé tham quan'));
+    setDraft(emptyDraft('Vé tham quan', defaultProvince));
     setErrors({});
     setIsCreateOpen(true);
   };
@@ -357,7 +364,7 @@ export default function ServiceList() {
       generalPrice: String(service.prices.at(-1)?.unitPrice ?? ''),
       adultPrice: adultPrice ? String(adultPrice) : '',
       childPrice: childPrice ? String(childPrice) : '',
-      province: (service.province as Province) ?? 'Đà Nẵng',
+      province: (service.province as Province) ?? defaultProvince,
       formulaCount: (service.formulaCount as CountFormulaOption) ?? 'Theo ngày',
       formulaCountDefault: service.formulaCountDefault ?? '',
       formulaQuantity: (service.formulaQuantity as QuantityFormulaOption) ?? 'Theo số người',
@@ -380,7 +387,12 @@ export default function ServiceList() {
       return;
     }
 
-    if (token) {
+    if (!token) {
+      message.error('Phiên đăng nhập đã hết hạn. Không thể lưu dịch vụ.');
+      return;
+    }
+
+    {
       const apiPayload: ServicePayload = {
         code: draft.id,
         name: draft.name.trim(),
@@ -425,6 +437,7 @@ export default function ServiceList() {
       return;
     }
 
+    /* local fallback removed: coordinator writes must persist through backend */
     const nextRowBase: Omit<ServiceRow, 'id'> = {
       name: draft.name.trim(),
       category: draft.category,
@@ -468,7 +481,12 @@ export default function ServiceList() {
   };
 
   const removeService = (serviceId: string) => {
-    if (token) {
+    if (!token) {
+      message.error('Phiên đăng nhập đã hết hạn. Không thể xóa dịch vụ.');
+      return;
+    }
+
+    {
       void (async () => {
         try {
           await deleteService(token, serviceId);
@@ -488,8 +506,14 @@ export default function ServiceList() {
   };
 
   const savePriceRow = (priceDraft: ServicePriceRow) => {
-    if (!activePriceService) return;
-    if (token) {
+    const priceService = activePriceService;
+    if (!priceService) return;
+    if (!token) {
+      message.error('Phiên đăng nhập đã hết hạn. Không thể cập nhật bảng giá.');
+      return;
+    }
+
+    {
       void (async () => {
         try {
           await addServicePrice(token, activePriceService.id, priceDraft);
@@ -504,7 +528,7 @@ export default function ServiceList() {
     }
 
     const nextRows = serviceRows.map(service => {
-      if (service.id !== activePriceService.id) return service;
+      if (service.id !== priceService!.id) return service;
       let prices = [...service.prices];
       if (activePriceRow) {
         prices = prices.map(price => (price.id === activePriceRow.id ? { ...priceDraft, id: activePriceRow.id } : price));
@@ -607,7 +631,7 @@ export default function ServiceList() {
                   onChange={event => {
                     const category = event.target.value as AddCategory;
                     setNextCategory(category);
-                    setDraft(emptyDraft(category));
+                    setDraft(emptyDraft(category, defaultProvince));
                     setErrors({});
                   }}
                   className="w-full border border-stone-200 px-4 py-3 text-sm outline-none"

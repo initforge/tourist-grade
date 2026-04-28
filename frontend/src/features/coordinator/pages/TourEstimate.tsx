@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Breadcrumb, message } from 'antd';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { Booking } from '@entities/booking/data/bookings';
@@ -41,9 +41,9 @@ type EstimateChoice = {
   unit: string;
   systemManagedPrice: boolean;
   unitPriceEditable: boolean;
-  formulaCount?: 'Theo ngÃ y' | 'GiÃ¡ trá»‹ máº·c Ä‘á»‹nh' | 'Nháº­p tay';
+  formulaCount?: 'Theo ngày' | 'Giá trị mặc định' | 'Nhập tay';
   formulaCountDefault?: number;
-  formulaQuantity?: 'Theo sá»‘ ngÆ°á»i' | 'GiÃ¡ trá»‹ máº·c Ä‘á»‹nh' | 'Nháº­p tay';
+  formulaQuantity?: 'Theo số người' | 'Giá trị mặc định' | 'Nhập tay';
   formulaQuantityDefault?: number;
   supplierId?: string;
   serviceId?: string;
@@ -75,33 +75,33 @@ type EstimateRow = {
 };
 
 const transportCatalog: Record<string, { supplierName: string; serviceVariant: string; unitPrice: number }> = {
-  'transport-van-tai-viet-29': { supplierName: 'Váº­n táº£i Viá»‡t Tourist', serviceVariant: 'Xe 29 chá»—', unitPrice: 8100000 },
-  'transport-hoang-gia-29': { supplierName: 'HoÃ ng Gia Travel Bus', serviceVariant: 'Xe 29 chá»—', unitPrice: 9600000 },
+  'transport-van-tai-viet-29': { supplierName: 'Vận tải Việt Tourist', serviceVariant: 'Xe 29 chỗ', unitPrice: 8100000 },
+  'transport-hoang-gia-29': { supplierName: 'Hoàng Gia Travel Bus', serviceVariant: 'Xe 29 chỗ', unitPrice: 9600000 },
 };
 
 const flightCatalog: Record<string, { supplierName: string; serviceVariant: string; unitPrice: number }> = {
-  'flight-vietnam-airlines': { supplierName: 'Vietnam Airlines Corp', serviceVariant: 'VÃ© mÃ¡y bay Ä‘oÃ n', unitPrice: 3200000 },
-  'flight-vietravel-air': { supplierName: 'Vietravel Airlines', serviceVariant: 'VÃ© mÃ¡y bay Ä‘oÃ n', unitPrice: 2800000 },
+  'flight-vietnam-airlines': { supplierName: 'Vietnam Airlines Corp', serviceVariant: 'Vé máy bay đoàn', unitPrice: 3200000 },
+  'flight-vietravel-air': { supplierName: 'Vietravel Airlines', serviceVariant: 'Vé máy bay đoàn', unitPrice: 2800000 },
 };
 
 const hotelCatalog: Record<string, { supplierName: string; city: string; single: DatedPrice[]; double: DatedPrice[]; triple: DatedPrice[] }> = {
   'hotel-da-nang-4-pearl': {
     supplierName: 'Pearl Beach Hotel',
-    city: 'ÄÃ  Náºµng',
+    city: 'Đà Nẵng',
     single: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 1550000 }, { startDate: '2026-06-01', endDate: '2026-08-31', price: 1750000 }, { startDate: '2026-09-01', price: 1600000 }],
     double: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 1250000 }, { startDate: '2026-06-01', endDate: '2026-08-31', price: 1450000 }, { startDate: '2026-09-01', price: 1300000 }],
     triple: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 1500000 }, { startDate: '2026-06-01', endDate: '2026-08-31', price: 1700000 }, { startDate: '2026-09-01', price: 1550000 }],
   },
   'hotel-da-nang-4-riviera': {
-    supplierName: 'Riviera ÄÃ  Náºµng',
-    city: 'ÄÃ  Náºµng',
+    supplierName: 'Riviera Đà Nẵng',
+    city: 'Đà Nẵng',
     single: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 1480000 }, { startDate: '2026-06-01', endDate: '2026-08-31', price: 1680000 }, { startDate: '2026-09-01', price: 1520000 }],
     double: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 1180000 }, { startDate: '2026-06-01', endDate: '2026-08-31', price: 1380000 }, { startDate: '2026-09-01', price: 1220000 }],
     triple: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 1440000 }, { startDate: '2026-06-01', endDate: '2026-08-31', price: 1640000 }, { startDate: '2026-09-01', price: 1490000 }],
   },
   'hotel-ha-long-4-heritage': {
-    supplierName: 'KhÃ¡ch sáº¡n Di Sáº£n Viá»‡t',
-    city: 'Quáº£ng Ninh',
+    supplierName: 'Khách sạn Di Sản Việt',
+    city: 'Quảng Ninh',
     single: [{ startDate: '2026-01-01', endDate: '2026-04-30', price: 1500000 }, { startDate: '2026-05-01', endDate: '2026-08-31', price: 1760000 }, { startDate: '2026-09-01', price: 1550000 }],
     double: [{ startDate: '2026-01-01', endDate: '2026-04-30', price: 1200000 }, { startDate: '2026-05-01', endDate: '2026-08-31', price: 1450000 }, { startDate: '2026-09-01', price: 1250000 }],
     triple: [{ startDate: '2026-01-01', endDate: '2026-04-30', price: 1440000 }, { startDate: '2026-05-01', endDate: '2026-08-31', price: 1680000 }, { startDate: '2026-09-01', price: 1490000 }],
@@ -109,25 +109,25 @@ const hotelCatalog: Record<string, { supplierName: string; city: string; single:
 };
 
 const mealCatalog: Record<string, { supplierName: string; serviceVariant: string; prices: DatedPrice[] }> = {
-  'meal-da-nang-ocean': { supplierName: 'NhÃ  hÃ ng Biá»ƒn Xanh', serviceVariant: 'Set menu miá»n Trung', prices: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 165000 }, { startDate: '2026-06-01', endDate: '2026-08-31', price: 185000 }, { startDate: '2026-09-01', price: 170000 }] },
-  'meal-ha-long-harbor': { supplierName: 'Háº¡ Long Harbor', serviceVariant: 'Set háº£i sáº£n Ä‘oÃ n', prices: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 178000 }, { startDate: '2026-06-01', endDate: '2026-08-31', price: 198000 }, { startDate: '2026-09-01', price: 182000 }] },
-  'meal-ha-noi-lotus': { supplierName: 'Lotus HÃ  Ná»™i', serviceVariant: 'Set menu Ä‘oÃ n', prices: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 150000 }, { startDate: '2026-06-01', price: 162000 }] },
+  'meal-da-nang-ocean': { supplierName: 'Nhà hàng Biển Xanh', serviceVariant: 'Set menu miền Trung', prices: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 165000 }, { startDate: '2026-06-01', endDate: '2026-08-31', price: 185000 }, { startDate: '2026-09-01', price: 170000 }] },
+  'meal-ha-long-harbor': { supplierName: 'Hạ Long Harbor', serviceVariant: 'Set hải sản đoàn', prices: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 178000 }, { startDate: '2026-06-01', endDate: '2026-08-31', price: 198000 }, { startDate: '2026-09-01', price: 182000 }] },
+  'meal-ha-noi-lotus': { supplierName: 'Lotus Hà Nội', serviceVariant: 'Set menu đoàn', prices: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 150000 }, { startDate: '2026-06-01', price: 162000 }] },
 };
 
 const attractionCatalog: Record<string, { supplierName: string; serviceVariant: string; adultPrices: DatedPrice[]; childPrices: DatedPrice[] }> = {
-  'ticket-ba-na': { supplierName: 'Sun World', serviceVariant: 'VÃ© BÃ  NÃ  Hills', adultPrices: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 820000 }, { startDate: '2026-06-01', endDate: '2026-08-31', price: 860000 }, { startDate: '2026-09-01', price: 830000 }], childPrices: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 650000 }, { startDate: '2026-06-01', endDate: '2026-08-31', price: 690000 }, { startDate: '2026-09-01', price: 660000 }] },
-  'ticket-sunworld-halong': { supplierName: 'Sun World', serviceVariant: 'VÃ© Sun World Háº¡ Long', adultPrices: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 450000 }, { startDate: '2026-06-01', endDate: '2026-08-31', price: 520000 }, { startDate: '2026-09-01', price: 470000 }], childPrices: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 320000 }, { startDate: '2026-06-01', endDate: '2026-08-31', price: 360000 }, { startDate: '2026-09-01', price: 330000 }] },
-  'ticket-van-mieu': { supplierName: 'VÄƒn Miáº¿u', serviceVariant: 'VÃ© VÄƒn Miáº¿u', adultPrices: [{ startDate: '2026-01-01', price: 70000 }], childPrices: [{ startDate: '2026-01-01', price: 35000 }] },
+  'ticket-ba-na': { supplierName: 'Sun World', serviceVariant: 'Vé Bà Nà Hills', adultPrices: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 820000 }, { startDate: '2026-06-01', endDate: '2026-08-31', price: 860000 }, { startDate: '2026-09-01', price: 830000 }], childPrices: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 650000 }, { startDate: '2026-06-01', endDate: '2026-08-31', price: 690000 }, { startDate: '2026-09-01', price: 660000 }] },
+  'ticket-sunworld-halong': { supplierName: 'Sun World', serviceVariant: 'Vé Sun World Hạ Long', adultPrices: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 450000 }, { startDate: '2026-06-01', endDate: '2026-08-31', price: 520000 }, { startDate: '2026-09-01', price: 470000 }], childPrices: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 320000 }, { startDate: '2026-06-01', endDate: '2026-08-31', price: 360000 }, { startDate: '2026-09-01', price: 330000 }] },
+  'ticket-van-mieu': { supplierName: 'Văn Miếu', serviceVariant: 'Vé Văn Miếu', adultPrices: [{ startDate: '2026-01-01', price: 70000 }], childPrices: [{ startDate: '2026-01-01', price: 35000 }] },
 };
 
-const otherCatalog: Record<string, { supplierName: string; serviceVariant: string; priceMode: 'BÃ¡o giÃ¡' | 'GiÃ¡ niÃªm yáº¿t'; formulaCount: 'Theo ngÃ y' | 'GiÃ¡ trá»‹ máº·c Ä‘á»‹nh' | 'Nháº­p tay'; formulaCountDefault?: number; formulaQuantity: 'Theo sá»‘ ngÆ°á»i' | 'GiÃ¡ trá»‹ máº·c Ä‘á»‹nh' | 'Nháº­p tay'; formulaQuantityDefault?: number; prices: DatedPrice[] }> = {
-  'other-insurance': { supplierName: 'Báº£o Viá»‡t Travel Care', serviceVariant: 'Báº£o hiá»ƒm du lá»‹ch', priceMode: 'GiÃ¡ niÃªm yáº¿t', formulaCount: 'GiÃ¡ trá»‹ máº·c Ä‘á»‹nh', formulaCountDefault: 1, formulaQuantity: 'Theo sá»‘ ngÆ°á»i', prices: [{ startDate: '2026-01-01', endDate: '2026-06-30', price: 40000 }, { startDate: '2026-07-01', price: 50000 }] },
-  'other-water': { supplierName: 'Aqua Tour Supply', serviceVariant: 'NÆ°á»›c uá»‘ng trÃªn xe', priceMode: 'GiÃ¡ niÃªm yáº¿t', formulaCount: 'Theo ngÃ y', formulaQuantity: 'Theo sá»‘ ngÆ°á»i', prices: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 12000 }, { startDate: '2026-06-01', price: 15000 }] },
-  'other-team-building': { supplierName: 'Event Lab', serviceVariant: 'Äáº¡o cá»¥ team building', priceMode: 'BÃ¡o giÃ¡', formulaCount: 'Nháº­p tay', formulaQuantity: 'GiÃ¡ trá»‹ máº·c Ä‘á»‹nh', formulaQuantityDefault: 1, prices: [{ startDate: '2026-01-01', price: 0 }] },
+const otherCatalog: Record<string, { supplierName: string; serviceVariant: string; priceMode: 'Báo giá' | 'Giá niêm yết'; formulaCount: 'Theo ngày' | 'Giá trị mặc định' | 'Nhập tay'; formulaCountDefault?: number; formulaQuantity: 'Theo số người' | 'Giá trị mặc định' | 'Nhập tay'; formulaQuantityDefault?: number; prices: DatedPrice[] }> = {
+  'other-insurance': { supplierName: 'Bảo Việt Travel Care', serviceVariant: 'Bảo hiểm du lịch', priceMode: 'Giá niêm yết', formulaCount: 'Giá trị mặc định', formulaCountDefault: 1, formulaQuantity: 'Theo số người', prices: [{ startDate: '2026-01-01', endDate: '2026-06-30', price: 40000 }, { startDate: '2026-07-01', price: 50000 }] },
+  'other-water': { supplierName: 'Aqua Tour Supply', serviceVariant: 'Nước uống trên xe', priceMode: 'Giá niêm yết', formulaCount: 'Theo ngày', formulaQuantity: 'Theo số người', prices: [{ startDate: '2026-01-01', endDate: '2026-05-31', price: 12000 }, { startDate: '2026-06-01', price: 15000 }] },
+  'other-team-building': { supplierName: 'Event Lab', serviceVariant: 'Đạo cụ team building', priceMode: 'Báo giá', formulaCount: 'Nhập tay', formulaQuantity: 'Giá trị mặc định', formulaQuantityDefault: 1, prices: [{ startDate: '2026-01-01', price: 0 }] },
 };
 
 function formatCurrency(value: number) {
-  return `${value.toLocaleString('vi-VN')} Ä‘`;
+  return `${value.toLocaleString('vi-VN')} đ`;
 }
 
 function cleanText(value?: string) {
@@ -177,7 +177,7 @@ function pickSupplierPrice(prices: SupplierPriceRow[], dateKey: string) {
 }
 
 function pickServicePrice(prices: ServicePriceRow[], targetLabel: RowTarget, dateKey: string) {
-  const loweredTarget = targetLabel === 'adult' ? 'ngÆ°á»i lá»›n' : targetLabel === 'child' ? 'tráº» em' : '';
+  const loweredTarget = targetLabel === 'adult' ? 'người lớn' : targetLabel === 'child' ? 'trẻ em' : '';
   const matchingPool = loweredTarget ? prices.filter((price) => price.note.toLowerCase().includes(loweredTarget)) : prices;
   const target = parseDateKey(dateKey).getTime();
   const included = matchingPool.find((price) => {
@@ -203,7 +203,7 @@ function closeOpenEndedSupplierPrices(prices: SupplierPriceRow[], effectiveDate:
 }
 
 function isListedPriceMode(mode?: string) {
-  return mode === 'Niêm yết' || mode === 'NiÃªm yáº¿t' || mode === 'Giá niêm yết' || mode === 'GiÃ¡ niÃªm yáº¿t';
+  return mode === 'Niêm yết' || mode === 'Niêm yết' || mode === 'Giá niêm yết' || mode === 'Giá niêm yết';
 }
 
 function isQuotedPriceMode(mode?: string) {
@@ -241,7 +241,7 @@ function getGroupedAccommodation(program: TourProgram) {
       if (current) {
         groups.push({
           id: `stay-${groups.length + 1}`,
-          label: current.nights === 1 ? `LÆ°u trÃº - ÄÃªm ${current.startNight}` : `LÆ°u trÃº - ÄÃªm ${current.startNight}, ${current.startNight + current.nights - 1}`,
+          label: current.nights === 1 ? `Lưu trú - Đêm ${current.startNight}` : `Lưu trú - Đêm ${current.startNight}, ${current.startNight + current.nights - 1}`,
           city: current.city,
           nights: current.nights,
           startNight: current.startNight,
@@ -255,7 +255,7 @@ function getGroupedAccommodation(program: TourProgram) {
   if (current) {
     groups.push({
       id: `stay-${groups.length + 1}`,
-      label: current.nights === 1 ? `LÆ°u trÃº - ÄÃªm ${current.startNight}` : `LÆ°u trÃº - ÄÃªm ${current.startNight}, ${current.startNight + current.nights - 1}`,
+      label: current.nights === 1 ? `Lưu trú - Đêm ${current.startNight}` : `Lưu trú - Đêm ${current.startNight}, ${current.startNight + current.nights - 1}`,
       city: current.city,
       nights: current.nights,
       startNight: current.startNight,
@@ -267,7 +267,7 @@ function getGroupedAccommodation(program: TourProgram) {
 function getMealGroups(program: TourProgram) {
   return program.itinerary.flatMap((day) => day.meals.map((meal) => ({
     id: `meal-${day.day}-${meal}`,
-    label: `NgÃ y ${day.day} - ${meal === 'breakfast' ? 'Bá»¯a sÃ¡ng' : meal === 'lunch' ? 'Bá»¯a trÆ°a' : 'Bá»¯a tá»‘i'}`,
+    label: `Ngày ${day.day} - ${meal === 'breakfast' ? 'Bữa sáng' : meal === 'lunch' ? 'Bữa trưa' : 'Bữa tối'}`,
     day: day.day,
   })));
 }
@@ -278,7 +278,7 @@ function fallbackTransportChoices(): EstimateChoice[] {
     supplierName: option.supplierName,
     serviceVariant: option.serviceVariant,
     unitPrice: option.unitPrice,
-    unit: 'chuyáº¿n',
+    unit: 'chuyến',
     systemManagedPrice: false,
     unitPriceEditable: true,
   }));
@@ -290,7 +290,7 @@ function fallbackFlightChoices(): EstimateChoice[] {
     supplierName: option.supplierName,
     serviceVariant: option.serviceVariant,
     unitPrice: option.unitPrice,
-    unit: 'khÃ¡ch',
+    unit: 'khách',
     systemManagedPrice: false,
     unitPriceEditable: true,
   }));
@@ -305,9 +305,9 @@ function fallbackHotelChoices(city: string, roomType: 'single' | 'double' | 'tri
       return {
         id,
         supplierName: option.supplierName,
-        serviceVariant: roomType === 'single' ? 'PhÃ²ng Ä‘Æ¡n' : roomType === 'double' ? 'PhÃ²ng Ä‘Ã´i' : 'PhÃ²ng ba',
+        serviceVariant: roomType === 'single' ? 'Phòng đơn' : roomType === 'double' ? 'Phòng đôi' : 'Phòng ba',
         unitPrice: average,
-        unit: 'phÃ²ng',
+        unit: 'phòng',
         systemManagedPrice: true,
         unitPriceEditable: false,
       };
@@ -320,7 +320,7 @@ function fallbackMealChoices(dateKey: string): EstimateChoice[] {
     supplierName: option.supplierName,
     serviceVariant: option.serviceVariant,
     unitPrice: pickDatedPrice(option.prices, dateKey),
-    unit: 'khÃ¡ch',
+    unit: 'khách',
     systemManagedPrice: true,
     unitPriceEditable: false,
   }));
@@ -333,7 +333,7 @@ function fallbackAttractionChoices(dateKey: string): EstimateChoice[] {
     serviceVariant: option.serviceVariant,
     unitPrice: pickDatedPrice(option.adultPrices, dateKey),
     childUnitPrice: pickDatedPrice(option.childPrices, dateKey),
-    unit: 'khÃ¡ch',
+    unit: 'khách',
     systemManagedPrice: true,
     unitPriceEditable: false,
   }));
@@ -345,8 +345,8 @@ function fallbackOtherChoices(dateKey: string): EstimateChoice[] {
     supplierName: option.supplierName,
     serviceVariant: option.serviceVariant,
     unitPrice: pickDatedPrice(option.prices, dateKey),
-    unit: 'láº§n',
-    systemManagedPrice: option.priceMode === 'GiÃ¡ niÃªm yáº¿t',
+    unit: 'lần',
+    systemManagedPrice: option.priceMode === 'Giá niêm yết',
     unitPriceEditable: isQuotedPriceMode(option.priceMode),
     formulaCount: option.formulaCount,
     formulaCountDefault: option.formulaCountDefault,
@@ -355,9 +355,9 @@ function fallbackOtherChoices(dateKey: string): EstimateChoice[] {
   }));
 }
 
-function supplierTransportChoices(suppliers: SupplierRow[], dateKey: string, type: 'Xe' | 'MÃ¡y bay'): EstimateChoice[] {
+function supplierTransportChoices(suppliers: SupplierRow[], dateKey: string, type: 'Xe' | 'Máy bay'): EstimateChoice[] {
   return suppliers.flatMap((supplier) => (
-    supplier.category === 'Váº­n chuyá»ƒn'
+    supplier.category === 'Vận chuyển'
       ? supplier.services
         .filter((service) => (service.transportType ?? 'Xe') === type)
         .map((service) => ({
@@ -377,7 +377,7 @@ function supplierTransportChoices(suppliers: SupplierRow[], dateKey: string, typ
 
 function supplierHotelChoices(suppliers: SupplierRow[], city: string, roomName: string, dateKey: string): EstimateChoice[] {
   return suppliers.flatMap((supplier) => (
-    supplier.category === 'KhÃ¡ch sáº¡n' && supplier.operatingArea.toLowerCase().includes(city.toLowerCase())
+    supplier.category === 'Khách sạn' && supplier.operatingArea.toLowerCase().includes(city.toLowerCase())
       ? supplier.services
         .filter((service) => service.name === roomName)
         .map((service) => ({
@@ -385,7 +385,7 @@ function supplierHotelChoices(suppliers: SupplierRow[], city: string, roomName: 
           supplierName: supplier.name,
           serviceVariant: service.name,
           unitPrice: pickSupplierPrice(service.prices, dateKey),
-          unit: 'phÃ²ng',
+          unit: 'phòng',
           systemManagedPrice: true,
           unitPriceEditable: false,
           supplierId: supplier.id,
@@ -401,13 +401,13 @@ function supplierMealChoices(suppliers: SupplierRow[], dateKey: string): Estimat
       ...supplier.services.map((service) => ({ ...service, mealLine: false })),
       ...supplier.mealServices.map((service) => ({ ...service, mealLine: true })),
     ];
-    if (supplier.category !== 'NhÃ  hÃ ng' && supplier.category !== 'KhÃ¡ch sáº¡n') return [];
+    if (supplier.category !== 'Nhà hàng' && supplier.category !== 'Khách sạn') return [];
     return serviceLines.map((service) => ({
       id: `supplier-${supplier.id}-${service.id}-${service.mealLine ? 'meal' : 'main'}`,
       supplierName: supplier.name,
       serviceVariant: service.name,
       unitPrice: pickSupplierPrice(service.prices, dateKey),
-      unit: 'khÃ¡ch',
+      unit: 'khách',
       systemManagedPrice: true,
       unitPriceEditable: false,
       supplierId: supplier.id,
@@ -417,7 +417,7 @@ function supplierMealChoices(suppliers: SupplierRow[], dateKey: string): Estimat
   });
 }
 
-function serviceChoices(services: ServiceRow[], category: 'VÃ© tham quan' | 'CÃ¡c dá»‹ch vá»¥ khÃ¡c' | 'HÆ°á»›ng dáº«n viÃªn', target: RowTarget, dateKey: string): EstimateChoice[] {
+function serviceChoices(services: ServiceRow[], category: 'Vé tham quan' | 'Các dịch vụ khác' | 'Hướng dẫn viên', target: RowTarget, dateKey: string): EstimateChoice[] {
   return services
     .filter((service) => service.category === category)
     .map((service) => ({
@@ -425,9 +425,9 @@ function serviceChoices(services: ServiceRow[], category: 'VÃ© tham quan' | 'C
       supplierName: service.supplierName ?? service.name,
       serviceVariant: service.name,
       unitPrice: pickServicePrice(service.prices, target === 'child' ? 'child' : 'adult', dateKey),
-      childUnitPrice: service.setup === 'Theo Ä‘á»™ tuá»•i' ? pickServicePrice(service.prices, 'child', dateKey) : undefined,
+      childUnitPrice: service.setup === 'Theo độ tuổi' ? pickServicePrice(service.prices, 'child', dateKey) : undefined,
       unit: service.unit,
-      systemManagedPrice: service.priceMode === 'GiÃ¡ niÃªm yáº¿t',
+      systemManagedPrice: service.priceMode === 'Giá niêm yết',
       unitPriceEditable: isQuotedPriceMode(service.priceMode),
       formulaCount: service.formulaCount as EstimateChoice['formulaCount'],
       formulaCountDefault: Number(service.formulaCountDefault || 0) || undefined,
@@ -452,14 +452,14 @@ function recalcRow(row: EstimateRow) {
 }
 
 function resolveDefaultQuantity(choice: EstimateChoice, stats: ReturnType<typeof getBookingStats>) {
-  if (choice.formulaQuantity === 'Theo sá»‘ ngÆ°á»i') return Math.max(1, stats.totalGuests);
-  if (choice.formulaQuantity === 'GiÃ¡ trá»‹ máº·c Ä‘á»‹nh') return Math.max(1, choice.formulaQuantityDefault ?? 1);
+  if (choice.formulaQuantity === 'Theo số người') return Math.max(1, stats.totalGuests);
+  if (choice.formulaQuantity === 'Giá trị mặc định') return Math.max(1, choice.formulaQuantityDefault ?? 1);
   return 0;
 }
 
 function resolveDefaultOccurrences(choice: EstimateChoice, durationDays: number) {
-  if (choice.formulaCount === 'Theo ngÃ y') return Math.max(1, durationDays);
-  if (choice.formulaCount === 'GiÃ¡ trá»‹ máº·c Ä‘á»‹nh') return Math.max(1, choice.formulaCountDefault ?? 1);
+  if (choice.formulaCount === 'Theo ngày') return Math.max(1, durationDays);
+  if (choice.formulaCount === 'Giá trị mặc định') return Math.max(1, choice.formulaCountDefault ?? 1);
   return 0;
 }
 
@@ -471,10 +471,10 @@ function applyChoice(row: EstimateRow, choice: EstimateChoice, stats: ReturnType
   let unitPrice = row.target === 'child' && choice.childUnitPrice != null ? choice.childUnitPrice : choice.unitPrice;
 
   if (row.categoryId === 'F') {
-    quantity = choice.formulaQuantity === 'Nháº­p tay' ? Math.max(0, row.quantity) : Math.max(1, resolveDefaultQuantity(choice, stats) || 1);
-    occurrences = choice.formulaCount === 'Nháº­p tay' ? Math.max(0, row.occurrences) : Math.max(1, resolveDefaultOccurrences(choice, durationDays) || 1);
-    quantityEditable = choice.formulaQuantity === 'Nháº­p tay';
-    occurrencesEditable = choice.formulaCount === 'Nháº­p tay';
+    quantity = choice.formulaQuantity === 'Nhập tay' ? Math.max(0, row.quantity) : Math.max(1, resolveDefaultQuantity(choice, stats) || 1);
+    occurrences = choice.formulaCount === 'Nhập tay' ? Math.max(0, row.occurrences) : Math.max(1, resolveDefaultOccurrences(choice, durationDays) || 1);
+    quantityEditable = choice.formulaQuantity === 'Nhập tay';
+    occurrencesEditable = choice.formulaCount === 'Nhập tay';
   }
 
   return recalcRow({
@@ -539,11 +539,11 @@ function buildFallbackRows(
     pushRow({
       rowId: `A-transport-${index}`,
       categoryId: 'A',
-      categoryName: 'Váº­n chuyá»ƒn',
-      itemName: 'Xe váº­n chuyá»ƒn',
+      categoryName: 'Vận chuyển',
+      itemName: 'Xe vận chuyển',
       supplierName: selected.supplierName,
       serviceVariant: selected.serviceVariant,
-      unit: 'chuyáº¿n',
+      unit: 'chuyến',
       target: 'all',
       quantity: 1,
       occurrences: 1,
@@ -560,17 +560,17 @@ function buildFallbackRows(
   });
 
   pricingTables?.flight?.forEach((selection, index) => {
-    const choices = mergeChoices(supplierTransportChoices(suppliers, departureDate, 'MÃ¡y bay'), fallbackFlightChoices());
+    const choices = mergeChoices(supplierTransportChoices(suppliers, departureDate, 'Máy bay'), fallbackFlightChoices());
     const selected = choices.find((choice) => choice.id === selection.optionId) ?? choices[0];
     if (!selected) return;
     pushRow({
       rowId: `A-flight-${index}`,
       categoryId: 'A',
-      categoryName: 'Váº­n chuyá»ƒn',
-      itemName: 'VÃ© mÃ¡y bay',
+      categoryName: 'Vận chuyển',
+      itemName: 'Vé máy bay',
       supplierName: selected.supplierName,
       serviceVariant: selected.serviceVariant,
-      unit: 'khÃ¡ch',
+      unit: 'khách',
       target: 'all',
       quantity: Math.max(1, stats.totalGuests),
       occurrences: 1,
@@ -589,9 +589,9 @@ function buildFallbackRows(
   getGroupedAccommodation(program).forEach((group) => {
     const selections = pricingTables?.hotels?.[group.id] ?? [];
     const roomConfigs: Array<{ roomType: 'single' | 'double' | 'triple'; roomName: string; roomCount: number }> = [
-      { roomType: 'single', roomName: 'PhÃ²ng Ä‘Æ¡n', roomCount: stats.roomCounts.single },
-      { roomType: 'double', roomName: 'PhÃ²ng Ä‘Ã´i', roomCount: stats.roomCounts.double },
-      { roomType: 'triple', roomName: 'PhÃ²ng ba', roomCount: stats.roomCounts.triple },
+      { roomType: 'single', roomName: 'Phòng đơn', roomCount: stats.roomCounts.single },
+      { roomType: 'double', roomName: 'Phòng đôi', roomCount: stats.roomCounts.double },
+      { roomType: 'triple', roomName: 'Phòng ba', roomCount: stats.roomCounts.triple },
     ];
     const nightlyDateKeys = Array.from({ length: group.nights }, (_, offset) => addDays(departureDate, group.startNight - 1 + offset));
 
@@ -607,11 +607,11 @@ function buildFallbackRows(
         rowId: `B-${group.id}-${roomType}`,
         groupId: group.id,
         categoryId: 'B',
-        categoryName: 'KhÃ¡ch sáº¡n',
+        categoryName: 'Khách sạn',
         itemName: `${group.label} - ${roomName}`,
         supplierName: selected.supplierName,
         serviceVariant: roomName,
-        unit: 'phÃ²ng',
+        unit: 'phòng',
         target: 'adult',
         quantity: roomCount,
         occurrences: group.nights,
@@ -639,11 +639,11 @@ function buildFallbackRows(
       rowId: `C-${group.id}`,
       groupId: group.id,
       categoryId: 'C',
-      categoryName: 'Chi phÃ­ Äƒn',
+      categoryName: 'Chi phí ăn',
       itemName: group.label,
       supplierName: selected.supplierName,
       serviceVariant: selected.serviceVariant,
-      unit: 'khÃ¡ch',
+      unit: 'khách',
       target: 'all',
       quantity: Math.max(1, stats.totalGuests),
       occurrences: 1,
@@ -662,7 +662,7 @@ function buildFallbackRows(
   Object.entries(pricingTables?.attractions ?? {}).forEach(([groupId, selections], index) => {
     const day = Number(groupId.split('-')[1] || index + 1);
     const dateKey = addDays(departureDate, day - 1);
-    const choices = mergeChoices(serviceChoices(services, 'VÃ© tham quan', 'adult', dateKey), fallbackAttractionChoices(dateKey));
+    const choices = mergeChoices(serviceChoices(services, 'Vé tham quan', 'adult', dateKey), fallbackAttractionChoices(dateKey));
     const defaultSelection = selections.find((item) => item.isDefault) ?? selections[0];
     const selected = choices.find((choice) => choice.id === defaultSelection?.optionId) ?? choices[0];
     if (!selected) return;
@@ -671,11 +671,11 @@ function buildFallbackRows(
         rowId: `D-${groupId}-adult`,
         groupId,
         categoryId: 'D',
-        categoryName: 'VÃ© tháº¯ng cáº£nh',
-        itemName: `NgÃ y ${day} - NgÆ°á»i lá»›n`,
+        categoryName: 'Vé thắng cảnh',
+        itemName: `Ngày ${day} - Người lớn`,
         supplierName: selected.supplierName,
         serviceVariant: selected.serviceVariant,
-        unit: 'khÃ¡ch',
+        unit: 'khách',
         target: 'adult',
         quantity: stats.adults,
         occurrences: 1,
@@ -695,11 +695,11 @@ function buildFallbackRows(
         rowId: `D-${groupId}-child`,
         groupId,
         categoryId: 'D',
-        categoryName: 'VÃ© tháº¯ng cáº£nh',
-        itemName: `NgÃ y ${day} - Tráº» em`,
+        categoryName: 'Vé thắng cảnh',
+        itemName: `Ngày ${day} - Trẻ em`,
         supplierName: selected.supplierName,
         serviceVariant: selected.serviceVariant,
-        unit: 'khÃ¡ch',
+        unit: 'khách',
         target: 'child',
         quantity: stats.children,
         occurrences: 1,
@@ -716,13 +716,13 @@ function buildFallbackRows(
     }
   });
 
-  const guideChoices = mergeChoices(serviceChoices(services, 'HÆ°á»›ng dáº«n viÃªn', 'adult', departureDate), [
+  const guideChoices = mergeChoices(serviceChoices(services, 'Hướng dẫn viên', 'adult', departureDate), [
     {
       id: 'guide-default',
-      supplierName: instance.assignedGuide?.name ?? 'ChÆ°a phÃ¢n cÃ´ng',
-      serviceVariant: 'HÆ°á»›ng dáº«n viÃªn',
+      supplierName: instance.assignedGuide?.name ?? 'Chưa phân công',
+      serviceVariant: 'Hướng dẫn viên',
       unitPrice: 400000,
-      unit: 'Ä‘',
+      unit: 'đ',
       systemManagedPrice: false,
       unitPriceEditable: true,
     },
@@ -731,11 +731,11 @@ function buildFallbackRows(
   pushRow({
     rowId: 'E-guide',
     categoryId: 'E',
-    categoryName: 'HÆ°á»›ng dáº«n viÃªn',
-    itemName: 'HÆ°á»›ng dáº«n viÃªn',
+    categoryName: 'Hướng dẫn viên',
+    itemName: 'Hướng dẫn viên',
     supplierName: selectedGuideChoice.supplierName,
     serviceVariant: selectedGuideChoice.serviceVariant,
-    unit: 'Ä‘',
+    unit: 'đ',
     target: 'all',
     quantity: 1,
     occurrences: 1,
@@ -751,33 +751,33 @@ function buildFallbackRows(
   });
 
   pricingTables?.otherCosts?.forEach((selection, index) => {
-    const choices = mergeChoices(serviceChoices(services, 'CÃ¡c dá»‹ch vá»¥ khÃ¡c', 'adult', departureDate), fallbackOtherChoices(departureDate));
+    const choices = mergeChoices(serviceChoices(services, 'Các dịch vụ khác', 'adult', departureDate), fallbackOtherChoices(departureDate));
     const selected = choices.find((choice) => choice.id === selection.optionId) ?? choices[0];
     if (!selected) return;
-    const quantity = selected.formulaQuantity === 'Theo sá»‘ ngÆ°á»i'
+    const quantity = selected.formulaQuantity === 'Theo số người'
       ? Math.max(1, stats.totalGuests)
-      : selected.formulaQuantity === 'GiÃ¡ trá»‹ máº·c Ä‘á»‹nh'
+      : selected.formulaQuantity === 'Giá trị mặc định'
         ? Math.max(1, selected.formulaQuantityDefault ?? 1)
         : Number(selection.note?.match(/\d+/)?.[0] ?? 0);
-    const occurrences = selected.formulaCount === 'Theo ngÃ y'
+    const occurrences = selected.formulaCount === 'Theo ngày'
       ? Math.max(1, program.duration.days)
-      : selected.formulaCount === 'GiÃ¡ trá»‹ máº·c Ä‘á»‹nh'
+      : selected.formulaCount === 'Giá trị mặc định'
         ? Math.max(1, selected.formulaCountDefault ?? 1)
         : Number(selection.occurrences ?? 0);
 
     pushRow({
       rowId: `F-other-${index}`,
       categoryId: 'F',
-      categoryName: 'Chi phÃ­ khÃ¡c',
+      categoryName: 'Chi phí khác',
       itemName: selected.serviceVariant,
       supplierName: selected.supplierName,
       serviceVariant: selected.serviceVariant,
-      unit: 'láº§n',
+      unit: 'lần',
       target: 'all',
       quantity: Math.max(1, quantity || 1),
       occurrences: Math.max(1, occurrences || 1),
-      quantityEditable: selected.formulaQuantity === 'Nháº­p tay',
-      occurrencesEditable: selected.formulaCount === 'Nháº­p tay',
+      quantityEditable: selected.formulaQuantity === 'Nhập tay',
+      occurrencesEditable: selected.formulaCount === 'Nhập tay',
       unitPrice: selection.manualPrice ?? selected.unitPrice,
       unitPriceEditable: selected.unitPriceEditable,
       systemManagedPrice: selected.systemManagedPrice,
@@ -854,7 +854,7 @@ export default function TourEstimate() {
   const basePrefix = location.pathname.startsWith('/manager') ? '/manager' : '/coordinator';
   const user = useAuthStore((state) => state.user);
   const token = useAuthStore((state) => state.accessToken);
-  const currentUser = user?.name || 'Äiá»u phá»‘i viÃªn';
+  const currentUser = user?.name || 'Điều phối viên';
   const initializeProtected = useAppDataStore((state) => state.initializeProtected);
   const upsertTourInstance = useAppDataStore((state) => state.upsertTourInstance);
   const tourInstances = useAppDataStore((state) => state.tourInstances);
@@ -874,8 +874,8 @@ export default function TourEstimate() {
       <div className="flex min-h-screen items-center justify-center bg-[var(--color-background)] p-8">
         <div className="space-y-3 text-center">
           <span className="material-symbols-outlined text-5xl text-[var(--color-primary)]/20">calculate</span>
-          <h1 className="font-serif text-2xl text-[var(--color-primary)]">ChÆ°a cÃ³ dá»¯ liá»‡u dá»± toÃ¡n</h1>
-          <p className="text-sm text-[var(--color-primary)]/50">API tour instance vÃ  tour program chÆ°a Ä‘Æ°á»£c káº¿t ná»‘i hoáº·c chÆ°a cÃ³ dá»¯ liá»‡u kháº£ dá»¥ng.</p>
+          <h1 className="font-serif text-2xl text-[var(--color-primary)]">Chưa có dữ liệu dự toán</h1>
+          <p className="text-sm text-[var(--color-primary)]/50">API tour instance và tour program chưa được kết nối hoặc chưa có dữ liệu khả dụng.</p>
         </div>
       </div>
     );
@@ -905,10 +905,10 @@ export default function TourEstimate() {
   const margin = expectedRevenue > 0 ? (profit / expectedRevenue) * 100 : 0;
 
   const tabs = [
-    { key: 'overview' as const, label: 'Tá»•ng quan' },
-    { key: 'guests' as const, label: 'Danh sÃ¡ch khÃ¡ch hÃ ng', badge: manifestBookings.length || null },
-    { key: 'itinerary' as const, label: 'Lá»‹ch trÃ¬nh' },
-    { key: 'estimate' as const, label: 'Dá»± toÃ¡n' },
+    { key: 'overview' as const, label: 'Tổng quan' },
+    { key: 'guests' as const, label: 'Danh sách khách hàng', badge: manifestBookings.length || null },
+    { key: 'itinerary' as const, label: 'Lịch trình' },
+    { key: 'estimate' as const, label: 'Dự toán' },
   ];
 
   const updateRow = (rowId: string, changes: Partial<EstimateRow>) => {
@@ -1005,13 +1005,16 @@ export default function TourEstimate() {
       upsertTourInstance(response.tourInstance);
       return response.tourInstance;
     } catch (error) {
-      message.error(error instanceof Error ? error.message : 'KhÃ´ng thá»ƒ lÆ°u dá»± toÃ¡n tour');
+      message.error(error instanceof Error ? error.message : 'Không thể lưu dự toán tour');
       return undefined;
     }
   };
 
   const updatePricesToSystem = async () => {
-    if (!token) return;
+    if (!token) {
+      message.error('Phiên đăng nhập đã hết hạn. Không thể cập nhật giá lên hệ thống.');
+      return;
+    }
 
     const apiEffectiveDate = todayKey();
     const apiRows = Array.from(new Map(
@@ -1038,9 +1041,9 @@ export default function TourEstimate() {
 
       if (selectedChoice?.serviceId) {
         const service = services.find((item) => item.id === selectedChoice.serviceId);
-        const note = service?.setup === 'Theo Ä‘á»™ tuá»•i'
-          ? (row.target === 'child' ? 'Tráº» em' : 'NgÆ°á»i lá»›n')
-          : `Cáº­p nháº­t tá»« dá»± toÃ¡n ${instance.id}`;
+        const note = service?.setup === 'Theo độ tuổi'
+          ? (row.target === 'child' ? 'Trẻ em' : 'Người lớn')
+          : `Cập nhật từ dự toán ${instance.id}`;
         serviceCalls.push(addServicePrice(token, selectedChoice.serviceId, {
           id: '',
           unitPrice: row.unitPrice,
@@ -1054,7 +1057,7 @@ export default function TourEstimate() {
     });
 
     if (changedCount === 0) {
-      message.warning('ChÆ°a tÃ¬m tháº¥y báº£ng giÃ¡ há»‡ thá»‘ng tÆ°Æ¡ng á»©ng Ä‘á»ƒ cáº­p nháº­t');
+      message.warning('Chưa tìm thấy bảng giá hệ thống tương ứng để cập nhật');
       return;
     }
 
@@ -1063,7 +1066,7 @@ export default function TourEstimate() {
         ...Array.from(supplierPayloads.entries()).map(([supplierId, priceMap]) => addSupplierBulkPrices(token, supplierId, {
           fromDate: apiEffectiveDate,
           toDate: '',
-          note: `Cáº­p nháº­t tá»« dá»± toÃ¡n ${instance.id}`,
+          note: `Cập nhật từ dự toán ${instance.id}`,
           createdBy: currentUser,
           priceMap,
         })),
@@ -1071,10 +1074,10 @@ export default function TourEstimate() {
       ]);
 
       await initializeProtected();
-      message.success(`ÄÃ£ cáº­p nháº­t ${changedCount} báº£n ghi giÃ¡ lÃªn há»‡ thá»‘ng`);
+      message.success(`Đã cập nhật ${changedCount} bản ghi giá lên hệ thống`);
       return;
     } catch (error) {
-      message.error(error instanceof Error ? error.message : 'KhÃ´ng thá»ƒ cáº­p nháº­t giÃ¡ lÃªn há»‡ thá»‘ng');
+      message.error(error instanceof Error ? error.message : 'Không thể cập nhật giá lên hệ thống');
       return;
     }
 
@@ -1103,7 +1106,7 @@ export default function TourEstimate() {
               fromDate: effectiveDate,
               toDate: '',
               unitPrice: latest.unitPrice,
-              note: `Cáº­p nháº­t tá»« dá»± toÃ¡n ${instance!.id}`,
+              note: `Cập nhật từ dự toán ${instance!.id}`,
               createdBy: currentUser,
             },
           ],
@@ -1124,29 +1127,29 @@ export default function TourEstimate() {
       if (!latestAdult && !latestChild) return service;
       serviceChanged += matchedRows.length;
       let prices = [...service.prices];
-      if (service.setup === 'Theo Ä‘á»™ tuá»•i') {
+      if (service.setup === 'Theo độ tuổi') {
         if (latestAdult) {
           prices = [
-            ...closeOpenEndedServicePrices(prices, effectiveDate, 'ngÆ°á»i lá»›n'),
+            ...closeOpenEndedServicePrices(prices, effectiveDate, 'người lớn'),
             {
               id: `${service.id}-${Date.now()}-adult`,
               effectiveDate,
               endDate: '',
               unitPrice: latestAdult.unitPrice,
-              note: 'NgÆ°á»i lá»›n',
+              note: 'Người lớn',
               createdBy: currentUser,
             },
           ];
         }
         if (latestChild) {
           prices = [
-            ...closeOpenEndedServicePrices(prices, effectiveDate, 'tráº» em'),
+            ...closeOpenEndedServicePrices(prices, effectiveDate, 'trẻ em'),
             {
               id: `${service.id}-${Date.now()}-child`,
               effectiveDate,
               endDate: '',
               unitPrice: latestChild.unitPrice,
-              note: 'Tráº» em',
+              note: 'Trẻ em',
               createdBy: currentUser,
             },
           ];
@@ -1159,7 +1162,7 @@ export default function TourEstimate() {
             effectiveDate,
             endDate: '',
             unitPrice: latestAdult.unitPrice,
-            note: `Cáº­p nháº­t tá»« dá»± toÃ¡n ${instance!.id}`,
+            note: `Cập nhật từ dự toán ${instance!.id}`,
             createdBy: currentUser,
           },
         ];
@@ -1168,13 +1171,13 @@ export default function TourEstimate() {
     });
 
     if (supplierChanged === 0 && serviceChanged === 0) {
-      message.warning('ChÆ°a tÃ¬m tháº¥y báº£ng giÃ¡ há»‡ thá»‘ng tÆ°Æ¡ng á»©ng Ä‘á»ƒ cáº­p nháº­t');
+      message.warning('Chưa tìm thấy bảng giá hệ thống tương ứng để cập nhật');
       return;
     }
 
     setSuppliers(nextSuppliers);
     setServices(nextServices);
-    message.success(`ÄÃ£ cáº­p nháº­t ${supplierChanged + serviceChanged} báº£n ghi giÃ¡ lÃªn há»‡ thá»‘ng`);
+    message.success(`Đã cập nhật ${supplierChanged + serviceChanged} bản ghi giá lên hệ thống`);
   };
 
   return (
@@ -1182,25 +1185,25 @@ export default function TourEstimate() {
       <Breadcrumb
         className="mb-4 text-xs"
         items={[
-          { title: <Link to={`${basePrefix}/tours`} className="text-[var(--color-primary)]/50 hover:text-[var(--color-primary)]">Äiá»u hÃ nh tour</Link> },
-          { title: <span className="text-[var(--color-primary)]/30">Dá»± toÃ¡n</span> },
+          { title: <Link to={`${basePrefix}/tours`} className="text-[var(--color-primary)]/50 hover:text-[var(--color-primary)]">Điều hành tour</Link> },
+          { title: <span className="text-[var(--color-primary)]/30">Dự toán</span> },
         ]}
       />
 
       <div className="mb-8 flex items-end justify-between">
         <div>
           <nav className="mb-4 flex cursor-pointer items-center gap-2 text-xs uppercase tracking-widest text-[var(--color-primary)]/50" onClick={() => navigate(`${basePrefix}/tours`)}>
-            <span>Quáº£n lÃ½ Tour</span>
+            <span>Quản lý Tour</span>
             <span className="material-symbols-outlined text-[14px]">chevron_right</span>
             <span className="font-bold text-[var(--color-primary)]">{id ?? instance.id}</span>
           </nav>
-          <h1 className="font-serif text-3xl text-[var(--color-primary)]">Láº­p Dá»± ToÃ¡n Chi PhÃ­</h1>
+          <h1 className="font-serif text-3xl text-[var(--color-primary)]">Lập Dự Toán Chi Phí</h1>
           <p className="mt-1 text-sm text-[var(--color-primary)]/50">{instance.programName} - {instance.departureDate}</p>
         </div>
         <div className="flex gap-4">
           {role === 'manager' ? (
             <button onClick={() => navigate(`${basePrefix}/tours`)} className="bg-[#2C5545] px-6 py-2 text-sm font-medium uppercase tracking-widest text-white shadow-md transition-colors hover:bg-[#1a382b]">
-              PhÃª duyá»‡t dá»± toÃ¡n
+              Phê duyệt dự toán
             </button>
           ) : (
             <>
@@ -1208,28 +1211,28 @@ export default function TourEstimate() {
                 onClick={updatePricesToSystem}
                 className="border border-[var(--color-secondary)] px-6 py-2 text-sm font-medium uppercase tracking-widest text-[var(--color-secondary)] transition-colors hover:bg-[var(--color-secondary)]/5"
               >
-                Cáº­p nháº­t giÃ¡ lÃªn há»‡ thá»‘ng
+                Cập nhật giá lên hệ thống
               </button>
               <button
                 onClick={async () => {
                   const persisted = await persistEstimate(false);
                   if (!persisted) return;
-                  message.success('ÄÃ£ lÆ°u nhÃ¡p dá»± toÃ¡n');
+                  message.success('Đã lưu nháp dự toán');
                 }}
                 className="border border-[var(--color-primary)] px-6 py-2 text-sm font-medium uppercase tracking-widest text-[var(--color-primary)] transition-colors hover:bg-black/5"
               >
-                LÆ°u NhÃ¡p
+                Lưu Nháp
               </button>
               <button
                 onClick={async () => {
                   const persisted = await persistEstimate(true);
                   if (!persisted) return;
-                  message.success('ÄÃ£ gá»­i dá»± toÃ¡n phÃª duyá»‡t');
+                  message.success('Đã gửi dự toán phê duyệt');
                   navigate(`${basePrefix}/tours`);
                 }}
                 className="bg-[var(--color-tertiary)] px-6 py-2 text-sm font-medium uppercase tracking-widest text-white shadow-md transition-colors hover:bg-[var(--color-tertiary)]/90"
               >
-                Gá»­i PhÃª Duyá»‡t
+                Gửi Phê Duyệt
               </button>
             </>
           )}
@@ -1238,7 +1241,7 @@ export default function TourEstimate() {
 
       {instance.status === 'yeu_cau_chinh_sua' && (
         <div className="mb-6 border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Dá»± toÃ¡n nÃ y Ä‘ang á»Ÿ tráº¡ng thÃ¡i yÃªu cáº§u chá»‰nh sá»­a. Cáº§n rÃ  soÃ¡t láº¡i danh sÃ¡ch chi phÃ­ vÃ  cáº­p nháº­t láº¡i trÆ°á»›c khi gá»­i duyá»‡t.
+          Dự toán này đang ở trạng thái yêu cầu chỉnh sửa. Cần rà soát lại danh sách chi phí và cập nhật lại trước khi gửi duyệt.
         </div>
       )}
 
@@ -1261,15 +1264,15 @@ export default function TourEstimate() {
         <div className="space-y-5 border border-[#D0C5AF]/40 bg-white p-6 shadow-sm">
           <div className="grid grid-cols-1 gap-x-10 gap-y-4 md:grid-cols-2">
             {[
-              ['MÃ£ tour', instance.id],
-              ['TÃªn chÆ°Æ¡ng trÃ¬nh', instance.programName],
-              ['Thá»i lÆ°á»£ng tour', `${program.duration.days} ngÃ y ${program.duration.nights} Ä‘Ãªm`],
-              ['NgÃ y khá»Ÿi hÃ nh', new Date(instance.departureDate).toLocaleDateString('vi-VN')],
-              ['Äiá»ƒm khá»Ÿi hÃ nh', instance.departurePoint],
-              ['Äiá»ƒm tham quan', instance.sightseeingSpots.join(', ')],
-              ['PhÆ°Æ¡ng tiá»‡n', instance.transport === 'xe' ? 'Xe' : 'MÃ¡y bay'],
-              ['NgÆ°á»i táº¡o chÆ°Æ¡ng trÃ¬nh', program.createdBy],
-              ['MÃ´ táº£', cleanText(program.itinerary[0]?.description)],
+              ['Mã tour', instance.id],
+              ['Tên chương trình', instance.programName],
+              ['Thời lượng tour', `${program.duration.days} ngày ${program.duration.nights} đêm`],
+              ['Ngày khởi hành', new Date(instance.departureDate).toLocaleDateString('vi-VN')],
+              ['Điểm khởi hành', instance.departurePoint],
+              ['Điểm tham quan', instance.sightseeingSpots.join(', ')],
+              ['Phương tiện', instance.transport === 'xe' ? 'Xe' : 'Máy bay'],
+              ['Người tạo chương trình', program.createdBy],
+              ['Mô tả', cleanText(program.itinerary[0]?.description)],
             ].map(([label, value]) => (
               <div key={label} className="flex justify-between gap-4 border-b border-[#D0C5AF]/15 pb-3 text-sm">
                 <span className="text-[var(--color-primary)]/50">{label}</span>
@@ -1287,20 +1290,20 @@ export default function TourEstimate() {
               <thead>
                 <tr className="border-b border-[#D0C5AF]/40 bg-[var(--color-surface)] text-[10px] uppercase tracking-widest text-[var(--color-primary)]/50">
                   <th className="px-6 py-4 font-bold">STT</th>
-                  <th className="px-6 py-4 font-bold">Há» vÃ  tÃªn</th>
-                  <th className="px-6 py-4 font-bold">Loáº¡i khÃ¡ch</th>
-                  <th className="px-6 py-4 font-bold">NgÃ y sinh</th>
+                  <th className="px-6 py-4 font-bold">Họ và tên</th>
+                  <th className="px-6 py-4 font-bold">Loại khách</th>
+                  <th className="px-6 py-4 font-bold">Ngày sinh</th>
                   <th className="px-6 py-4 font-bold">CCCD / GKS</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#D0C5AF]/20 text-sm">
                 {manifestBookings.length === 0 ? (
-                  <tr><td colSpan={5} className="py-12 text-center text-sm text-[var(--color-primary)]/40">ChÆ°a cÃ³ booking nÃ o cho tour nÃ y</td></tr>
+                  <tr><td colSpan={5} className="py-12 text-center text-sm text-[var(--color-primary)]/40">Chưa có booking nào cho tour này</td></tr>
                 ) : (
                   manifestBookings.flatMap((booking) => [
                     <tr key={`${booking.id}-group`} className="bg-[var(--color-surface)] font-medium text-[var(--color-primary)]">
                       <td colSpan={5} className="px-6 py-3">
-                        NhÃ³m khÃ¡ch [{booking.id}] - MÃ£ Ä‘Æ¡n <button onClick={() => setGuestPopup(booking)} className="font-mono text-[var(--color-secondary)] hover:underline">[{booking.bookingCode}]</button>
+                        Nhóm khách [{booking.id}] - Mã đơn <button onClick={() => setGuestPopup(booking)} className="font-mono text-[var(--color-secondary)] hover:underline">[{booking.bookingCode}]</button>
                       </td>
                     </tr>,
                     ...booking.passengers.map((passenger, index) => (
@@ -1326,7 +1329,7 @@ export default function TourEstimate() {
             <div key={index} className="flex gap-0 border-b border-[#D0C5AF]/20">
               <div className="w-20 shrink-0 border-r border-[#D0C5AF]/20 bg-[var(--color-surface)] pt-6 pb-6">
                 <div className="flex flex-col items-center">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-primary)]/40">NgÃ y</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-primary)]/40">Ngày</span>
                   <span className="font-serif text-2xl font-bold text-[var(--color-secondary)]">{day.day}</span>
                 </div>
               </div>
@@ -1345,10 +1348,10 @@ export default function TourEstimate() {
         <>
           <div className="sticky top-0 z-10 mb-4 grid grid-cols-1 gap-4 md:grid-cols-4">
             {[
-              { label: 'Tá»•ng chi phÃ­ dá»± toÃ¡n', value: formatCurrency(totalCost) },
-              { label: 'Doanh thu dá»± kiáº¿n', value: formatCurrency(expectedRevenue) },
-              { label: 'Lá»£i nhuáº­n dá»± kiáº¿n', value: formatCurrency(profit) },
-              { label: 'Tá»· suáº¥t lá»£i nhuáº­n', value: `${margin.toFixed(1)}%` },
+              { label: 'Tổng chi phí dự toán', value: formatCurrency(totalCost) },
+              { label: 'Doanh thu dự kiến', value: formatCurrency(expectedRevenue) },
+              { label: 'Lợi nhuận dự kiến', value: formatCurrency(profit) },
+              { label: 'Tỷ suất lợi nhuận', value: `${margin.toFixed(1)}%` },
             ].map((card) => (
               <div key={card.label} className="border border-[#D4AF37] bg-[#D4AF37] px-5 py-4 text-white shadow-sm">
                 <p className="text-[10px] font-bold uppercase tracking-widest opacity-80">{card.label}</p>
@@ -1358,10 +1361,10 @@ export default function TourEstimate() {
           </div>
 
           <div className="mb-4 flex flex-wrap gap-6 text-xs text-[var(--color-primary)]/55">
-            <span>NgÆ°á»i lá»›n: <strong className="text-[var(--color-primary)]">{bookingStats.adults}</strong></span>
-            <span>Tráº» em: <strong className="text-[var(--color-primary)]">{bookingStats.children}</strong></span>
-            <span>Tráº» sÆ¡ sinh: <strong className="text-[var(--color-primary)]">{bookingStats.infants}</strong></span>
-            <span>PhÃ²ng Ä‘Æ¡n/Ä‘Ã´i/ba: <strong className="text-[var(--color-primary)]">{bookingStats.roomCounts.single}/{bookingStats.roomCounts.double}/{bookingStats.roomCounts.triple}</strong></span>
+            <span>Người lớn: <strong className="text-[var(--color-primary)]">{bookingStats.adults}</strong></span>
+            <span>Trẻ em: <strong className="text-[var(--color-primary)]">{bookingStats.children}</strong></span>
+            <span>Trẻ sơ sinh: <strong className="text-[var(--color-primary)]">{bookingStats.infants}</strong></span>
+            <span>Phòng đơn/đôi/ba: <strong className="text-[var(--color-primary)]">{bookingStats.roomCounts.single}/{bookingStats.roomCounts.double}/{bookingStats.roomCounts.triple}</strong></span>
           </div>
 
           <div className="mb-6 overflow-hidden border border-[#D0C5AF]/40 bg-white shadow-sm">
@@ -1369,7 +1372,7 @@ export default function TourEstimate() {
               <table className="w-full border-collapse text-left">
                 <thead>
                   <tr className="bg-[#D4AF37] text-white shadow-sm">
-                    {['STT', 'Khoáº£n má»¥c', 'NhÃ  cung cáº¥p', 'Dá»‹ch vá»¥', 'ÄÆ¡n vá»‹', 'Äá»‘i tÆ°á»£ng', 'Sá»‘ lÆ°á»£ng', 'Sá»‘ láº§n', 'ÄÆ¡n giÃ¡ Ã¡p dá»¥ng', 'ThÃ nh tiá»n'].map((header) => (
+                    {['STT', 'Khoản mục', 'Nhà cung cấp', 'Dịch vụ', 'Đơn vị', 'Đối tượng', 'Số lượng', 'Số lần', 'Đơn giá áp dụng', 'Thành tiền'].map((header) => (
                       <th key={header} className="whitespace-nowrap px-4 py-4 text-[10px] font-bold uppercase tracking-widest">{header}</th>
                     ))}
                   </tr>
@@ -1438,7 +1441,7 @@ export default function TourEstimate() {
                                 className={`w-32 border px-2 py-1 text-right ${row.unitPriceEditable ? 'border-[#D0C5AF]/40' : 'border-transparent bg-stone-50'}`}
                               />
                               {!row.unitPriceEditable && row.systemManagedPrice && (
-                                <p className="mt-1 text-[10px] text-[var(--color-primary)]/40">ÄÆ¡n giÃ¡ há»‡ thá»‘ng theo báº£ng giÃ¡ Ã¡p dá»¥ng</p>
+                                <p className="mt-1 text-[10px] text-[var(--color-primary)]/40">Đơn giá hệ thống theo bảng giá áp dụng</p>
                               )}
                             </td>
                             <td className="px-4 py-3 text-right font-bold">{formatCurrency(row.total)}</td>
@@ -1450,7 +1453,7 @@ export default function TourEstimate() {
                 </tbody>
                 <tfoot className="bg-[var(--color-surface)]">
                   <tr className="border-t-2 border-[#D0C5AF]/50">
-                    <td colSpan={9} className="px-6 py-5 text-right text-[11px] font-bold uppercase tracking-widest text-[var(--color-primary)]">Tá»•ng dá»± chi:</td>
+                    <td colSpan={9} className="px-6 py-5 text-right text-[11px] font-bold uppercase tracking-widest text-[var(--color-primary)]">Tổng dự chi:</td>
                     <td className="px-6 py-5 text-right text-lg font-bold text-[var(--color-primary)]">{formatCurrency(totalCost)}</td>
                   </tr>
                 </tfoot>
@@ -1466,16 +1469,16 @@ export default function TourEstimate() {
           <div role="dialog" aria-modal="true" className="relative w-full max-w-2xl space-y-5 bg-white p-6 shadow-2xl">
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="font-serif text-2xl text-[var(--color-primary)]">ThÃ´ng tin khÃ¡ch hÃ ng Ä‘áº·t tour</h3>
+                <h3 className="font-serif text-2xl text-[var(--color-primary)]">Thông tin khách hàng đặt tour</h3>
                 <p className="mt-1 font-mono text-xs text-[var(--color-primary)]/50">{guestPopup.bookingCode}</p>
               </div>
               <button onClick={() => setGuestPopup(null)} className="text-[var(--color-primary)]/40 hover:text-[var(--color-primary)]"><span className="material-symbols-outlined">close</span></button>
             </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><span className="text-[var(--color-primary)]/50">TÃªn liÃªn há»‡:</span> <strong>{guestPopup.contactInfo.name}</strong></div>
-              <div><span className="text-[var(--color-primary)]/50">Sá»‘ Ä‘iá»‡n thoáº¡i:</span> <strong>{guestPopup.contactInfo.phone}</strong></div>
+              <div><span className="text-[var(--color-primary)]/50">Tên liên hệ:</span> <strong>{guestPopup.contactInfo.name}</strong></div>
+              <div><span className="text-[var(--color-primary)]/50">Số điện thoại:</span> <strong>{guestPopup.contactInfo.phone}</strong></div>
               <div><span className="text-[var(--color-primary)]/50">Email:</span> <strong>{guestPopup.contactInfo.email}</strong></div>
-              <div><span className="text-[var(--color-primary)]/50">Tá»•ng tiá»n:</span> <strong>{formatCurrency(guestPopup.totalAmount)}</strong></div>
+              <div><span className="text-[var(--color-primary)]/50">Tổng tiền:</span> <strong>{formatCurrency(guestPopup.totalAmount)}</strong></div>
             </div>
           </div>
         </div>
@@ -1483,4 +1486,3 @@ export default function TourEstimate() {
     </div>
   );
 }
-

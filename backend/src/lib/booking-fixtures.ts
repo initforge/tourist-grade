@@ -527,12 +527,6 @@ export async function resetCustomerPublicFixtures(prisma: PrismaClient) {
       title: 'Du thuyen sach, lich trinh gon',
       comment: 'Lich trinh ro rang, du thuyen sach va doi ngu cham soc doan rat ky.',
     },
-    {
-      bookingId: 'B008',
-      rating: 4,
-      title: 'Nghi duong yen tinh',
-      comment: 'Phong dep, resort yen tinh, dich vu spa tot. Mong co them lua chon bua toi ngoai troi.',
-    },
   ];
 
   for (const reviewPayload of reviewPayloads) {
@@ -704,8 +698,8 @@ export async function resetTourProgramFixtures(prisma: PrismaClient) {
         publicContentJson: {
           ...publicContent,
           inactiveReason: null,
-          rejectionReason: null,
-          approvalStatus: 'pending',
+          rejectionReason: 'Thiếu dữ liệu đối tác khách sạn và cần cập nhật lại cấu hình giá.',
+          approvalStatus: 'rejected',
         },
       },
     });

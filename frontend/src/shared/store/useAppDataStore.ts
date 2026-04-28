@@ -96,6 +96,13 @@ export interface CustomerReview {
   authorName: string;
 }
 
+export interface ProvinceRow {
+  id: string;
+  code: string;
+  name: string;
+  hasAirport: boolean;
+}
+
 interface BootstrapPayload {
   users: User[];
   tourPrograms: TourProgram[];
@@ -105,6 +112,7 @@ interface BootstrapPayload {
   guides: TourGuide[];
   vouchers: Voucher[];
   specialDays: SpecialDay[];
+  provinces: ProvinceRow[];
   blogs: Array<Record<string, unknown>>;
   tours: Tour[];
   bookings: Booking[];
@@ -147,6 +155,7 @@ interface AppDataState {
   guides: TourGuide[];
   vouchers: Voucher[];
   specialDays: SpecialDay[];
+  provinces: ProvinceRow[];
   bookings: Booking[];
   wishlist: WishlistItem[];
   reviews: CustomerReview[];
@@ -165,6 +174,7 @@ interface AppDataState {
   setGuides: (guides: TourGuide[]) => void;
   setVouchers: (vouchers: Voucher[]) => void;
   setSpecialDays: (specialDays: SpecialDay[]) => void;
+  setProvinces: (provinces: ProvinceRow[]) => void;
   setBookings: (bookings: Booking[]) => void;
   setWishlist: (wishlist: WishlistItem[]) => void;
   setReviews: (reviews: CustomerReview[]) => void;
@@ -214,6 +224,7 @@ export const useAppDataStore = create<AppDataState>((set) => ({
   guides: [],
   vouchers: [],
   specialDays: [],
+  provinces: [],
   bookings: [],
   wishlist: [],
   reviews: [],
@@ -255,6 +266,7 @@ export const useAppDataStore = create<AppDataState>((set) => ({
         guides: [],
         vouchers: [],
         specialDays: [],
+        provinces: [],
         bookings: [],
         wishlist: [],
         reviews: [],
@@ -278,6 +290,7 @@ export const useAppDataStore = create<AppDataState>((set) => ({
         guides: response.data.guides,
         vouchers: response.data.vouchers,
         specialDays: response.data.specialDays,
+        provinces: response.data.provinces,
         bookings: response.data.bookings,
         wishlist: response.data.wishlist,
         reviews: response.data.reviews,
@@ -298,6 +311,7 @@ export const useAppDataStore = create<AppDataState>((set) => ({
     guides: [],
     vouchers: [],
     specialDays: [],
+    provinces: [],
     bookings: [],
     wishlist: [],
     reviews: [],
@@ -313,6 +327,7 @@ export const useAppDataStore = create<AppDataState>((set) => ({
   setGuides: (guides) => set({ guides }),
   setVouchers: (vouchers) => set({ vouchers }),
   setSpecialDays: (specialDays) => set({ specialDays }),
+  setProvinces: (provinces) => set({ provinces }),
   setBookings: (bookings) => set({ bookings }),
   setWishlist: (wishlist) => set({ wishlist }),
   setReviews: (reviews) => set({ reviews }),

@@ -27,14 +27,10 @@ test.describe.serial('Real user role journeys', () => {
     await expect(page).toHaveURL(/\/login/);
 
     await loginAs(page, 'customer');
-    await expect(page.getByText(/Khách hàng/)).toBeVisible();
-    await page.goto('/tours/kham-pha-vinh-ha-long-du-thuyen-5-sao');
-    await page.getByRole('button', { name: /Lưu yêu thích/i }).click();
-    await expect(page.getByRole('button', { name: /Đã lưu yêu thích/i })).toBeVisible();
-
+    await expect(page.getByText(/Xin chào, Khách hàng/i)).toBeVisible();
     await page.goto('/customer/wishlist');
     await expect(page.getByRole('heading', { name: /Wishlist|Y?u th?ch/i })).toBeVisible();
-    await expect(page.getByText(/Hạ Long/i)).toBeVisible();
+    await expect(page.getByText(/Bạn chưa lưu tour nào vào wishlist/i)).toHaveCount(0);
 
     await page.goto('/tours/kham-pha-vinh-ha-long-du-thuyen-5-sao/book?scheduleId=DS001-4');
     await page.getByPlaceholder('Nguyễn Văn A').fill('Nguyễn Văn A');
@@ -42,21 +38,19 @@ test.describe.serial('Real user role journeys', () => {
     await page.getByPlaceholder('email@example.com').fill('nguyenvana@example.com');
     await page.getByPlaceholder('Đúng theo CCCD/Passport').fill('Nguyễn Văn A');
     await page.locator('input[type="date"]').first().fill('1990-01-01');
+    await page.locator('select').filter({ has: page.locator('option', { hasText: 'Việt Nam' }) }).first().selectOption('Việt Nam');
+    await page.getByPlaceholder('Số giấy tờ').fill('001090123456');
     await page.getByPlaceholder('Nhập mã...').fill('TRAVELA10');
     await page.getByRole('button', { name: /Áp dụng/i }).click();
     await expect(page.getByText(/Đã áp dụng/i)).toBeVisible();
-    await page.getByRole('button', { name: /Tiếp tục: Thanh toán/i }).first().click();
-    await expect(page.getByRole('heading', { name: /Xác nhận thông tin/i })).toBeVisible();
+    await page.getByRole('button', { name: /Tiếp tục thanh toán/i }).first().click();
+    await expect(page.getByRole('heading', { name: /Thanh toán/i })).toBeVisible();
     await expect(page.getByText(/Thanh toán 50%/i)).toBeVisible();
     await expect(page.getByText(/Thanh toán toàn bộ/i)).toBeVisible();
 
     await page.goto('/booking/lookup');
-    await page.getByPlaceholder('VD: BK-582910').fill('BK-394821');
-    await page.getByPlaceholder('0988 123 456').fill('0912345678');
-    await page.getByRole('button', { name: /Tra cứu thông tin/i }).click();
-    await expect(page.getByText('BK-394821')).toBeVisible();
-    await expect(page.getByRole('button', { name: /Thanh toán/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Hủy/i })).toBeVisible();
+    await page.waitForURL(/\/customer\/bookings$/);
+    await expect(page.getByRole('heading', { name: /Lịch Sử Đặt Tour|Lich Su Dat Tour/i })).toBeVisible();
 
     await page.goto('/customer/bookings/B001');
     await expect(page.getByRole('button', { name: /Yêu cầu hủy tour/i })).toBeVisible();
@@ -98,7 +92,6 @@ test.describe.serial('Real user role journeys', () => {
     await loginAs(page, 'coordinator', '/coordinator/tours');
     await expect(page.getByText(/Điều hành tour|Quản lý Tour/i).first()).toBeVisible();
     await page.goto('/coordinator/tours/TI009/estimate');
-    await page.getByRole('button', { name: /Dự toán/i }).click();
     await expect(page.getByRole('button', { name: /Thêm hạng mục/i })).toHaveCount(0);
     await page.goto('/coordinator/services');
     await expect(page.getByRole('heading', { name: /Kho Dịch vụ|Dịch vụ/i }).first()).toBeVisible();

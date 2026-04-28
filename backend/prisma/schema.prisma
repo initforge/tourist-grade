@@ -401,6 +401,15 @@ model SpecialDay {
   @@index([startDate, endDate])
 }
 
+model Province {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  name       String   @unique
+  hasAirport Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
 model Voucher {
   id              String         @id @default(cuid())
   code            String         @unique

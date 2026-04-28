@@ -7,6 +7,7 @@ import {
   UNPAID_BOOKING_CANCEL_REASON,
 } from '../lib/booking-lifecycle.js';
 import {
+  calculateAvailableSeats,
   calculateAgeAtDate,
   calculateVoucherDiscount,
   DEPOSIT_RATIO,
@@ -15,6 +16,7 @@ import {
   isWithinFinalPaymentWindow,
   normalizePaymentStatusAfterPartial,
   OVERDUE_DEPOSIT_CANCEL_REASON,
+  resolveSingleRoomSurcharge,
   validatePassengerAge,
   validatePassengerDocument,
 } from '../lib/customer.js';
@@ -135,6 +137,15 @@ const bookingInclude = {
 } as const;
 
 type BookingWithInclude = Prisma.BookingGetPayload<{ include: typeof bookingInclude }>;
+type BookableInstance = Prisma.TourInstanceGetPayload<{
+  include: {
+    bookings: {
+      include: {
+        passengers: true;
+      };
+    };
+  };
+}>;
 
 type BookingDraftInput = z.infer<typeof createBookingSchema>;
 
@@ -244,6 +255,14 @@ function calculatePassengerSubtotal(
   };
 }
 
+function toDecimalNumber(value: { toNumber?: () => number } | number | null | undefined) {
+  if (typeof value === 'number') {
+    return value;
+  }
+
+  return value?.toNumber?.() ?? 0;
+}
+
 async function resolveProgramBySlug(tourSlug: string) {
   const program = await prisma.tourProgram.findFirst({
     where: {
@@ -290,11 +309,8 @@ function resolveScheduleFromPublicContent(
 
   const schedule =
     publicContent.departureSchedule?.find((item) => item.id === scheduleId)
-    ?? publicContent.departureSchedule?.find((item) => item.instanceCode === scheduleId);
-
-  if (!schedule) {
-    throw notFound('Departure schedule not found');
-  }
+    ?? publicContent.departureSchedule?.find((item) => item.instanceCode === scheduleId)
+    ?? null;
 
   return {
     publicContent,
@@ -310,6 +326,13 @@ async function resolveInstanceForSchedule(programId: string, schedule: { date: s
         programId,
         code: schedule.instanceCode,
       },
+      include: {
+        bookings: {
+          include: {
+            passengers: true,
+          },
+        },
+      },
     });
 
     if (byCode) {
@@ -322,6 +345,13 @@ async function resolveInstanceForSchedule(programId: string, schedule: { date: s
       programId,
       departureDate,
     },
+    include: {
+      bookings: {
+        include: {
+          passengers: true,
+        },
+      },
+    },
   });
 
   if (!instance) {
@@ -329,6 +359,63 @@ async function resolveInstanceForSchedule(programId: string, schedule: { date: s
   }
 
   return instance;
+}
+
+async function resolveInstanceForPublicScheduleId(programId: string, scheduleId: string) {
+  const candidates = [scheduleId];
+  if (scheduleId.includes('-')) {
+    candidates.push(scheduleId.split('-').at(-1) ?? scheduleId);
+  }
+
+  const instance = await prisma.tourInstance.findFirst({
+    where: {
+      programId,
+      code: { in: candidates.filter(Boolean) },
+    },
+    include: {
+      bookings: {
+        include: {
+          passengers: true,
+        },
+      },
+    },
+  });
+
+  if (!instance) {
+    throw notFound('Departure schedule not found');
+  }
+
+  return instance;
+}
+
+function buildBookableSchedule(
+  schedule: {
+    id: string;
+    date: string;
+    priceAdult?: number;
+    priceChild?: number;
+    priceInfant?: number;
+    singleRoomSurcharge?: number;
+  },
+  instance: BookableInstance,
+  publicContent: Record<string, unknown>,
+) {
+  const departureDateKey = instance.departureDate.toISOString().slice(0, 10);
+  return {
+    id: schedule.id,
+    date: schedule.date,
+    priceAdult: toDecimalNumber(instance.priceAdult),
+    priceChild: toDecimalNumber(instance.priceChild),
+    priceInfant: instance.priceInfant == null ? 0 : toDecimalNumber(instance.priceInfant),
+    singleRoomSurcharge:
+      typeof schedule.singleRoomSurcharge === 'number'
+        ? schedule.singleRoomSurcharge
+        : resolveSingleRoomSurcharge(publicContent, departureDateKey),
+    availableSeats: calculateAvailableSeats(instance, instance.bookings),
+    totalSlots: instance.expectedGuests,
+    bookingDeadlineAt: instance.bookingDeadlineAt.toISOString(),
+    instanceCode: instance.code,
+  };
 }
 
 async function resolveVoucher(programId: string, promoCode: string) {
@@ -359,7 +446,14 @@ async function resolveVoucher(programId: string, promoCode: string) {
 
 async function buildBookingDraft(program: Awaited<ReturnType<typeof resolveProgramBySlug>>, input: BookingDraftInput) {
   const { publicContent, schedule } = resolveScheduleFromPublicContent(program, input.scheduleId);
-  const instance = await resolveInstanceForSchedule(program.id, schedule);
+  const instance = schedule
+    ? await resolveInstanceForSchedule(program.id, schedule)
+    : await resolveInstanceForPublicScheduleId(program.id, input.scheduleId);
+  const resolvedSchedule = schedule ?? {
+    id: input.scheduleId,
+    date: instance.departureDate.toISOString().slice(0, 10),
+  };
+  const bookableSchedule = buildBookableSchedule(resolvedSchedule, instance, publicContent);
 
   if (!phonePattern.test(input.contact.phone.replace(/\s+/g, ''))) {
     throw badRequest('So dien thoai khong hop le');
@@ -388,8 +482,8 @@ async function buildBookingDraft(program: Awaited<ReturnType<typeof resolveProgr
     throw badRequest('Khong the chon thanh toan 50% khi con duoi 7 ngay toi ngay khoi hanh');
   }
 
-  const { counts, subtotal, singleRoomSupplement } = calculatePassengerSubtotal(input.passengers, schedule);
-  const availableSeats = typeof schedule.availableSeats === 'number' ? schedule.availableSeats : instance.expectedGuests;
+  const { counts, subtotal, singleRoomSupplement } = calculatePassengerSubtotal(input.passengers, bookableSchedule);
+  const availableSeats = bookableSchedule.availableSeats;
   if (input.passengers.length > availableSeats) {
     throw badRequest('So luong hanh khach vuot qua cho trong con lai');
   }
@@ -406,7 +500,7 @@ async function buildBookingDraft(program: Awaited<ReturnType<typeof resolveProgr
     program,
     instance,
     publicContent,
-    schedule,
+    schedule: bookableSchedule,
     counts,
     subtotal,
     totalAmount,

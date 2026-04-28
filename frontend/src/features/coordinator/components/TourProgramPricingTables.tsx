@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { MEAL_LABELS } from '@entities/tour-program/data/tourProgram';
+import { useAppDataStore } from '@shared/store/useAppDataStore';
 
 type Transport = 'xe' | 'maybay';
 type LodgingStandard = '2 sao' | '3 sao' | '4 sao' | '5 sao' | '';
@@ -464,7 +465,21 @@ function formatMoney(value: number) {
 }
 
 function roundToThousand(value: number) {
-  return Math.round(value / 1000) * 1000;
+  return Math.ceil(value / 1000) * 1000;
+}
+
+function extractSpotsFromText(source: string, sightseeingSpots: string[]) {
+  const normalizedSource = source.toLowerCase();
+  return sightseeingSpots.filter((spot) => normalizedSource.includes(spot.toLowerCase()));
+}
+
+function extractHotelStandard(source: string): Exclude<LodgingStandard, ''> {
+  const matched = source.match(/([2-5])\s*sao/i);
+  const value = matched?.[1];
+  if (value === '2' || value === '3' || value === '4' || value === '5') {
+    return `${value} sao`;
+  }
+  return '3 sao';
 }
 
 function normalizeDefaults<T extends BaseSelection>(rows: T[]) {
@@ -625,11 +640,108 @@ export default function TourProgramPricingTables({
   onValidationChange,
   hideActionColumn = false,
 }: Props) {
+  const suppliers = useAppDataStore((state) => state.suppliers);
+  const services = useAppDataStore((state) => state.services);
   const [internalValue, setInternalValue] = useState<PricingTablesValue>(() => emptyValue());
   const [picker, setPicker] = useState<PickerState | null>(null);
   const lastSummaryRef = useRef('');
   const lastValidationRef = useRef('');
   const pricingValue = value ?? internalValue;
+  const transportOptions = useMemo<TransportOption[]>(() => suppliers
+    .filter((supplier) => supplier.category === 'Vận chuyển')
+    .map((supplier) => {
+      const roadServices = supplier.services.filter((item) => item.transportType === 'Xe' || item.name.toLowerCase().includes('xe'));
+      return {
+        id: `${supplier.id}-transport`,
+        supplierName: supplier.name,
+        operatingArea: supplier.operatingArea || supplier.address || '-',
+        serviceLabel: roadServices.map((item) => item.name).join(', '),
+      };
+    })
+    .filter((item) => item.serviceLabel.trim().length > 0), [suppliers]);
+  const flightOptions = useMemo<FlightOption[]>(() => suppliers
+    .filter((supplier) => supplier.category === 'Vận chuyển')
+    .map((supplier) => {
+      const flightServices = supplier.services.filter((item) => item.transportType === 'Máy bay' || item.name.toLowerCase().includes('vé'));
+      const lastCollaboration = flightServices
+        .flatMap((item) => item.prices)
+        .map((item) => item.fromDate)
+        .sort()
+        .at(-1) ?? '';
+      return {
+        id: `${supplier.id}-flight`,
+        supplierName: supplier.name,
+        collaborationCount: flightServices.reduce((sum, item) => sum + Math.max(1, item.prices.length), 0),
+        lastCollaboration,
+      };
+    })
+    .filter((item) => item.collaborationCount > 0), [suppliers]);
+  const hotelOptions = useMemo<HotelOption[]>(() => suppliers
+    .filter((supplier) => supplier.category === 'Khách sạn')
+    .reduce<HotelOption[]>((result, supplier) => {
+      const single = supplier.services.find((item) => item.name.toLowerCase().includes('đơn'));
+      const double = supplier.services.find((item) => item.name.toLowerCase().includes('đôi'));
+      const triple = supplier.services.find((item) => item.name.toLowerCase().includes('ba'));
+      if (!single || !double || !triple) return result;
+      result.push({
+        id: supplier.id,
+        supplierName: supplier.name,
+        address: supplier.address || supplier.operatingArea || '-',
+        city: extractSpotsFromText(`${supplier.address} ${supplier.operatingArea}`, sightseeingSpots)[0] ?? supplier.operatingArea.split(',')[0]?.trim() ?? '',
+        standard: extractHotelStandard(`${supplier.service} ${supplier.description}`),
+        singlePrices: single.prices.map((price): DatedPrice => ({ startDate: price.fromDate, endDate: price.toDate || undefined, price: price.unitPrice })),
+        doublePrices: double.prices.map((price): DatedPrice => ({ startDate: price.fromDate, endDate: price.toDate || undefined, price: price.unitPrice })),
+        triplePrices: triple.prices.map((price): DatedPrice => ({ startDate: price.fromDate, endDate: price.toDate || undefined, price: price.unitPrice })),
+      });
+      return result;
+    }, []), [sightseeingSpots, suppliers]);
+  const mealOptions = useMemo<MealOption[]>(() => suppliers
+    .flatMap((supplier) => supplier.mealServices.map((service) => ({
+      id: service.id,
+      supplierName: supplier.name,
+      serviceName: service.name,
+      description: service.description || service.menu || '',
+      address: supplier.address || supplier.operatingArea || '-',
+      spots: extractSpotsFromText(`${supplier.address} ${supplier.operatingArea}`, sightseeingSpots),
+      prices: service.prices.map((price) => ({ startDate: price.fromDate, endDate: price.toDate || undefined, price: price.unitPrice })),
+    }))), [sightseeingSpots, suppliers]);
+  const attractionOptions = useMemo<AttractionOption[]>(() => services
+    .filter((service) => service.category === 'Vé tham quan')
+    .map((service) => {
+      const adultPrices = service.prices
+        .filter((price) => !price.note || price.note.toLowerCase().includes('người lớn'))
+        .map((price) => ({ startDate: price.effectiveDate, endDate: price.endDate || undefined, price: price.unitPrice }));
+      const childPrices = service.setup === 'Theo độ tuổi'
+        ? service.prices
+          .filter((price) => price.note.toLowerCase().includes('trẻ em'))
+          .map((price) => ({ startDate: price.effectiveDate, endDate: price.endDate || undefined, price: price.unitPrice }))
+        : adultPrices;
+      return {
+        id: service.id,
+        serviceName: service.name,
+        description: service.description,
+        address: service.province || service.contactInfo || '-',
+        spots: service.province ? [service.province] : sightseeingSpots,
+        adultPrices,
+        childPrices: childPrices.length > 0 ? childPrices : adultPrices,
+      };
+    }), [services, sightseeingSpots]);
+  const otherOptions = useMemo<OtherOption[]>(() => services
+    .filter((service) => service.category !== 'Vé tham quan')
+    .map((service) => ({
+      id: service.id,
+      supplierName: service.supplierName || '-',
+      serviceName: service.name,
+      priceMode: service.priceMode as OtherOption['priceMode'],
+      formulaCount: (service.formulaCount as OtherOption['formulaCount']) ?? 'Giá trị mặc định',
+      formulaCountDefault: service.formulaCountDefault ? Number(service.formulaCountDefault) : undefined,
+      formulaQuantity: (service.formulaQuantity as OtherOption['formulaQuantity']) ?? 'Theo số người',
+      formulaQuantityDefault: service.formulaQuantityDefault && !Number.isNaN(Number(service.formulaQuantityDefault))
+        ? Number(service.formulaQuantityDefault)
+        : undefined,
+      prices: service.prices.map((price) => ({ startDate: price.effectiveDate, endDate: price.endDate || undefined, price: price.unitPrice })),
+      isInsurance: service.name.toLowerCase().includes('bảo hiểm'),
+    })), [services]);
 
   const updateValue = (updater: PricingTablesValue | ((current: PricingTablesValue) => PricingTablesValue)) => {
     const next = typeof updater === 'function' ? updater(pricingValue) : updater;

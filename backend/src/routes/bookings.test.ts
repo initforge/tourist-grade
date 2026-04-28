@@ -3,7 +3,17 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = {
+  tourProgram: {
+    findFirst: vi.fn(),
+  },
+  tourInstance: {
+    findFirst: vi.fn(),
+  },
+  voucher: {
+    findFirst: vi.fn(),
+  },
   booking: {
+    create: vi.fn(),
     findFirst: vi.fn(),
     findMany: vi.fn(),
     findUnique: vi.fn(),
@@ -114,6 +124,7 @@ function createTestApp() {
 describe('bookings routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.voucher.findFirst.mockResolvedValue(null);
     prismaMock.booking.updateMany.mockResolvedValue({ count: 0 });
     prismaMock.booking.findMany.mockResolvedValue([]);
     prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => Promise<unknown>) => callback(prismaMock));
@@ -204,5 +215,118 @@ describe('bookings routes', () => {
     expect(response.status).toBe(401);
     expect(response.body.message).toBe('Contact verification failed');
     expect(prismaMock.booking.update).not.toHaveBeenCalled();
+  });
+
+  it('creates a public booking from the live tour instance price instead of a stale public schedule snapshot', async () => {
+    prismaMock.tourProgram.findFirst.mockResolvedValue({
+      id: 'program-1',
+      code: 'TP001',
+      slug: 'kham-pha-vinh-ha-long-du-thuyen-5-sao',
+      publicContentJson: {
+        id: 'T001',
+        slug: 'kham-pha-vinh-ha-long-du-thuyen-5-sao',
+        departureSchedule: [
+          {
+            id: 'DS001-2',
+            instanceCode: 'TI009',
+            date: '2026-05-22',
+            priceAdult: 72000,
+            priceChild: 36000,
+            priceInfant: 0,
+            availableSeats: 20,
+          },
+        ],
+      },
+    });
+    prismaMock.tourInstance.findFirst.mockResolvedValue({
+      id: 'instance-1',
+      code: 'TI009',
+      programId: 'program-1',
+      departureDate: new Date('2026-05-22T00:00:00.000Z'),
+      bookingDeadlineAt: new Date('2026-05-10T00:00:00.000Z'),
+      expectedGuests: 20,
+      minParticipants: 10,
+      priceAdult: { toNumber: () => 7200000 },
+      priceChild: { toNumber: () => 3600000 },
+      priceInfant: { toNumber: () => 0 },
+      bookings: [],
+    });
+    prismaMock.booking.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+      ...createBookingFixture(),
+      id: 'B900',
+      bookingCode: 'BK-900001',
+      status: 'BOOKED',
+      paymentStatus: 'UNPAID',
+      tourInstance: {
+        ...createBookingFixture().tourInstance,
+        id: 'instance-1',
+        code: 'TI009',
+        programNameSnapshot: 'Khám Phá Vịnh Hạ Long - Du Thuyền 5 Sao',
+        departureDate: new Date('2026-05-22T00:00:00.000Z'),
+        program: {
+          ...createBookingFixture().tourInstance.program,
+          code: 'TP001',
+          slug: 'kham-pha-vinh-ha-long-du-thuyen-5-sao',
+          durationDays: 3,
+          durationNights: 2,
+          publicContentJson: { id: 'T001' },
+        },
+      },
+      totalAmount: 7200000,
+      remainingAmount: 7200000,
+      paidAmount: 0,
+      payloadJson: data.payloadJson,
+      passengers: [
+        {
+          id: 'P900',
+          bookingId: 'B900',
+          type: 'ADULT',
+          fullName: 'Nguyen Van A',
+          dateOfBirth: new Date('1990-01-01T00:00:00.000Z'),
+          gender: 'MALE',
+          cccd: '001090123456',
+          nationality: 'Việt Nam',
+          singleRoomSupplement: 0,
+          createdAt: new Date('2026-04-28T00:00:00.000Z'),
+        },
+      ],
+    }));
+
+    const response = await request(createTestApp())
+      .post('/public')
+      .send({
+        tourSlug: 'kham-pha-vinh-ha-long-du-thuyen-5-sao',
+        scheduleId: 'DS001-2',
+        contact: {
+          name: 'Nguyen Van A',
+          phone: '0901234567',
+          email: 'nguyenvana@example.com',
+          note: '',
+        },
+        passengers: [
+          {
+            type: 'adult',
+            name: 'Nguyen Van A',
+            dob: '1990-01-01',
+            gender: 'male',
+            cccd: '001090123456',
+            nationality: 'Việt Nam',
+          },
+        ],
+        roomCounts: { single: 0, double: 1, triple: 0 },
+        promoCode: '',
+        paymentRatio: 'full',
+        paymentMethod: 'bank',
+      });
+
+    expect(response.status).toBe(201);
+    expect(prismaMock.booking.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        totalAmount: 7200000,
+        remainingAmount: 7200000,
+        discountAmount: 0,
+      }),
+    }));
+    expect(response.body.booking.totalAmount).toBe(7200000);
   });
 });

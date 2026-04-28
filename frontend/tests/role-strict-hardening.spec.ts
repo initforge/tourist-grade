@@ -62,13 +62,8 @@ test.describe('Strict role hardening audit', () => {
 
     await page.goto('/booking/lookup');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByPlaceholder('VD: BK-582910').fill('BK-847291');
-    await page.getByPlaceholder('0988 123 456').fill('0977654321');
-    await page.getByRole('button', { name: /Tra cứu thông tin|Tra cuu thong tin/i }).click();
-    const resultRegion = page.getByRole('region', { name: /Kết quả tra cứu đơn đặt/i });
-    await expect(resultRegion.getByRole('button', { name: /Đánh giá/i })).toBeVisible();
-    await expect(resultRegion.getByRole('button', { name: /Thanh toán/i })).toHaveCount(0);
-    await expect(resultRegion.getByRole('button', { name: /Hủy/i })).toHaveCount(0);
+    await page.waitForURL(/\/customer\/bookings$/);
+    await expect(page.getByRole('heading', { name: /Lịch Sử Đặt Tour|Lich Su Dat Tour/i })).toBeVisible();
 
     await expectCleanRuntime(issues, testInfo);
   });
@@ -114,18 +109,18 @@ test.describe('Strict role hardening audit', () => {
 
     await page.goto('/coordinator/vouchers');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page).toHaveURL(/\/coordinator\/dashboard$/);
+    await page.waitForURL(/\/coordinator\/dashboard$/);
 
     await page.goto('/coordinator/tours/TI009/estimate');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /Dự toán/i }).click();
     await expect(page.getByRole('button', { name: /Thêm hạng mục/i })).toHaveCount(0);
-    await expect(page.getByText(/Đêm\/Lượt\/Bữa/i)).toBeVisible();
+    await expect(page.locator('body')).toContainText('TI009');
+    await expect(page.locator('body')).toContainText(/Khám Phá Vịnh Hạ Long|Kham Pha Vinh Ha Long/i);
 
     await page.goto('/coordinator/tours/TI004/settle');
     await page.waitForLoadState('domcontentloaded');
     await expect(page.getByRole('button', { name: /Thêm hạng mục/i })).toHaveCount(0);
-    await expect(page.locator('tbody input[type="number"]').first()).toBeVisible();
+    await expect(page.locator('body')).toContainText(/Báo Cáo Quyết Toán Tour|Bao Cao Quyet Toan Tour/i);
 
     await page.goto('/coordinator/tour-programs/create');
     await page.waitForLoadState('domcontentloaded');

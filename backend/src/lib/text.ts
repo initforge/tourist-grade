@@ -1,59 +1,76 @@
-﻿const MOJIBAKE_PATTERN = /[\u00c3\u00c2\u00c4]/;
+const suspiciousPattern = /(?:\u00c3\u0192.|\u00c3\u201a.|\u00c3\u201e.|\u00c3\u2020.|\u00c3\u00a1\u00c2\u00bb.|\u00c3\u00a1\u00c2\u00ba.|ï¿½)/;
+const suspiciousCharacters = /[\u00c3\u00c2\u0192\u00d2]|ï¿½/g;
 
-const KNOWN_CORRUPT_TEXT: Record<string, string> = {
-  'S?n bay Cam Ranh - Amanoi': '\u0053\u00e2\u006e\u0020\u0062\u0061\u0079\u0020\u0043\u0061\u006d\u0020\u0052\u0061\u006e\u0068\u0020\u002d\u0020\u0041\u006d\u0061\u006e\u006f\u0069',
-  'Check-in bi?t th? ngh? d??ng.': '\u0043\u0068\u0065\u0063\u006b\u002d\u0069\u006e\u0020\u0062\u0069\u1ec7\u0074\u0020\u0074\u0068\u1ef1\u0020\u006e\u0067\u0068\u1ec9\u0020\u0064\u01b0\u1ee1\u006e\u0067\u002e',
-  'H?nh tr?nh n??c': '\u0048\u00e0\u006e\u0068\u0020\u0074\u0072\u00ec\u006e\u0068\u0020\u006e\u01b0\u1edb\u0063',
-  'Du thuy?n ri?ng v? snorkeling.': '\u0044\u0075\u0020\u0074\u0068\u0075\u0079\u1ec1\u006e\u0020\u0072\u0069\u00ea\u006e\u0067\u0020\u0076\u00e0\u0020\u0073\u006e\u006f\u0072\u006b\u0065\u006c\u0069\u006e\u0067\u002e',
-  'Du thuy?n': '\u0044\u0075\u0020\u0074\u0068\u0075\u0079\u1ec1\u006e',
-  'T?m bi?t': '\u0054\u1ea1\u006d\u0020\u0062\u0069\u1ec7\u0074',
-  'Tr? ph?ng v? ra s?n bay.': '\u0054\u0072\u1ea3\u0020\u0070\u0068\u00f2\u006e\u0067\u0020\u0076\u00e0\u0020\u0072\u0061\u0020\u0073\u00e2\u006e\u0020\u0062\u0061\u0079\u002e',
-  'Tr? ph?ng': '\u0054\u0072\u1ea3\u0020\u0070\u0068\u00f2\u006e\u0067',
-  'H? N?i - Osaka': '\u0048\u00e0\u0020\u004e\u1ed9\u0069\u0020\u002d\u0020\u004f\u0073\u0061\u006b\u0061',
-  'Bay th?ng ??n Osaka.': '\u0042\u0061\u0079\u0020\u0074\u0068\u1eb3\u006e\u0067\u0020\u0111\u1ebf\u006e\u0020\u004f\u0073\u0061\u006b\u0061\u002e',
-  'Nh?n ph?ng': '\u004e\u0068\u1ead\u006e\u0020\u0070\u0068\u00f2\u006e\u0067',
-  'C? ?? Kyoto': '\u0043\u1ed1\u0020\u0111\u00f4\u0020\u004b\u0079\u006f\u0074\u006f',
-  'Th?m Kinkakuji v? tr?i nghi?m tr? ??o.': '\u0054\u0068\u0103\u006d\u0020\u004b\u0069\u006e\u006b\u0061\u006b\u0075\u006a\u0069\u0020\u0076\u00e0\u0020\u0074\u0072\u1ea3\u0069\u0020\u006e\u0067\u0068\u0069\u1ec7\u006d\u0020\u0074\u0072\u00e0\u0020\u0111\u1ea1\u006f\u002e',
-  'Tr? ??o': '\u0054\u0072\u00e0\u0020\u0111\u1ea1\u006f',
-  'R?ng tr?c v? b?a t?i Kaiseki.': '\u0052\u1eeb\u006e\u0067\u0020\u0074\u0072\u00fa\u0063\u0020\u0076\u00e0\u0020\u0062\u1eefa\u0020\u0074\u1ed1\u0069\u0020\u004b\u0061\u0069\u0073\u0065\u006b\u0069\u002e',
-  'R?ng tr?c': '\u0052\u1eeb\u006e\u0067\u0020\u0074\u0072\u00fa\u0063',
-  'Osaka - H? N?i': '\u004f\u0073\u0061\u006b\u0061\u0020\u002d\u0020\u0048\u00e0\u0020\u004e\u1ed9\u0069',
-  'Onsen s?ng v? k?t th?c h?nh tr?nh.': '\u004f\u006e\u0073\u0065\u006e\u0020\u0073\u00e1\u006e\u0067\u0020\u0076\u00e0\u0020\u006b\u1ebf\u0074\u0020\u0074\u0068\u00fa\u0063\u0020\u0068\u00e0\u006e\u0068\u0020\u0074\u0072\u00ec\u006e\u0068\u002e',
-  'V? m?y bay': '\u0056\u00e9\u0020\u006d\u00e1\u0079\u0020\u0062\u0061\u0079',
-  'Kh?ch s?n 4 sao': '\u004b\u0068\u00e1\u0063\u0068\u0020\u0073\u1ea1\u006e\u0020\u0034\u0020\u0073\u0061\u006f',
-  '?n theo ch??ng tr?nh': '\u0102\u006e\u0020\u0074\u0068\u0065\u006f\u0020\u0063\u0068\u01b0\u01a1\u006e\u0067\u0020\u0074\u0072\u00ec\u006e\u0068',
-  'B?o hi?m': '\u0042\u1ea3\u006f\u0020\u0068\u0069\u1ec3\u006d',
-  'Tr? em 2-11 tu?i t?nh 81% gi? ng??i l?n.': '\u0054\u0072\u1ebb\u0020\u0065\u006d\u0020\u0032\u002d\u0031\u0031\u0020\u0074\u0075\u1ed5\u0069\u0020\u0074\u00ed\u006e\u0068\u0020\u0038\u0031\u0025\u0020\u0067\u0069\u00e1\u0020\u006e\u0067\u01b0\u1eddi\u0020\u006c\u1edb\u006e\u002e',
-  'Xe 16 chá»—': '\u0058\u0065\u0020\u0031\u0036\u0020\u0063\u0068\u1ed7',
-  'Xe 25 chá»—': '\u0058\u0065\u0020\u0032\u0035\u0020\u0063\u0068\u1ed7',
-  'KhÒ¡ch HÒ ng Demo': '\u004b\u0068\u00e1\u0063\u0068\u0020\u0048\u00e0\u006e\u0067\u0020\u0044\u0065\u006d\u006f',
-  'NhÒ¢n ViÒªn Kinh Doanh': '\u004e\u0068\u00e2\u006e\u0020\u0056\u0069\u00ea\u006e\u0020\u004b\u0069\u006e\u0068\u0020\u0044\u006f\u0061\u006e\u0068',
-  'Quáº£n lÒ½ kinh doanh': '\u0051\u0075\u1ea3\u006e\u0020\u006c\u00fd\u0020\u006b\u0069\u006e\u0068\u0020\u0064\u006f\u0061\u006e\u0068',
-  'MÒ¡y bay': '\u004d\u00e1\u0079\u0020\u0062\u0061\u0079',
-};
+const collapsePairs: Array<[RegExp, string]> = [
+  [/\u00c3\u0192\u00c2/g, '\u00c3'],
+  [/\u00c3\u00a0\u00c2/g, '\u00e0'],
+  [/\u00c3\u00a1\u00c2/g, '\u00e1'],
+  [/\u00c3\u00a2\u00c2/g, '\u00e2'],
+  [/\u00c3\u00a3\u00c2/g, '\u00e3'],
+  [/\u00c3\u00a8\u00c2/g, '\u00e8'],
+  [/\u00c3\u00a9\u00c2/g, '\u00e9'],
+  [/\u00c3\u00aa\u00c2/g, '\u00ea'],
+  [/\u00c3\u00ac\u00c2/g, '\u00ec'],
+  [/\u00c3\u00ad\u00c2/g, '\u00ed'],
+  [/\u00c3\u00b2\u00c2/g, '\u00f2'],
+  [/\u00c3\u00b3\u00c2/g, '\u00f3'],
+  [/\u00c3\u00b4\u00c2/g, '\u00f4'],
+  [/\u00c3\u00b5\u00c2/g, '\u00f5'],
+  [/\u00c3\u00b9\u00c2/g, '\u00f9'],
+  [/\u00c3\u00ba\u00c2/g, '\u00fa'],
+  [/\u00c3\u00bd\u00c2/g, '\u00fd'],
+  [/\u00c2/g, ''],
+];
 
-function decodeLatin1Utf8(value: string) {
-  return Buffer.from(value, 'latin1').toString('utf8');
+function decodeUtf8FromSingleByteString(value: string) {
+  const bytes = Uint8Array.from(Array.from(value, (char) => char.charCodeAt(0) & 255));
+  return new TextDecoder('utf-8').decode(bytes);
+}
+
+function collapseDoubleMojibake(value: string) {
+  return collapsePairs.reduce((current, [pattern, next]) => current.replace(pattern, next), value);
+}
+
+function scoreCandidate(value: string) {
+  const suspicious = (value.match(suspiciousPattern) ?? []).length;
+  const suspiciousChars = (value.match(suspiciousCharacters) ?? []).length;
+  const replacement = (value.match(/�/g) ?? []).length;
+  const vietnamese = (value.match(/[àáảãạăắằẳẵặâấầẩẫậđèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵ]/gi) ?? []).length;
+  const readable = (value.match(/[a-z0-9\s,./:;()%-]/gi) ?? []).length;
+  return (vietnamese * 3) + readable - (suspicious * 6) - (suspiciousChars * 5) - (replacement * 8);
 }
 
 export function normalizeText(value: string) {
-  if (value.startsWith('data:')) return value;
-
-  if (value.includes('Di S') && value.includes('Vi')) return '\u004b\u0068\u00e1\u0063\u0068\u0020\u0073\u1ea1\u006e\u0020\u0044\u0069\u0020\u0053\u1ea3\u006e\u0020\u0056\u0069\u1ec7\u0074';
-  if (value.includes('canh') && value.includes('ng')) return '\u0036\u0020\u006d\u00f3\u006e\u0020\u002b\u0020\u0063\u0061\u006e\u0068\u0020\u002b\u0020\u0074\u0072\u00e1\u006e\u0067\u0020\u006d\u0069\u1ec7\u006e\u0067';
-  if (value.includes('Xuy') && value.includes('Vi')) return '\u0056\u1ead\u006e\u0020\u0074\u1ea3\u0069\u0020\u0058\u0075\u0079\u00ea\u006e\u0020\u0056\u0069\u1ec7\u0074';
-
-  if (KNOWN_CORRUPT_TEXT[value]) return KNOWN_CORRUPT_TEXT[value];
-  if (!MOJIBAKE_PATTERN.test(value)) return value;
-
-  let current = value;
-  for (let index = 0; index < 3 && MOJIBAKE_PATTERN.test(current); index += 1) {
-    const decoded = decodeLatin1Utf8(current);
-    if (decoded === current || decoded.includes('\ufffd')) break;
-    current = decoded;
+  if (!value || value.startsWith('data:')) {
+    return value;
   }
 
-  return KNOWN_CORRUPT_TEXT[current] ?? current;
+  const candidates = [value];
+  let current = collapseDoubleMojibake(value);
+  if (!candidates.includes(current)) {
+    candidates.push(current);
+  }
+
+  for (let index = 0; index < 3; index += 1) {
+    const decoded = decodeUtf8FromSingleByteString(current);
+    if (!decoded || decoded === current) {
+      break;
+    }
+
+    candidates.push(decoded);
+    current = collapseDoubleMojibake(decoded);
+    if (!candidates.includes(current)) {
+      candidates.push(current);
+    }
+
+    if (!suspiciousPattern.test(current)) {
+      break;
+    }
+  }
+
+  return candidates.reduce((currentBest, candidate) => (
+    scoreCandidate(candidate) > scoreCandidate(currentBest) ? candidate : currentBest
+  ), value);
 }
 
 export function normalizePayload<T>(payload: T): T {

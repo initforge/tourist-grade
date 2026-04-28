@@ -3,6 +3,7 @@ import { expireOverdueDepositBookings, expireUnpaidBookings } from '../lib/booki
 import { asyncHandler } from '../lib/http.js';
 import {
   mapBooking,
+  mapProvince,
   mapService,
   mapSpecialDay,
   mapSupplier,
@@ -33,6 +34,7 @@ export function createBootstrapRouter() {
       guides,
       vouchers,
       specialDays,
+      provinces,
       blogs,
       bookings,
       wishlistItems,
@@ -66,6 +68,7 @@ export function createBootstrapRouter() {
         orderBy: { createdAt: 'desc' },
       }),
       prisma.specialDay.findMany({ orderBy: { startDate: 'asc' } }),
+      prisma.province.findMany({ orderBy: { name: 'asc' } }),
       prisma.blogPost.findMany({ orderBy: { createdAt: 'desc' } }),
       prisma.booking.findMany({
         include: {
@@ -117,6 +120,7 @@ export function createBootstrapRouter() {
         guides: guides.map(mapTourGuide),
         vouchers: vouchers.map(mapVoucher),
         specialDays: specialDays.map(mapSpecialDay),
+        provinces: provinces.map(mapProvince),
         blogs,
         tours: tourPrograms
           .map((program) => program.publicContentJson)

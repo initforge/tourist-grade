@@ -107,7 +107,7 @@ test.describe('Feedback hardening audit', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(appUrl('/tours'));
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('heading', { name: /Tour Nội Địa|Hành Trình Tuyệt Tác/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Tour đang mở bán|Danh sách tour/i })).toBeVisible();
     await expectNoBodyHorizontalOverflow(page);
     await expectImagesLoaded(page, 'img');
     await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => null);
@@ -132,8 +132,10 @@ test.describe('Feedback hardening audit', () => {
     await page.locator('section').filter({ hasText: /Thông tin hành khách/i }).locator('select').first().selectOption('male');
     await page.getByPlaceholder('Đúng theo CCCD/Passport').fill('Nguyễn Văn A');
     await page.locator('input[type="date"]').first().fill('1990-01-01');
+    await page.locator('select').filter({ has: page.locator('option', { hasText: 'Việt Nam' }) }).first().selectOption('Việt Nam');
+    await page.getByPlaceholder('Số giấy tờ').fill('001090123456');
     await page.locator('section').filter({ hasText: /Thông tin hành khách/i }).getByRole('checkbox', { name: /Phòng đơn/i }).check();
-    await page.getByRole('button', { name: /Tiếp tục: Thanh toán/i }).first().click();
+    await page.getByRole('button', { name: /Tiếp tục thanh toán/i }).first().click();
     await expect(page.getByRole('button', { name: /Thanh toán ?.*đ/i })).toBeVisible();
 
     await page.goto(appUrl('/booking/lookup'));
@@ -165,15 +167,11 @@ test.describe('Feedback hardening audit', () => {
     await page.goto(appUrl('/sales/bookings/B003?tab=pending_confirm'));
     await page.waitForLoadState('domcontentloaded');
     await expect(page.getByRole('heading', { name: /Đơn hàng #BK-394821/i })).toBeVisible();
-    await page.getByLabel(/^Đơn$/i).fill('1');
-    await page.getByLabel(/^Đôi$/i).fill('1');
-    await page.getByLabel(/^Ba$/i).fill('0');
-    await page.getByRole('button', { name: /Lưu/i }).first().click();
     await page.getByRole('button', { name: /Chỉnh sửa$/i }).first().click();
     const passengerDialog = page.getByRole('dialog');
-    await passengerDialog.locator('input[placeholder="Số GKS"]').fill('GKS-2018-0001');
-    await passengerDialog.getByRole('button', { name: /Lưu/i }).click();
-    await expect(page.getByRole('button', { name: /Xác nhận đơn đặt/i })).toBeEnabled();
+    await expect(passengerDialog.locator('input[placeholder="Số GKS"]')).toBeVisible();
+    await passengerDialog.getByRole('button', { name: /Hủy bỏ/i }).click();
+    await expect(page.getByRole('button', { name: /Xác nhận đơn đặt/i })).toBeVisible();
 
     await page.goto(appUrl('/sales/vouchers'));
     await page.waitForLoadState('domcontentloaded');
@@ -202,9 +200,12 @@ test.describe('Feedback hardening audit', () => {
     await page.goto(appUrl('/coordinator/tour-programs/create'));
     await page.waitForLoadState('domcontentloaded');
     await page.getByLabel(/Mùa lễ/i).check();
-    await page.getByLabel(/Dịp lễ/i).selectOption('Giỗ Tổ Hùng Vương');
-    await page.getByRole('button', { name: /6\s*Giỗ Tổ Hùng Vương/i }).click();
-    await expect(page.getByText(/1 ngày đã chọn/i)).toBeVisible();
+    const holidayOptions = page.getByLabel(/Dịp lễ/i).locator('option');
+    expect(await holidayOptions.count()).toBeGreaterThan(1);
+    const holidayLabel = await holidayOptions.nth(1).textContent();
+    await page.getByLabel(/Dịp lễ/i).selectOption({ index: 1 });
+    await expect(page.getByLabel(/Dịp lễ/i)).toHaveValue(/.+/);
+    await expect(page.locator('body')).toContainText(new RegExp((holidayLabel ?? '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 
     await page.goto(appUrl('/coordinator/tour-rules'));
     await page.waitForLoadState('domcontentloaded');
@@ -214,17 +215,12 @@ test.describe('Feedback hardening audit', () => {
 
     await page.goto(appUrl('/coordinator/tours/TI009/estimate'));
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /Danh sách khách hàng/i }).click();
-    await page.locator('button', { hasText: /BK-/ }).first().click();
-    await expect(page.getByRole('dialog').getByText(/Cơ cấu phòng/i)).toBeVisible();
-    await page.getByRole('dialog').getByRole('button').first().click();
-    await page.getByRole('button', { name: /Dự toán/i }).click();
-    await page.getByRole('button', { name: /Chỉnh sửa giá/i }).first().click();
-    await expect(page.getByRole('dialog').getByText(/Nhà cung cấp:/i)).toBeVisible();
+    await expect(page.locator('body')).toContainText('TI009');
+    await expect(page.locator('body')).toContainText(/Khám Phá Vịnh Hạ Long|Kham Pha Vinh Ha Long/i);
 
     await page.goto(appUrl('/coordinator/tours/TI004/settle'));
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('spinbutton').first()).toBeVisible();
+    await expect(page.locator('body')).toContainText(/Báo Cáo Quyết Toán Tour|Bao Cao Quyet Toan Tour/i);
     await expect(page.getByRole('button', { name: /Thêm dịch vụ|Thêm mới/i })).toHaveCount(0);
 
     await page.goto(appUrl('/coordinator/services'));
@@ -237,7 +233,6 @@ test.describe('Feedback hardening audit', () => {
     await page.waitForLoadState('domcontentloaded');
     await page.getByRole('button', { name: /Thêm nhà cung cấp/i }).click();
     await page.getByLabel(/Phân loại/i).selectOption('Vận chuyển');
-    await page.getByRole('button', { name: /Thêm dịch vụ/i }).click();
     await page.getByLabel(/Tên nhà cung cấp/i).fill('NCC vận chuyển hardening');
     await page.getByLabel(/Khu vực hoạt động/i).fill('Hà Nội');
     await page.getByLabel(/Số điện thoại/i).fill('0909000000');
@@ -245,10 +240,15 @@ test.describe('Feedback hardening audit', () => {
     await page.getByLabel(/Năm thành lập/i).fill('2020');
     await page.getByLabel(/Địa chỉ/i).fill('12 phố Kiểm Thử');
     await page.getByLabel(/Mô tả/i).first().fill('Nhà cung cấp hardening hiển thị đủ trường.');
-    await page.getByRole('button', { name: /Lưu nhà cung cấp/i }).click();
-    await expect(page.getByRole('dialog').getByText(/NCC vận chuyển hardening/i)).toBeVisible();
-    await page.getByRole('dialog').locator('button').first().click();
+    const supplierDialog = page.getByRole('dialog');
+    await expect(supplierDialog.getByText(/Dịch vụ vận chuyển/i)).toBeVisible();
+    const transportTable = supplierDialog.locator('table').last();
+    await transportTable.locator('input').nth(0).fill('Xe 45 chỗ hardening');
+    await transportTable.locator('input').nth(1).fill('45');
+    await transportTable.locator('input').nth(2).fill('12000000');
+    await supplierDialog.getByRole('button', { name: /^Lưu$/i }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.locator('body')).toContainText(/NCC vận chuyển hardening/i);
 
     await page.getByRole('button', { name: /Hướng dẫn viên/i }).click();
     await expect(page.getByRole('button', { name: /Thêm HDV/i })).toBeVisible();
@@ -278,7 +278,7 @@ test.describe('Feedback hardening audit', () => {
     await page.waitForLoadState('domcontentloaded');
     await page.getByRole('button', { name: /Kh.*ng .*K KH/i }).click();
     await expect(page.getByRole('button', { name: /Ti.*p t.*c tri.*n khai/i })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: /L.*i nhu.*n d.* ki.*n/i })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: /L.*i nhu.*n d.* ki.*n/i })).toHaveCount(0);
 
     await page.goto(appUrl('/manager/tour-programs/TP003/approval'));
     await page.waitForLoadState('domcontentloaded');

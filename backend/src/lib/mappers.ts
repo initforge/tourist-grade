@@ -270,6 +270,10 @@ function supplierTypeLabel(type: Supplier['type']) {
 }
 
 export function mapService(service: Service & { prices: ServicePrice[] }) {
+  const mappedFormulaQuantity = service.formulaQuantityDefault === 'Theo số người'
+    ? 'Theo số người'
+    : mapFormulaOption(service.formulaQuantity);
+
   return {
     id: service.code,
     name: service.name,
@@ -289,7 +293,7 @@ export function mapService(service: Service & { prices: ServicePrice[] }) {
     province: service.province ?? undefined,
     formulaCount: mapFormulaOption(service.formulaCount),
     formulaCountDefault: service.formulaCountDefault ?? undefined,
-    formulaQuantity: mapFormulaOption(service.formulaQuantity),
+    formulaQuantity: mappedFormulaQuantity,
     formulaQuantityDefault: service.formulaQuantityDefault ?? undefined,
     prices: service.prices.map((price) => ({
       id: price.id,
@@ -491,6 +495,15 @@ export function mapSpecialDay(day: SpecialDay) {
     startDate: day.startDate.toISOString().slice(0, 10),
     endDate: day.endDate.toISOString().slice(0, 10),
     note: day.note ?? '',
+  };
+}
+
+export function mapProvince(province: { code: string; name: string; hasAirport: boolean }) {
+  return {
+    id: province.code,
+    code: province.code,
+    name: province.name,
+    hasAirport: province.hasAirport,
   };
 }
 

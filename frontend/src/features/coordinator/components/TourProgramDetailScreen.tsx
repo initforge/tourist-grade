@@ -180,6 +180,8 @@ export default function TourProgramDetailScreen({ role }: { role: DetailRole }) 
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const programs = useAppDataStore(state => state.tourPrograms);
+  const protectedReady = useAppDataStore(state => state.protectedReady);
+  const protectedLoading = useAppDataStore(state => state.protectedLoading);
   const setPrograms = useAppDataStore(state => state.setTourPrograms);
   const [activeTab, setActiveTab] = useState<DetailTab>('general');
   const [isEditing, setIsEditing] = useState(false);
@@ -197,6 +199,17 @@ export default function TourProgramDetailScreen({ role }: { role: DetailRole }) 
     const found = programs?.find(item => item?.id === id);
     return found ? toEditableProgram(found) : null;
   });
+
+  if ((protectedLoading || !protectedReady) && (!program || !draft)) {
+    return (
+      <div className="min-h-screen bg-[var(--color-background)] flex items-center justify-center p-8">
+        <div className="text-center space-y-3">
+          <span className="material-symbols-outlined text-4xl text-primary/30">progress_activity</span>
+          <p className="text-sm text-primary/60">Đang tải dữ liệu chương trình tour...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!program || !draft) {
     return (

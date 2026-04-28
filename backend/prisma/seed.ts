@@ -27,6 +27,7 @@ async function main() {
   await prisma.voucherTarget.deleteMany();
   await prisma.voucher.deleteMany();
   await prisma.specialDay.deleteMany();
+  await prisma.province.deleteMany();
   await prisma.tourProgram.deleteMany();
   await prisma.supplierServicePrice.deleteMany();
   await prisma.supplierServiceVariant.deleteMany();
@@ -94,6 +95,23 @@ async function main() {
     }),
   ]);
 
+  await prisma.province.createMany({
+    data: [
+      { code: 'HN', name: 'Hà Nội', hasAirport: true },
+      { code: 'HCM', name: 'Hồ Chí Minh', hasAirport: true },
+      { code: 'DN', name: 'Đà Nẵng', hasAirport: true },
+      { code: 'QN', name: 'Quảng Ninh', hasAirport: true },
+      { code: 'NB', name: 'Ninh Bình', hasAirport: false },
+      { code: 'LC', name: 'Lào Cai', hasAirport: true },
+      { code: 'NT', name: 'Ninh Thuận', hasAirport: false },
+      { code: 'KH', name: 'Khánh Hòa', hasAirport: true },
+      { code: 'QT', name: 'Quảng Trị', hasAirport: false },
+      { code: 'QB', name: 'Quảng Bình', hasAirport: true },
+      { code: 'HP', name: 'Hải Phòng', hasAirport: true },
+      { code: 'CT', name: 'Cần Thơ', hasAirport: true },
+    ],
+  });
+
   await prisma.specialDay.createMany({
     data: [
       { code: 'SD001', name: 'Tết Nguyên Đán 2026', occasion: 'Lễ Tết', startDate: toDate('2026-02-17'), endDate: toDate('2026-02-23'), note: 'Kỳ nghỉ Tết âm lịch' },
@@ -110,9 +128,9 @@ async function main() {
     {
       id: 'T001',
       slug: 'kham-pha-vinh-ha-long-du-thuyen-5-sao',
-      title: 'Kh?m Ph? V?nh H? Long - Du Thuy?n 5 Sao',
-      description: 'Tr?i nghi?m ho?ng h?n r?c r? tr?n v?nh di s?n c?ng d?ch v? nh? h?ng fine-dining tr?n du thuy?n Ambassador.',
-      highlights: ['Ngh? ??m tr?n du thuy?n', 'Sunset party', 'Ch?o kayak hang Lu?n'],
+      title: 'Khám Phá Vịnh Hạ Long - Du Thuyền 5 Sao',
+      description: 'Trải nghiệm hoàng hôn rực rỡ trên vịnh di sản cùng dịch vụ nhà hàng fine-dining trên du thuyền Ambassador.',
+      highlights: ['Nghỉ đêm trên du thuyền', 'Sunset party', 'Chèo kayak hang Luồn'],
       duration: { days: 3, nights: 2 },
       price: { adult: 4500000, child: 2250000, infant: 0 },
       originalPrice: 5500000,
@@ -127,12 +145,12 @@ async function main() {
       status: 'published',
       category: 'domestic',
       itinerary: [
-        { day: 1, title: 'H? N?i - V?nh H? Long', description: '??n kh?ch t?i H? N?i, check-in du thuy?n.', activities: ['Nh?n ph?ng', 'Ti?c t?i'], meals: ['lunch', 'dinner'] },
-        { day: 2, title: 'Kh?m ph? v?nh', description: 'Th?m hang S?ng S?t v? b?i Ti T?p.', activities: ['Hang S?ng S?t', 'Ti T?p'], meals: ['breakfast', 'lunch', 'dinner'] },
-        { day: 3, title: 'Tr? v? H? N?i', description: 'Ng?m b?nh minh v? brunch tr?n t?u.', activities: ['Th?i c?c quy?n', 'Brunch'], meals: ['breakfast', 'lunch'] },
+        { day: 1, title: 'Hà Nội - Vịnh Hạ Long', description: 'Đón khách tại Hà Nội, check-in du thuyền.', activities: ['Nhận phòng', 'Tiệc tối'], meals: ['lunch', 'dinner'] },
+        { day: 2, title: 'Khám phá vịnh', description: 'Thăm hang Sửng Sốt và bãi Ti Tốp.', activities: ['Hang Sửng Sốt', 'Ti Tốp'], meals: ['breakfast', 'lunch', 'dinner'] },
+        { day: 3, title: 'Trở về Hà Nội', description: 'Ngắm bình minh và brunch trên tàu.', activities: ['Thái cực quyền', 'Brunch'], meals: ['breakfast', 'lunch'] },
       ],
-      departurePoint: 'H? N?i',
-      sightseeingSpots: ['Qu?ng Ninh'],
+      departurePoint: 'Hà Nội',
+      sightseeingSpots: ['Quảng Ninh'],
       transport: 'xe',
       tourType: 'quanh_nam',
       bookingDeadline: 7,
@@ -147,9 +165,9 @@ async function main() {
         { id: 'DS001-4', date: '2026-05-01', availableSeats: 12, status: 'open', priceAdult: 4800000, priceChild: 2400000, priceInfant: 0, singleRoomSurcharge: 500000 },
         { id: 'DS001-5', date: '2026-05-08', availableSeats: 0, status: 'full', priceAdult: 4500000, priceChild: 2250000, priceInfant: 0 },
       ],
-      inclusions: ['Xe Limousine ??a ??n kh? h?i', '02 ??m ngh? tr?n du thuy?n', 'B?a ?n theo ch??ng tr?nh (3 b?a/ng?y)', 'V? tham quan hang ??ng', 'Ch?o Kayak', 'B?o hi?m du l?ch'],
-      exclusions: ['Chi ph? c? nh?n, ?? u?ng ngo?i th?c ??n', 'Ti?n tip cho h??ng d?n vi?n v? l?i xe', 'VAT n?u y?u c?u xu?t h?a ??n'],
-      childPolicy: 'Tr? em (d??i 12 tu?i): 50% gi? ng??i l?n. Tr? s? sinh (d??i 2 tu?i): mi?n ph? (kh?ng chi?m gh?).',
+      inclusions: ['Xe Limousine đưa đón khứ hồi', '02 đêm nghỉ trên du thuyền', 'Bữa ăn theo chương trình (3 bữa/ngày)', 'Vé tham quan hang động', 'Chèo Kayak', 'Bảo hiểm du lịch'],
+      exclusions: ['Chi phí cá nhân, đồ uống ngoài thực đơn', 'Tiền tip cho hướng dẫn viên và lái xe', 'VAT nếu yêu cầu xuất hóa đơn'],
+      childPolicy: 'Trẻ em (dưới 12 tuổi): 50% giá người lớn. Trẻ sơ sinh (dưới 2 tuổi): miễn phí (không chiếm ghế).',
       cancellationPolicy: [
         { daysBefore: 30, refundPercent: 100 },
         { daysBefore: 15, refundPercent: 70 },
@@ -197,7 +215,7 @@ async function main() {
       ],
       inclusions: ['Xe đưa đón', '03 đêm Amanoi', 'Spa 60 phút/ngày'],
       exclusions: ['Vé máy bay', 'Chi phí cá nhân'],
-      childPolicy: 'Tr? em d??i 12 tu?i t?nh 50% gi? ng??i l?n.',
+      childPolicy: 'Trẻ em dưới 12 tuổi tính 50% giá người lớn.',
       cancellationPolicy: [
         { daysBefore: 14, refundPercent: 100 },
         { daysBefore: 7, refundPercent: 50 },
@@ -246,7 +264,7 @@ async function main() {
       ],
       inclusions: ['V? m?y bay', 'Kh?ch s?n 4 sao', '?n theo ch??ng tr?nh', 'B?o hi?m'],
       exclusions: ['Chi phí cá nhân', 'VAT'],
-      childPolicy: 'Tr? em 2-11 tu?i t?nh 81% gi? ng??i l?n.',
+      childPolicy: 'Trẻ em 2-11 tuổi tính 81% giá người lớn.',
       cancellationPolicy: [
         { daysBefore: 30, refundPercent: 100 },
         { daysBefore: 21, refundPercent: 80 },
@@ -306,6 +324,7 @@ async function main() {
     highlights: ['Trải nghiệm kimono', 'Ẩm thực kaiseki', 'Onsen'],
     departurePoint: 'Hà Nội',
     sightseeingSpots: ['Osaka', 'Kyoto', 'Nara'],
+    lodgingStandard: '4 sao',
     image: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?q=80&w=1400',
     gallery: [
       'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?q=80&w=1400',
@@ -430,7 +449,11 @@ async function main() {
           sellPriceInfant: 8000000,
           minParticipants: 10,
         },
-        publicContentJson: publicTours[2],
+        publicContentJson: {
+          ...publicTours[2],
+          approvalStatus: 'rejected',
+          rejectionReason: 'Thiếu dữ liệu đối tác khách sạn và cần cập nhật lại cấu hình giá.',
+        },
         createdById: coordinator.id,
         updatedById: coordinator.id,
       },
@@ -464,7 +487,13 @@ async function main() {
           minParticipants: 10,
         },
         publicContentJson: {
-          inactiveReason: 'T?m d?ng ?? c?p nh?t l?i gi? ph?ng v? ??i t?c v?n chuy?n',
+          lodgingStandard: '4 sao',
+          yearRoundStartDate: '2026-06-01',
+          yearRoundEndDate: '2026-09-30',
+          weekdays: ['t6'],
+          coverageMonths: 3,
+          inactiveReason: 'T\u1ea1m d\u1eebng \u0111\u1ec3 c\u1eadp nh\u1eadt l\u1ea1i gi\u00e1 ph\u00f2ng v\u00e0 \u0111\u1ed1i t\u00e1c v\u1eadn chuy\u1ec3n',
+          approvalStatus: 'approved',
         },
         createdById: coordinator.id,
         updatedById: coordinator.id,
@@ -714,28 +743,41 @@ async function main() {
     data: [
       {
         id: 'SUP001',
-        name: 'Kh?ch s?n Di S?n Vi?t',
+        name: 'Kh\u00e1ch s\u1ea1n Di S\u1ea3n Vi\u1ec7t',
         phone: '024 3939 8888',
         email: 'contact@heritage.vn',
         type: 'HOTEL',
-        serviceSummary: 'Lưu trú',
-        operatingArea: 'Hạ Long',
-        address: '12 Bãi Cháy, Hạ Long',
+        serviceSummary: 'L\u01b0u tr\u00fa',
+        operatingArea: 'Qu\u1ea3ng Ninh, H\u1ea1 Long',
+        address: '12 B\u00e3i Ch\u00e1y, H\u1ea1 Long, Qu\u1ea3ng Ninh',
         establishedYear: 2016,
-        description: 'Kh?ch s?n 4 sao ph?c v? kh?ch ?o?n, c? nh? h?ng n?i khu.',
+        description: 'Kh\u00e1ch s\u1ea1n 4 sao ph\u1ee5c v\u1ee5 kh\u00e1ch \u0111o\u00e0n, c\u00f3 nh\u00e0 h\u00e0ng n\u1ed9i khu.',
         isActive: true,
       },
       {
         id: 'SUP002',
-        name: 'V?n t?i Xuy?n Vi?t',
+        name: 'Vận tải Xuyên Việt',
         phone: '0901 234 567',
         email: 'ops@vantaiviet.vn',
         type: 'TRANSPORT',
         serviceSummary: 'Xe tham quan',
-        operatingArea: 'H? N?i, Qu?ng Ninh, Ninh B?nh',
-        address: '31 Tr?n Quang Kh?i, H? N?i',
+        operatingArea: 'Hà Nội, Quảng Ninh, Ninh Bình',
+        address: '31 Trần Quang Khải, Hà Nội',
         establishedYear: 2014,
-        description: 'Nh? xe chuy?n tour gh?p v? tour ri?ng.',
+        description: 'Nhà xe chuyên tour ghép và tour riêng.',
+        isActive: true,
+      },
+      {
+        id: 'SUP003',
+        name: 'SkyLink Airways Services',
+        phone: '028 3822 5566',
+        email: 'groupdesk@skylink.example',
+        type: 'TRANSPORT',
+        serviceSummary: 'Vé máy bay đoàn',
+        operatingArea: 'Hà Nội, Hồ Chí Minh, Đà Nẵng, Quảng Ninh',
+        address: '21 Láng Hạ, Ba Đình, Hà Nội',
+        establishedYear: 2017,
+        description: 'Đại lý vé máy bay đoàn cho tour nội địa và outbound.',
         isActive: true,
       },
       {
@@ -744,12 +786,25 @@ async function main() {
         phone: '024 3888 7777',
         email: 'reserve@lotus.vn',
         type: 'RESTAURANT',
-        serviceSummary: 'B?a ?n ?o?n',
-        operatingArea: 'H? N?i',
-        address: '88 Tr?ng Ti?n, Ho?n Ki?m, H? N?i',
+        serviceSummary: 'Bữa ăn đoàn',
+        operatingArea: 'Hà Nội',
+        address: '88 Tràng Tiền, Hoàn Kiếm, Hà Nội',
         establishedYear: 2011,
-        description: 'Nh? h?ng chuy?n set menu cho kh?ch du l?ch ?o?n.',
+        description: 'Nhà hàng chuyên set menu cho khách du lịch đoàn.',
         isActive: false,
+      },
+      {
+        id: 'SUP005',
+        name: 'Hạ Long Harbor Dining',
+        phone: '0203 3888 889',
+        email: 'booking@halongharbor.example',
+        type: 'RESTAURANT',
+        serviceSummary: 'Bữa ăn đoàn',
+        operatingArea: 'Quảng Ninh',
+        address: '28 Bãi Cháy, Hạ Long, Quảng Ninh',
+        establishedYear: 2015,
+        description: 'Nhà hàng phục vụ set menu đoàn tại Hạ Long.',
+        isActive: true,
       },
     ],
   });
@@ -759,25 +814,34 @@ async function main() {
       {
         id: 'SUP001-S1',
         supplierId: 'SUP001',
-        name: 'Ph?ng ??i',
-        description: 'Ph?ng ti?u chu?n h??ng ph?',
-        unit: 'Ph?ng',
+        name: 'Phòng đôi',
+        description: 'Phòng tiêu chuẩn hướng phố',
+        unit: 'Phòng',
         quantity: 1,
         basePrice: 1300000,
       },
       {
         id: 'SUP001-S2',
         supplierId: 'SUP001',
-        name: 'Ph?ng ??n',
-        description: 'Ph?ng ti?u chu?n gi??ng l?n',
-        unit: 'Ph?ng',
+        name: 'Phòng đơn',
+        description: 'Phòng tiêu chuẩn giường lớn',
+        unit: 'Phòng',
         quantity: 1,
         basePrice: 1200000,
       },
       {
+        id: 'SUP001-S3',
+        supplierId: 'SUP001',
+        name: 'Ph\u00f2ng ba',
+        description: 'Ph\u00f2ng ti\u00eau chu\u1ea9n cho 3 kh\u00e1ch',
+        unit: 'Ph\u00f2ng',
+        quantity: 1,
+        basePrice: 1500000,
+      },
+      {
         id: 'SUP001-M1',
         supplierId: 'SUP001',
-        name: 'Buffet s?ng',
+        name: 'Buffet sáng',
         unit: 'B?a',
         quantity: 1,
         basePrice: 180000,
@@ -810,6 +874,17 @@ async function main() {
         priceMode: 'QUOTED',
       },
       {
+        id: 'SUP003-S1',
+        supplierId: 'SUP003',
+        name: 'Vé máy bay đoàn nội địa',
+        description: 'Áp dụng hành trình có chặng bay đoàn.',
+        unit: 'Vé',
+        quantity: 1,
+        transportType: 'MAYBAY',
+        priceMode: 'LISTED',
+        basePrice: 1850000,
+      },
+      {
         id: 'SUP004-S1',
         supplierId: 'SUP004',
         name: 'Set menu đoàn',
@@ -820,6 +895,18 @@ async function main() {
         menu: '6 m?n + canh + tr?ng mi?ng',
         note: 'C? menu chay theo y?u c?u',
       },
+      {
+        id: 'SUP005-S1',
+        supplierId: 'SUP005',
+        name: 'Set hải sản đoàn',
+        description: 'Thực đơn đoàn 10 khách tại Hạ Long.',
+        unit: 'Bàn',
+        quantity: 1,
+        basePrice: 1980000,
+        isMealService: true,
+        menu: '8 món hải sản + canh + tráng miệng',
+        note: 'Có lựa chọn thực đơn trẻ em',
+      },
     ],
   });
 
@@ -828,9 +915,12 @@ async function main() {
       { serviceVariantId: 'SUP001-S1', unitPrice: 1300000, fromDate: toDate('2026-01-01'), toDate: toDate('2026-12-31'), note: 'Gi? chu?n', createdByName: '?i?u ph?i vi?n' },
       { serviceVariantId: 'SUP001-S2', unitPrice: 1200000, fromDate: toDate('2026-01-01'), toDate: toDate('2026-12-31'), note: 'Gi? chu?n', createdByName: '?i?u ph?i vi?n' },
       { serviceVariantId: 'SUP001-M1', unitPrice: 180000, fromDate: toDate('2026-01-01'), toDate: toDate('2026-12-31'), note: '?p d?ng n?i khu', createdByName: '?i?u ph?i vi?n' },
+      { serviceVariantId: 'SUP001-S3', unitPrice: 1500000, fromDate: toDate('2026-01-01'), toDate: toDate('2026-12-31'), note: 'Gi? chu?n', createdByName: '?i?u ph?i vi?n' },
       { serviceVariantId: 'SUP002-S1', unitPrice: 8100000, fromDate: toDate('2026-04-01'), toDate: toDate('2026-09-30'), note: 'Xe 16 ch?', createdByName: '?i?u ph?i vi?n' },
       { serviceVariantId: 'SUP002-S2', unitPrice: 9600000, fromDate: toDate('2026-04-01'), toDate: toDate('2026-09-30'), note: 'Xe 25 ch?', createdByName: '?i?u ph?i vi?n' },
+      { serviceVariantId: 'SUP003-S1', unitPrice: 1850000, fromDate: toDate('2026-01-01'), toDate: toDate('2026-12-31'), note: 'Giá chặng đoàn', createdByName: 'Điều phối viên' },
       { serviceVariantId: 'SUP004-S1', unitPrice: 1800000, fromDate: toDate('2026-01-01'), toDate: toDate('2026-12-31'), note: 'Set menu c? b?n', createdByName: '?i?u ph?i vi?n' },
+      { serviceVariantId: 'SUP005-S1', unitPrice: 1980000, fromDate: toDate('2026-01-01'), toDate: toDate('2026-12-31'), note: 'Set hải sản cơ bản', createdByName: 'Điều phối viên' },
     ],
   });
 
@@ -845,10 +935,10 @@ async function main() {
         priceMode: 'LISTED',
         priceSetup: 'BY_AGE',
         status: 'ACTIVE',
-        description: 'Áp dụng cho các chương trình tham quan tại Đà Nẵng.',
+        description: 'Áp dụng cho các chương trình tham quan tại Quảng Ninh.',
         supplierName: 'Sun World Hạ Long',
         contactInfo: '024 3936 6666',
-        province: 'Đà Nẵng',
+        province: 'Quảng Ninh',
       },
       {
         id: 'service-2',
@@ -867,14 +957,30 @@ async function main() {
         formulaQuantity: 'DEFAULT_VALUE',
         formulaQuantityDefault: 'Theo sđ người',
       },
+      {
+        id: 'service-3',
+        code: 'SV-TEAM',
+        name: '??o c? team building',
+        category: 'OTHER',
+        unit: 'g?i',
+        priceMode: 'QUOTED',
+        priceSetup: 'COMMON',
+        status: 'ACTIVE',
+        description: 'Chi ph? kh?c c?n b?o gi? theo t?ng tour.',
+        supplierName: 'Event House',
+        contactInfo: 'event@travela.example',
+        formulaCount: 'MANUAL',
+        formulaQuantity: 'DEFAULT_VALUE',
+        formulaQuantityDefault: '1',
+      },
     ],
   });
 
   await prisma.servicePrice.createMany({
     data: [
-      { serviceId: 'service-1', unitPrice: 250000, effectiveDate: toDate('2026-01-01'), endDate: toDate('2026-06-30'), note: 'Ng??i l?n', createdByName: 'Tr??ng ph?ng ?i?u ph?i' },
-      { serviceId: 'service-1', unitPrice: 180000, effectiveDate: toDate('2026-01-01'), endDate: toDate('2026-06-30'), note: 'Tr? em', createdByName: 'Tr??ng ph?ng ?i?u ph?i' },
-      { serviceId: 'service-2', unitPrice: 40000, effectiveDate: toDate('2026-01-01'), endDate: toDate('2026-12-31'), note: 'B?o hi?m n?i ??a', createdByName: '?i?u ph?i vi?n' },
+      { serviceId: 'service-1', unitPrice: 250000, effectiveDate: toDate('2026-01-01'), endDate: toDate('2026-06-30'), note: 'Người lớn', createdByName: 'Trưởng phòng điều phối' },
+      { serviceId: 'service-1', unitPrice: 180000, effectiveDate: toDate('2026-01-01'), endDate: toDate('2026-06-30'), note: 'Trẻ em', createdByName: 'Trưởng phòng điều phối' },
+      { serviceId: 'service-2', unitPrice: 40000, effectiveDate: toDate('2026-01-01'), endDate: toDate('2026-12-31'), note: 'Bảo hiểm nội địa', createdByName: 'Điều phối viên' },
     ],
   });
 
@@ -893,7 +999,7 @@ async function main() {
         issueDate: toDate('2020-03-20'),
         expiryDate: toDate('2030-03-20'),
         issuePlace: 'Tổng cục Du lịch',
-        note: 'Ph? tr?ch tour n?i ??a mi?n B?c',
+        note: 'Phụ trách tour nội địa miền Bắc',
         languagesJson: ['Tiếng Anh'],
       },
       {
@@ -1153,4 +1259,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

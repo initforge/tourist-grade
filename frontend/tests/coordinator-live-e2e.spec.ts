@@ -5,10 +5,15 @@ function uniqueSuffix() {
   return Date.now().toString().slice(-6);
 }
 
-async function addFirstPickerOption(page: Page) {
+async function addFirstPickerOption(page: Page, expectedText?: RegExp) {
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
-  await dialog.getByRole('checkbox').first().check();
+  if (expectedText) {
+    await expect(dialog.getByText(expectedText).first()).toBeVisible();
+  }
+  const firstCheckbox = dialog.getByRole('checkbox').first();
+  await expect(firstCheckbox).toBeVisible();
+  await firstCheckbox.check();
   await dialog.getByRole('button', { name: /Thêm đã chọn/i }).click();
   await expect(dialog).toBeHidden();
 }
@@ -19,18 +24,18 @@ test.describe('Coordinator live E2E against docker stack', () => {
     await loginAs(page, 'coordinator', '/coordinator/tour-programs/create', { clearBookings: true });
 
     const duration = page.locator('section').filter({ hasText: /Thời lượng tour/i }).first();
-    await duration.locator('input[type="number"]').nth(0).fill('1');
-    await duration.locator('input[type="number"]').nth(1).fill('0');
+    await duration.locator('input[type="number"]').nth(0).fill('2');
+    await duration.locator('input[type="number"]').nth(1).fill('1');
 
     const route = page.locator('section').filter({ hasText: /Tên chương trình tour/i }).first();
     await route.locator('input').first().fill(name);
     await route.locator('select').nth(0).selectOption({ label: 'Hà Nội' });
-    await route.locator('select').nth(1).selectOption({ label: 'Đà Nẵng' });
-    await route.getByLabel('Tiêu chuẩn lưu trú').selectOption({ label: '4 sao' });
+    await route.locator('select').nth(1).selectOption({ label: 'Quảng Ninh' });
+    await route.getByLabel(/Tiêu chuẩn lưu trú/i).selectOption({ label: '4 sao' });
     await route.locator('textarea').fill('Live E2E create program through docker stack.');
 
-    const startInput = page.getByLabel('Ngày bắt đầu');
-    const endInput = page.getByLabel('Ngày kết thúc');
+    const startInput = page.getByLabel(/Ngày bắt đầu/i);
+    const endInput = page.getByLabel(/Ngày kết thúc/i);
     const startDate = (await startInput.getAttribute('min')) ?? await startInput.inputValue();
     const endDate = new Date(`${startDate}T00:00:00`);
     endDate.setDate(endDate.getDate() + 7);
@@ -40,20 +45,37 @@ test.describe('Coordinator live E2E against docker stack', () => {
     await page.getByRole('button', { name: /T2|T3|T4|T5|T6|T7|CN/ }).nth(0).click();
 
     await page.getByRole('button', { name: /Tiếp theo: Lịch trình/i }).click();
-    await page.locator('fieldset input[placeholder^="VD:"]').first().fill('Ngày 1 live');
-    await page.locator('fieldset textarea').first().fill('Mô tả live ngày 1');
-    await page.getByRole('button', { name: /Bữa trưa/i }).first().click();
+    await expect(page.getByLabel(/Địa điểm lưu trú/i)).toHaveCount(0);
+    await page.locator('fieldset input[placeholder^="VD:"]').nth(0).fill('Ngày 1 live');
+    await page.locator('fieldset textarea').nth(0).fill('Mô tả live ngày 1');
+    await page.getByRole('button', { name: /Bữa trưa/i }).nth(0).click();
+    await page.locator('fieldset input[placeholder^="VD:"]').nth(1).fill('Ngày 2 live');
+    await page.locator('fieldset textarea').nth(1).fill('Mô tả live ngày 2');
+    await page.getByRole('button', { name: /Bữa tối/i }).nth(1).click();
 
     await page.getByRole('button', { name: /Tiếp theo: Giá & Cấu hình/i }).click();
-    await page.getByLabel(/Thêm nhà cung cấp xe tham quan/i).click();
-    await addFirstPickerOption(page);
-    await page.getByLabel(/Đơn giá xe tham quan/i).fill('8100000');
 
-    await page.getByLabel(/Thêm dịch vụ ăn uống cho Ngày 1 - Bữa trưa/i).click();
-    await addFirstPickerOption(page);
+    await page.getByRole('button', { name: /Thêm nhà cung cấp xe tham quan/i }).click();
+    await addFirstPickerOption(page, /Xuyên Việt|hardening/i);
+    const transportEditableRow = page.locator('tr')
+      .filter({ hasText: /Xe tham quan/i })
+      .filter({ has: page.locator('input[type="number"]') })
+      .first();
+    await expect(transportEditableRow).toBeVisible();
+    await transportEditableRow.getByRole('spinbutton').fill('8100000');
 
-    await page.getByLabel(/Thêm vé tham quan cho Ngày 1/i).click();
-    await addFirstPickerOption(page);
+    await page.getByRole('button', { name: /Thêm khách sạn cho Lưu trú - Đêm 1/i }).click();
+    await addFirstPickerOption(page, /Khách sạn Di Sản Việt/i);
+
+    await page.getByRole('button', { name: /Thêm dịch vụ ăn uống cho Ngày 1 - Bữa trưa/i }).click();
+    await addFirstPickerOption(page, /Harbor Dining/i);
+    await page.getByRole('button', { name: /Thêm dịch vụ ăn uống cho Ngày 2 - Bữa tối/i }).click();
+    await addFirstPickerOption(page, /Harbor Dining/i);
+
+    await page.getByRole('button', { name: /Thêm vé tham quan cho Ngày 1/i }).click();
+    await addFirstPickerOption(page, /Sun World/i);
+    await page.getByRole('button', { name: /Thêm vé tham quan cho Ngày 2/i }).click();
+    await addFirstPickerOption(page, /Sun World/i);
 
     await page.getByRole('button', { name: /Tiếp theo: Tour dự kiến/i }).click();
     await page.getByRole('button', { name: /^Gửi duyệt$/i }).click();
@@ -129,17 +151,33 @@ test.describe('Coordinator live E2E against docker stack', () => {
     await modal.getByRole('button', { name: /Xác nhận điều phối/i }).click();
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toContain('.xls');
-    await expect(page.getByRole('button', { name: 'Thay đổi HDV' }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /Thay đổi HDV/i }).first()).toBeVisible();
+
+    const accessToken = await page.evaluate(() => {
+      const raw = localStorage.getItem('__travela_auth_tokens');
+      return raw ? JSON.parse(raw).accessToken as string : '';
+    });
+    const sourceEstimateResponse = await page.request.get('http://localhost:4000/api/v1/tour-instances/TI008', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const sourceEstimatePayload = await sourceEstimateResponse.json();
+    await page.request.post('http://localhost:4000/api/v1/tour-instances/TI002/estimate', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      data: {
+        costEstimate: sourceEstimatePayload.tourInstance.costEstimate,
+        submit: false,
+      },
+    });
 
     await page.goto('/coordinator/tours/TI002/settle');
-    const actualInput = page.locator('table').first().locator('input[type="number"]').first();
+    const actualInput = page.getByRole('spinbutton').first();
     await expect(actualInput).toBeVisible();
     await actualInput.fill('8200000');
-    await page.getByRole('button', { name: 'Lưu Nháp' }).click();
-    await expect(page.getByText('Đã lưu nháp quyết toán')).toBeVisible();
+    await page.getByRole('button', { name: /Lưu Nháp/i }).click();
+    await expect(page.getByText(/Đã lưu nháp quyết toán/i)).toBeVisible();
 
     await page.reload();
-    await expect(page.locator('input[type="number"]').first()).toHaveValue('8200000');
+    await expect(page.getByRole('spinbutton').first()).toHaveValue('8200000');
   });
 
   test('creates a service and a supplier through the real backend', async ({ page }) => {
@@ -151,13 +189,13 @@ test.describe('Coordinator live E2E against docker stack', () => {
       const raw = localStorage.getItem('__travela_auth_tokens');
       return raw ? JSON.parse(raw).accessToken as string : '';
     });
-    await page.getByRole('button', { name: 'Thêm dịch vụ' }).click();
-    await page.getByLabel('Tên dịch vụ').fill(serviceName);
-    await page.getByLabel('Đơn vị').fill('vé');
-    await page.getByLabel('Mô tả').fill('Live service create');
-    await page.getByLabel('Đơn giá người lớn').fill('250000');
-    await page.getByLabel('Đơn giá trẻ em').fill('180000');
-    await page.getByRole('button', { name: 'Lưu dịch vụ' }).click();
+    await page.getByRole('button', { name: /Thêm dịch vụ/i }).click();
+    await page.getByLabel(/Tên dịch vụ/i).fill(serviceName);
+    await page.getByLabel(/Đơn vị/i).fill('vé');
+    await page.getByLabel(/Mô tả/i).fill('Live service create');
+    await page.getByLabel(/Đơn giá người lớn/i).fill('250000');
+    await page.getByLabel(/Đơn giá trẻ em/i).fill('180000');
+    await page.getByRole('button', { name: /Lưu dịch vụ/i }).click();
     await expect(page.getByText(serviceName)).toBeVisible();
     await expect.poll(async () => {
       const response = await page.request.get('http://localhost:4000/api/v1/bootstrap', {
@@ -168,13 +206,13 @@ test.describe('Coordinator live E2E against docker stack', () => {
     }).toBe(true);
 
     await page.goto('/coordinator/suppliers');
-    await page.getByRole('button', { name: 'Thêm nhà cung cấp' }).click();
-    await page.getByLabel('Phân loại').selectOption('Vận chuyển');
-    await page.getByLabel('Tên nhà cung cấp').fill(supplierName);
-    await page.getByLabel('Khu vực hoạt động').fill('Hà Nội');
-    await page.getByLabel('Số điện thoại').fill('0909000999');
-    await page.getByLabel('Email').fill('live-supplier@test.vn');
-    await page.getByLabel('Địa chỉ').fill('Hà Nội');
+    await page.getByRole('button', { name: /Thêm nhà cung cấp/i }).click();
+    await page.getByLabel(/Phân loại/i).selectOption('Vận chuyển');
+    await page.getByLabel(/Tên nhà cung cấp/i).fill(supplierName);
+    await page.getByLabel(/Khu vực hoạt động/i).fill('Hà Nội');
+    await page.getByLabel(/Số điện thoại/i).fill('0909000999');
+    await page.getByLabel(/Email/i).fill('live-supplier@test.vn');
+    await page.getByLabel(/Địa chỉ/i).fill('Hà Nội');
     await page.locator('input[type="number"]').nth(0).fill('16');
     await page.locator('input[type="number"]').nth(1).fill('8100000');
     const supplierResponsePromise = page.waitForResponse((response) => (
