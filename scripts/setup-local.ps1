@@ -126,7 +126,7 @@ function Show-BackendDiagnostics {
   if ($logResult.Output) { $logResult.Output | Out-Host }
 }
 
-function Wait-BackendReady($seconds = 180) {
+function Wait-BackendReady($seconds = 300) {
   $deadline = (Get-Date).AddSeconds($seconds)
   $urls = @(
     'http://127.0.0.1:4000/health',
@@ -250,9 +250,12 @@ if (!$cloudflared) {
 Write-Host "cloudflared: $cloudflared"
 
 Write-Step 'Build and start Docker stack'
-(Invoke-Docker @('compose', 'up', '-d', '--build')).Output | Out-Host
-$backendHealthUrl = Wait-BackendReady 180
+(Invoke-Docker @('compose', 'up', '-d', '--build', 'db', 'backend')).Output | Out-Host
+$backendHealthUrl = Wait-BackendReady 300
 Write-Host "Backend health URL: $backendHealthUrl" -ForegroundColor Green
+
+Write-Step 'Start frontend after backend is ready'
+(Invoke-Docker @('compose', 'up', '-d', '--build', 'frontend')).Output | Out-Host
 
 Write-Step 'Start named Cloudflare tunnel'
 $logDir = Join-Path $repoRoot '.local'
@@ -296,8 +299,11 @@ Wait-HttpOk "$tunnelUrl/health" 60
 
 Write-Step 'Restart backend for new webhook URL'
 (Invoke-Docker @('compose', 'up', '-d', '--build', 'backend')).Output | Out-Host
-$backendHealthUrl = Wait-BackendReady 180
+$backendHealthUrl = Wait-BackendReady 300
 Write-Host "Backend health URL: $backendHealthUrl" -ForegroundColor Green
+
+Write-Step 'Refresh frontend after backend restart'
+(Invoke-Docker @('compose', 'up', '-d', 'frontend')).Output | Out-Host
 
 Write-Step 'Confirm webhook with PayOS'
 try {
