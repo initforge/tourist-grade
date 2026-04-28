@@ -122,8 +122,28 @@ function Show-BackendDiagnostics {
   Write-Warning 'Backend did not become reachable. Docker diagnostics:'
   $psResult = Invoke-Docker @('compose', 'ps') -AllowFailure
   if ($psResult.Output) { $psResult.Output | Out-Host }
+  $stateResult = Invoke-Docker @('inspect', '--format', '{{json .State}}', 'travela-backend') -AllowFailure
+  if ($stateResult.Output) {
+    Write-Host "`n--- travela-backend state ---" -ForegroundColor Yellow
+    $stateResult.Output | Out-Host
+  }
+  $portsResult = Invoke-Docker @('inspect', '--format', '{{json .NetworkSettings.Ports}}', 'travela-backend') -AllowFailure
+  if ($portsResult.Output) {
+    Write-Host "`n--- travela-backend published ports ---" -ForegroundColor Yellow
+    $portsResult.Output | Out-Host
+  }
+  $internalHealthResult = Invoke-Docker @('exec', 'travela-backend', 'sh', '-lc', 'wget -q -O - http://127.0.0.1:4000/health') -AllowFailure
+  if ($internalHealthResult.Output) {
+    Write-Host "`n--- travela-backend internal /health ---" -ForegroundColor Yellow
+    $internalHealthResult.Output | Out-Host
+  }
   $logResult = Invoke-Docker @('compose', 'logs', '--tail=120', 'backend') -AllowFailure
   if ($logResult.Output) { $logResult.Output | Out-Host }
+  try {
+    $tcp4000 = Test-NetConnection -ComputerName 127.0.0.1 -Port 4000 -WarningAction SilentlyContinue
+    Write-Host "`n--- host 127.0.0.1:4000 ---" -ForegroundColor Yellow
+    $tcp4000 | Select-Object ComputerName,RemotePort,TcpTestSucceeded | Format-List | Out-Host
+  } catch {}
 }
 
 function Wait-BackendReady($seconds = 300) {
@@ -164,6 +184,53 @@ function Confirm-PayOSWebhook($token, $attempts = 5) {
   }
 }
 
+function Get-CloudflareCertInfo($certPath) {
+  if (!(Test-Path $certPath)) {
+    return @{
+      Valid = $false
+      Reason = "Missing Cloudflare cert at $certPath"
+    }
+  }
+
+  $raw = Get-Content $certPath -Raw
+  if ([string]::IsNullOrWhiteSpace($raw)) {
+    return @{
+      Valid = $false
+      Reason = "Cloudflare cert at $certPath is empty"
+    }
+  }
+
+  $lines = Get-Content $certPath | Where-Object { $_ -and $_ -notmatch '^-----' }
+  if (!$lines -or $lines.Count -eq 0) {
+    return @{
+      Valid = $false
+      Reason = "Cloudflare cert at $certPath does not contain a valid Argo token payload"
+    }
+  }
+
+  try {
+    $payload = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($lines -join '')))
+    $json = $payload | ConvertFrom-Json
+    if (!$json.zoneID -or !$json.accountID -or !$json.apiToken) {
+      return @{
+        Valid = $false
+        Reason = "Cloudflare cert at $certPath is missing zone/account/api token fields"
+      }
+    }
+
+    return @{
+      Valid = $true
+      ZoneId = $json.zoneID
+      AccountId = $json.accountID
+    }
+  } catch {
+    return @{
+      Valid = $false
+      Reason = "Cloudflare cert at $certPath cannot be decoded. Re-run cloudflared tunnel login."
+    }
+  }
+}
+
 function Invoke-Cloudflared($cloudflaredPath, $arguments) {
   $tempDir = Join-Path $repoRoot '.local'
   if (!(Test-Path $tempDir)) { New-Item -ItemType Directory $tempDir | Out-Null }
@@ -195,8 +262,9 @@ function Get-TunnelInfo($cloudflaredPath, $name) {
 
 function Ensure-NamedTunnel($cloudflaredPath, $name, $hostname) {
   $certPath = Join-Path $env:USERPROFILE '.cloudflared\cert.pem'
-  if (!(Test-Path $certPath)) {
-    throw "Missing Cloudflare cert at $certPath. Run: cloudflared tunnel login"
+  $certInfo = Get-CloudflareCertInfo $certPath
+  if (!$certInfo.Valid) {
+    throw "$($certInfo.Reason)`nFix: delete $certPath, run 'cloudflared tunnel login', finish browser authorization, then rerun scripts/setup-local.ps1"
   }
 
   $tunnel = Get-TunnelInfo $cloudflaredPath $name
