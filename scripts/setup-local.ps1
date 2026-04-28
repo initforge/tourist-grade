@@ -72,6 +72,87 @@ function Wait-HttpOk($url, $seconds = 60) {
   throw "Could not reach $url after $seconds seconds."
 }
 
+function Test-HttpOk($url) {
+  try {
+    $response = Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 5
+    return ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300)
+  } catch {
+    return $false
+  }
+}
+
+function Invoke-Docker($arguments, [switch]$AllowFailure) {
+  $tempDir = Join-Path $repoRoot '.local'
+  if (!(Test-Path $tempDir)) { New-Item -ItemType Directory $tempDir | Out-Null }
+  $stdout = Join-Path $tempDir ('docker-call-' + [guid]::NewGuid().ToString() + '.out.log')
+  $stderr = Join-Path $tempDir ('docker-call-' + [guid]::NewGuid().ToString() + '.err.log')
+
+  try {
+    $process = Start-Process -FilePath 'docker' -ArgumentList $arguments -RedirectStandardOutput $stdout -RedirectStandardError $stderr -Wait -PassThru -WindowStyle Hidden
+    $stdoutText = if (Test-Path $stdout) { Get-Content $stdout -Raw } else { '' }
+    $stderrText = if (Test-Path $stderr) { Get-Content $stderr -Raw } else { '' }
+    $output = @()
+    if ($stdoutText) { $output += $stdoutText.TrimEnd() }
+    if ($stderrText) { $output += $stderrText.TrimEnd() }
+    $exitCode = $process.ExitCode
+  } finally {
+    Remove-Item $stdout, $stderr -ErrorAction SilentlyContinue
+  }
+
+  if (!$AllowFailure -and $exitCode -ne 0) {
+    $joined = if ($output) { ($output | Out-String).Trim() } else { '(no output)' }
+    throw "docker $($arguments -join ' ') failed.`n$joined"
+  }
+
+  return @{
+    ExitCode = $exitCode
+    Output = $output
+  }
+}
+
+function Get-BackendState {
+  $result = Invoke-Docker @('inspect', '--format', '{{json .State}}', 'travela-backend') -AllowFailure
+  if ($result.ExitCode -ne 0 -or !$result.Output) { return $null }
+  $stateJson = ($result.Output | Out-String).Trim()
+  if (!$stateJson) { return $null }
+  return $stateJson | ConvertFrom-Json
+}
+
+function Show-BackendDiagnostics {
+  Write-Warning 'Backend did not become reachable. Docker diagnostics:'
+  $psResult = Invoke-Docker @('compose', 'ps') -AllowFailure
+  if ($psResult.Output) { $psResult.Output | Out-Host }
+  $logResult = Invoke-Docker @('compose', 'logs', '--tail=120', 'backend') -AllowFailure
+  if ($logResult.Output) { $logResult.Output | Out-Host }
+}
+
+function Wait-BackendReady($seconds = 180) {
+  $deadline = (Get-Date).AddSeconds($seconds)
+  $urls = @(
+    'http://127.0.0.1:4000/health',
+    'http://localhost:4000/health'
+  )
+
+  do {
+    foreach ($url in $urls) {
+      if (Test-HttpOk $url) {
+        return $url
+      }
+    }
+
+    $state = Get-BackendState
+    if ($state -and -not $state.Running) {
+      Show-BackendDiagnostics
+      throw "Backend container is not running. ExitCode=$($state.ExitCode)"
+    }
+
+    Start-Sleep -Seconds 3
+  } while ((Get-Date) -lt $deadline)
+
+  Show-BackendDiagnostics
+  throw "Backend did not become reachable after $seconds seconds on localhost or 127.0.0.1."
+}
+
 function Confirm-PayOSWebhook($token, $attempts = 5) {
   for ($attempt = 1; $attempt -le $attempts; $attempt++) {
     try {
@@ -154,7 +235,7 @@ Write-Step 'Check backend env'
 $envPath = Ensure-EnvFile
 
 Write-Step 'Check Docker'
-docker version | Out-Null
+(Invoke-Docker @('version')).Output | Out-Null
 
 Write-Step 'Check cloudflared'
 $cloudflared = Find-Cloudflared
@@ -169,8 +250,9 @@ if (!$cloudflared) {
 Write-Host "cloudflared: $cloudflared"
 
 Write-Step 'Build and start Docker stack'
-docker compose up -d --build
-Wait-HttpOk 'http://localhost:4000/health' 90
+(Invoke-Docker @('compose', 'up', '-d', '--build')).Output | Out-Host
+$backendHealthUrl = Wait-BackendReady 180
+Write-Host "Backend health URL: $backendHealthUrl" -ForegroundColor Green
 
 Write-Step 'Start named Cloudflare tunnel'
 $logDir = Join-Path $repoRoot '.local'
@@ -213,8 +295,9 @@ Write-Step 'Wait for public tunnel health'
 Wait-HttpOk "$tunnelUrl/health" 60
 
 Write-Step 'Restart backend for new webhook URL'
-docker compose up -d --build backend
-Wait-HttpOk 'http://localhost:4000/health' 90
+(Invoke-Docker @('compose', 'up', '-d', '--build', 'backend')).Output | Out-Host
+$backendHealthUrl = Wait-BackendReady 180
+Write-Host "Backend health URL: $backendHealthUrl" -ForegroundColor Green
 
 Write-Step 'Confirm webhook with PayOS'
 try {
