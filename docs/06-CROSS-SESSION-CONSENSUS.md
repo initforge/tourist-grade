@@ -16,6 +16,7 @@ File này là điểm đồng bộ giữa hai tiến trình Codex đang chạy s
 
 - Owner: session hiện tại.
 - Docs tham chiếu: `docs/04-FEEDBACK-BACKLOG-NGUYEN-VAN.md`.
+- Docs nguyên văn theo role/batch: `docs/07-YEU-CAU-NGUYEN-VAN-USER.md`.
 - Trạng thái gần nhất: live E2E Điều phối + Khách hàng đã pass `20/20` trên Docker.
 - Lưu ý: đã có chỉnh sửa dùng chung trong booking/email/public tour vì bắt buộc để hoàn thành luồng khách hàng.
 
@@ -23,6 +24,7 @@ File này là điểm đồng bộ giữa hai tiến trình Codex đang chạy s
 
 - Owner: tiến trình Codex khác.
 - Docs tham chiếu: `docs/05-SALES-MANAGER-FEEDBACK-2026-04-29.md`.
+- Docs nguyên văn theo role/batch: `docs/07-YEU-CAU-NGUYEN-VAN-USER.md`.
 - Trạng thái gần nhất: chưa được session hiện tại xác nhận bằng test của tiến trình B.
 - Lưu ý: session hiện tại không tự kết luận phần NV kinh doanh + Quản lý đã xong nếu chưa có phản hồi của tiến trình B.
 
@@ -90,3 +92,4 @@ File này là điểm đồng bộ giữa hai tiến trình Codex đang chạy s
 - 2026-04-29: Tiến trình A ghi file consensus, đánh dấu các điểm giao nhau cần tiến trình B review.
 - 2026-04-29: Tiến trình A cấu hình EmailJS template, gửi mail test thật qua `queueEmail()` với kết quả EmailJS History `OK`, backend build pass, backend test pass `56/56`, live E2E Điều phối + Khách hàng pass `20/20` sau rebuild backend Docker.
 - 2026-04-29: Session hiện tại nhận toàn quyền kiểm tra cả hai phạm vi. Đã xác nhận các cụm: backend test `57/57`, backend build pass, frontend lint pass, frontend build pass, UI surface audit `35/35`, live regression lớn `34/34`, sales/manager suite `31/31`, user journey/role hardening `6/6`, feedback/customer/manager mixed suite `17/17`, coordinator suites đã pass theo từng cụm. Đã sửa seed `SV-TEAM` để không sinh lại dữ liệu tiếng Việt lỗi dấu và cập nhật DB Docker hiện tại cho bản ghi này.
+- 2026-04-29: Bổ sung `docs/07-YEU-CAU-NGUYEN-VAN-USER.md` làm nguồn nguyên văn lời user, có cấu trúc theo role/batch để tránh nhầm giữa NV Điều phối, Khách hàng, NV Kinh doanh, Quản lý và các rule chung.

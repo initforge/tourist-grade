@@ -2,6 +2,9 @@
 
 File này là nguồn tham chiếu cho batch feedback khách hàng. Nội dung phải giữ tiếng Việt có dấu, không để mojibake.
 
+Nguồn lưu nguyên văn lời user theo role và theo batch: `docs/07-YEU-CAU-NGUYEN-VAN-USER.md`.
+File này dùng để chuẩn hóa checklist triển khai/test, không thay thế file nguyên văn.
+
 ## Quy tắc làm việc bắt buộc
 
 ```text
