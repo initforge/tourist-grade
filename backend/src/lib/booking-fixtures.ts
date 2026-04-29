@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 
 function toDate(value: string) {
   return new Date(value);
@@ -100,12 +100,9 @@ export async function resetBookingFixtures(prisma: PrismaClient) {
       paidAmount: 32000000,
       remainingAmount: 0,
       cancellationReason: 'Thay đổi kế hoạch công tác',
-      cancelledAt: toDate('2026-04-05T10:00:00Z'),
+      cancelledAt: new Date(),
       refundAmount: 25600000,
-      payloadJson: {
-        cancelledConfirmedBy: 'Nhân Viên Kinh Doanh',
-        cancelledConfirmedAt: '2026-04-05T10:30:00Z',
-      },
+      payloadJson: {},
       createdAt: toDate('2026-03-26T08:15:00Z'),
       passengers: {
         create: [
@@ -632,6 +629,8 @@ export async function resetTourWorkflowFixtures(prisma: PrismaClient) {
       data: {
         status: 'CHO_DU_TOAN',
         receivedAt: toDate('2026-05-18T10:00:00Z'),
+        bookingDeadlineAt: toDate('2026-04-01T00:00:00Z'),
+        minParticipants: 6,
         cancelledAt: null,
         cancelReason: null,
         refundTotal: null,
@@ -641,6 +640,8 @@ export async function resetTourWorkflowFixtures(prisma: PrismaClient) {
       where: { code: 'TI010' },
       data: {
         status: 'DANG_MO_BAN',
+        departureDate: toDate(isoOffset(6)),
+        bookingDeadlineAt: toDate(isoOffset(1)),
         cancelledAt: null,
         cancelReason: null,
         refundTotal: null,
@@ -657,16 +658,24 @@ export async function resetTourProgramFixtures(prisma: PrismaClient) {
 
   if (tp1) {
     const publicContent = ((tp1.publicContentJson as Record<string, unknown> | null) ?? {});
+    const departureSchedule = Array.isArray(publicContent.departureSchedule)
+      ? publicContent.departureSchedule.map((schedule) => (
+        schedule && typeof schedule === 'object' && (schedule as { id?: unknown }).id === 'DS001-4'
+          ? { ...(schedule as Record<string, unknown>), date: isoOffset(6) }
+          : schedule
+      ))
+      : publicContent.departureSchedule;
     await prisma.tourProgram.update({
       where: { id: tp1.id },
       data: {
         status: 'ACTIVE',
         publicContentJson: {
           ...publicContent,
+          departureSchedule,
           inactiveReason: null,
           rejectionReason: null,
           approvalStatus: 'approved',
-        },
+        } as Prisma.InputJsonValue,
       },
     });
   }

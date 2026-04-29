@@ -341,7 +341,9 @@ async function fillBaseInfo(page: Page, { days, nights }: { days: number; nights
   await route.locator('input').first().fill('Tour tạo để test persist');
   await route.locator('select').nth(0).selectOption({ label: 'Hà Nội' });
   await addSightseeingSpot(route, 'Đà Nẵng');
-  await route.getByLabel('Tiêu chuẩn lưu trú').selectOption({ label: '4 sao' });
+  if (nights > 0) {
+    await route.getByLabel('Tiêu chuẩn lưu trú').selectOption({ label: '4 sao' });
+  }
   await route.locator('textarea').fill('Mô tả kiểm thử lưu và sửa chương trình tour.');
 
   const rules = await getDateRules(page);
@@ -382,6 +384,7 @@ test.describe('Coordinator tour program persistence and detail edit flow', () =>
     await page.getByLabel(/Thêm vé tham quan cho Ngày 1/i).click();
     await page.getByLabel(/Chọn Vé tham quan Bà Nà Hills/i).check();
     await page.getByRole('button', { name: /Thêm đã chọn/i }).click();
+    await page.getByLabel(/Đơn giá hướng dẫn viên/i).fill('400000');
 
     await page.getByRole('button', { name: /Tiếp theo: Tour dự kiến/i }).click();
     await page.getByRole('button', { name: /^Gửi duyệt$/i }).click();
@@ -393,7 +396,7 @@ test.describe('Coordinator tour program persistence and detail edit flow', () =>
     await expect(page).toHaveURL(/\/coordinator\/tour-programs\/TP005\/edit$/);
     await expect(page.getByText(/Bước 1 \/ 4/i)).toBeVisible();
 
-    await page.getByRole('button', { name: /3Giá & Cấu hình/i }).click();
+    await page.getByRole('button', { name: /3.*Giá & Cấu hình/i }).click();
     await expect(page.getByText(/Vận tải Việt Tourist/i)).toBeVisible();
     await expect(page.getByText(/Set menu miền Trung/i)).toBeVisible();
     await expect(page.getByText(/Vé tham quan Bà Nà Hills/i)).toBeVisible();
@@ -410,11 +413,11 @@ test.describe('Coordinator tour program persistence and detail edit flow', () =>
     await expect(page).toHaveURL(/\/coordinator\/tour-programs\/TP003\/edit$/);
     await expect(page.getByText(/Lý do từ chối: Thiếu thông tin giá bán/i)).toBeVisible();
 
-    await page.getByRole('button', { name: /3Giá & Cấu hình/i }).click();
+    await page.getByRole('button', { name: /3.*Giá & Cấu hình/i }).click();
     await expect(page.getByText(/Vận tải Việt Tourist/i)).toBeVisible();
     await expect(page.getByText(/Pearl Beach Hotel/i)).toBeVisible();
 
-    await page.getByRole('button', { name: /4Tour dự kiến/i }).click();
+    await page.getByRole('button', { name: /4.*Tour dự kiến/i }).click();
     await expect(page.getByText(/Preview danh sách tour/i)).toBeVisible();
     await expect(page.getByText('T001')).toBeVisible();
     await expect(page.getByText(/Chưa có ngày dự kiến/i)).toHaveCount(0);
@@ -432,11 +435,12 @@ test.describe('Coordinator tour program persistence and detail edit flow', () =>
     await expect(page).toHaveURL(/\/coordinator\/tour-programs\/TP004\/edit$/);
     await expect(page.getByText(/Danh sách ngày khởi hành dự kiến/i).first()).toBeVisible();
 
-    await page.getByRole('button', { name: /3Giá & Cấu hình/i }).click();
+    await page.getByRole('button', { name: /3.*Giá & Cấu hình/i }).click();
     await expect(page.getByLabel(/Đơn giá hướng dẫn viên/i)).toBeEnabled();
+    await page.getByLabel(/Đơn giá hướng dẫn viên/i).fill('400000');
     await expect(page.getByText(/Tính toán dự kiến/i)).toBeVisible();
 
-    await page.getByRole('button', { name: /4Tour dự kiến/i }).click();
+    await page.getByRole('button', { name: /4.*Tour dự kiến/i }).click();
     await expect(page.getByText(/Preview danh sách tour/i)).toBeVisible();
     await expect(page.getByText(/Tóm tắt:/i)).toHaveCount(0);
     await page.getByRole('button', { name: /^Gửi duyệt$/i }).click();

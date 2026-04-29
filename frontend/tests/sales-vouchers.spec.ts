@@ -18,7 +18,7 @@ test.describe('Sales voucher feedback', () => {
     await expect(page.getByRole('heading', { name: /Quản lý Voucher/i })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Thời gian áp dụng' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Tour áp dụng' })).toBeVisible();
-    await expect(page.getByRole('table').getByText('Chưa diễn ra')).toBeVisible();
+    await expect(page.getByRole('table').getByText('Sắp diễn ra')).toBeVisible();
 
     const autumnRow = page.locator('tbody tr').filter({ hasText: 'AUTUMN20' });
     await expect(autumnRow.getByText('Mùa Thu Kyoto & Osaka')).toBeVisible();

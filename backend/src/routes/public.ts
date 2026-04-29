@@ -42,9 +42,13 @@ export function createPublicRouter() {
       orderBy: { code: 'asc' },
     });
 
+    const tours = programs
+      .map((program) => buildPublicTour(program, program.instances, program.reviews))
+      .filter((tour): tour is NonNullable<typeof tour> => tour != null);
+
     res.json(normalizePayload({
       success: true,
-      tours: programs.map((program) => buildPublicTour(program, program.instances, program.reviews)),
+      tours,
     }));
   }));
 
@@ -68,9 +72,14 @@ export function createPublicRouter() {
       throw notFound('Tour not found');
     }
 
+    const tour = buildPublicTour(program, program.instances, program.reviews);
+    if (!tour) {
+      throw notFound('Tour not found');
+    }
+
     res.json(normalizePayload({
       success: true,
-      tour: buildPublicTour(program, program.instances, program.reviews),
+      tour,
     }));
   }));
 

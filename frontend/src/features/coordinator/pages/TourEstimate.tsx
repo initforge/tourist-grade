@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Breadcrumb, message } from 'antd';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { Booking } from '@entities/booking/data/bookings';
@@ -230,6 +230,24 @@ function getBookingStats(bookings: Booking[]) {
     });
   });
   return stats;
+}
+
+function hasBookingDeadlinePassed(instance: TourInstance) {
+  const deadline = new Date(instance.bookingDeadline);
+  return !Number.isNaN(deadline.getTime()) && deadline <= new Date();
+}
+
+function isBookingResolvedForManifestGate(booking: Booking) {
+  return booking.status === 'confirmed' || booking.status === 'completed' || booking.status === 'cancelled';
+}
+
+function canShowPassengerManifest(instance: TourInstance, relatedBookings: Booking[]) {
+  const confirmedBookings = relatedBookings.filter(isBookingConfirmedForOperations);
+  const confirmedGuestCount = confirmedBookings.reduce((sum, booking) => sum + booking.passengers.length, 0);
+  return hasBookingDeadlinePassed(instance)
+    && confirmedGuestCount >= instance.minParticipants
+    && relatedBookings.length > 0
+    && relatedBookings.every(isBookingResolvedForManifestGate);
 }
 
 function getGroupedAccommodation(program: TourProgram) {
@@ -468,7 +486,7 @@ function applyChoice(row: EstimateRow, choice: EstimateChoice, stats: ReturnType
   let occurrences = row.occurrences;
   let quantityEditable = row.quantityEditable;
   let occurrencesEditable = row.occurrencesEditable;
-  let unitPrice = row.target === 'child' && choice.childUnitPrice != null ? choice.childUnitPrice : choice.unitPrice;
+  const unitPrice = row.target === 'child' && choice.childUnitPrice != null ? choice.childUnitPrice : choice.unitPrice;
 
   if (row.categoryId === 'F') {
     quantity = choice.formulaQuantity === 'Nhập tay' ? Math.max(0, row.quantity) : Math.max(1, resolveDefaultQuantity(choice, stats) || 1);
@@ -869,6 +887,48 @@ export default function TourEstimate() {
   const instance = tourInstances.find((item) => item.id === id);
   const program = instance ? tourPrograms.find((item) => item.id === instance.programId) : undefined;
 
+  const [activeTab, setActiveTab] = useState<'overview' | 'guests' | 'itinerary' | 'estimate'>('overview');
+  const [guestPopup, setGuestPopup] = useState<Booking | null>(null);
+  const relatedBookings = useMemo(() => instance ? bookings.filter((booking) => (
+    booking.instanceCode === instance.id || (!booking.instanceCode && booking.tourId === instance.id)
+  )) : [], [bookings, instance]);
+  const canDisplayManifest = instance ? canShowPassengerManifest(instance, relatedBookings) : false;
+  const manifestBookings = useMemo(
+    () => canDisplayManifest ? relatedBookings.filter(isBookingConfirmedForOperations) : [],
+    [canDisplayManifest, relatedBookings],
+  );
+  const financialBookings = useMemo(
+    () => relatedBookings.filter(isBookingFinanciallyRelevantForOperations),
+    [relatedBookings],
+  );
+  const bookingStats = useMemo(() => getBookingStats(manifestBookings), [manifestBookings]);
+
+  const [estimateRows, setEstimateRows] = useState<EstimateRow[]>(() => (
+    instance && program
+      ? hydrateRows(buildFallbackRows(instance, program, manifestBookings, suppliers, services), instance, bookingStats, program.duration.days)
+      : []
+  ));
+
+  useEffect(() => {
+    if (!instance || !program) return;
+    const timer = window.setTimeout(() => {
+      setEstimateRows((current) => (
+        current.length > 0
+          ? current
+          : hydrateRows(buildFallbackRows(instance, program, manifestBookings, suppliers, services), instance, bookingStats, program.duration.days)
+      ));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [bookingStats, instance, manifestBookings, program, services, suppliers]);
+
+  const groupedRows = useMemo(() => getGroupedRows(estimateRows), [estimateRows]);
+  const totalCost = estimateRows.reduce((sum, row) => sum + row.total, 0);
+  const expectedRevenue = financialBookings.reduce((sum, booking) => (
+    sum + (booking.status === 'cancelled' ? getRetainedAmountFromCancelledBooking(booking) : booking.totalAmount)
+  ), 0);
+  const profit = expectedRevenue - totalCost;
+  const margin = expectedRevenue > 0 ? (profit / expectedRevenue) * 100 : 0;
+
   if (!instance || !program) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--color-background)] p-8">
@@ -880,29 +940,6 @@ export default function TourEstimate() {
       </div>
     );
   }
-
-  const [activeTab, setActiveTab] = useState<'overview' | 'guests' | 'itinerary' | 'estimate'>('overview');
-  const [guestPopup, setGuestPopup] = useState<Booking | null>(null);
-
-  const relatedBookings = bookings.filter((booking) => (
-    booking.instanceCode === instance.id || (!booking.instanceCode && booking.tourId === instance.id)
-  ));
-  const manifestBookings = relatedBookings.filter(isBookingConfirmedForOperations);
-  const financialBookings = relatedBookings.filter(isBookingFinanciallyRelevantForOperations);
-  const bookingStats = getBookingStats(manifestBookings);
-
-  const [estimateRows, setEstimateRows] = useState<EstimateRow[]>(() => {
-    const baseRows = buildFallbackRows(instance, program, manifestBookings, suppliers, services);
-    return hydrateRows(baseRows, instance, bookingStats, program.duration.days);
-  });
-
-  const groupedRows = useMemo(() => getGroupedRows(estimateRows), [estimateRows]);
-  const totalCost = estimateRows.reduce((sum, row) => sum + row.total, 0);
-  const expectedRevenue = financialBookings.reduce((sum, booking) => (
-    sum + (booking.status === 'cancelled' ? getRetainedAmountFromCancelledBooking(booking) : booking.totalAmount)
-  ), 0);
-  const profit = expectedRevenue - totalCost;
-  const margin = expectedRevenue > 0 ? (profit / expectedRevenue) * 100 : 0;
 
   const tabs = [
     { key: 'overview' as const, label: 'Tổng quan' },

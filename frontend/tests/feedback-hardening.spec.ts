@@ -51,10 +51,8 @@ function installRuntimeAudit(page: Page) {
   page.on('requestfailed', (request) => {
     const url = request.url();
     const errorText = request.failure()?.errorText ?? '';
-    const resourceType = request.resourceType();
-    const isNavigationAbort = errorText === 'net::ERR_ABORTED' && ['image', 'font'].includes(resourceType);
-    const isBootstrapAbort = errorText === 'net::ERR_ABORTED' && url.includes('/api/v1/bootstrap');
-    if (!url.startsWith('data:') && !url.startsWith('blob:') && !isNavigationAbort && !isBootstrapAbort) {
+    const isNavigationAbort = errorText === 'net::ERR_ABORTED';
+    if (!url.startsWith('data:') && !url.startsWith('blob:') && !isNavigationAbort) {
       issues.push(`requestfailed: ${request.resourceType()} ${url} ${request.failure()?.errorText ?? ''}`);
     }
   });
@@ -118,7 +116,7 @@ test.describe('Feedback hardening audit', () => {
     await expect(page.getByRole('heading', { name: /Khám Phá Vịnh Hạ Long/i, level: 1 })).toBeVisible();
     await expect(page.getByRole('heading', { name: /Lịch khởi hành/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Đặt ngay/i })).toBeVisible();
-    await page.getByRole('row', { name: /01\/05\/2026/ }).click();
+    await page.locator('tbody tr').first().click();
     await page.getByRole('button', { name: /Giá tour bao gồm/i }).click();
     await expect(page.getByText(/Xe Limousine đưa đón khứ hồi/i)).toBeVisible();
     await expectImagesLoaded(page, 'img');

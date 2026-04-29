@@ -39,6 +39,15 @@ const COMMON_COLS_CREATOR = ['Mã tour', 'Tên chương trình', 'Ngày KH', 'Đ
 const COMMON_COLS_HDV = ['Mã tour', 'Tên chương trình', 'Ngày KH', 'Điểm KH', 'Điểm TQ', 'Thời lượng', 'Số KH', 'Hướng dẫn viên', 'Trạng thái', ''];
 const COL_COMPLETED = ['Mã tour', 'Tên chương trình', 'Ngày KH', 'Số KH', 'Doanh thu thực tế', 'Chi phí thực tế', 'Lợi nhuận', ''];
 const COL_CANCELLED = ['Mã tour', 'Tên chương trình', 'Ngày KH', 'Số KH đăng ký', 'Thời điểm hủy', 'Tổng tiền hoàn', 'Lý do'];
+const TAB_STATUS_MAP: Record<TabKey, TourInstanceStatus> = {
+  cho_nhan_dieu_hanh: 'cho_nhan_dieu_hanh',
+  cho_du_toan: 'cho_du_toan',
+  phan_cong_hdv: 'san_sang_trien_khai',
+  dang_khoi_hanh: 'dang_trien_khai',
+  cho_quyet_toan: 'cho_quyet_toan',
+  hoan_thanh: 'hoan_thanh',
+  da_huy: 'da_huy',
+};
 
 function formatDate(value?: string) {
   return value ? new Date(value).toLocaleDateString('vi-VN') : '—';
@@ -134,16 +143,6 @@ export default function TourInstances() {
   const [showDispatchModal, setShowDispatchModal] = useState(false);
   const [dispatchTarget, setDispatchTarget] = useState<TourInstance | null>(null);
 
-  const tabStatusMap: Record<TabKey, TourInstanceStatus> = {
-    cho_nhan_dieu_hanh: 'cho_nhan_dieu_hanh',
-    cho_du_toan: 'cho_du_toan',
-    phan_cong_hdv: 'san_sang_trien_khai',
-    dang_khoi_hanh: 'dang_trien_khai',
-    cho_quyet_toan: 'cho_quyet_toan',
-    hoan_thanh: 'hoan_thanh',
-    da_huy: 'da_huy',
-  };
-
   const getProgram = (programId: string) => tourPrograms.find((program) => program.id === programId);
 
   const getTourBookings = (instance: TourInstance) => bookings.filter((booking) => isBookingConfirmedForOperations(booking) && (
@@ -166,12 +165,12 @@ export default function TourInstances() {
   };
 
   const tabCounts = TABS.reduce((acc, tab) => {
-    acc[tab.key] = tourInstances.filter((instance) => instance.status === tabStatusMap[tab.key]).length;
+    acc[tab.key] = tourInstances.filter((instance) => instance.status === TAB_STATUS_MAP[tab.key]).length;
     return acc;
   }, {} as Record<TabKey, number>);
 
   const displayRows = useMemo(() => {
-    const rows = tourInstances.filter((instance) => instance.status === tabStatusMap[activeTab]);
+    const rows = tourInstances.filter((instance) => instance.status === TAB_STATUS_MAP[activeTab]);
     if (activeTab === 'hoan_thanh' && rows.length === 0) {
       return tourInstances.filter((instance) => instance.status === 'cho_quyet_toan');
     }

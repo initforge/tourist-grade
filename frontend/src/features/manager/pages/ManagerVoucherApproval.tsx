@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { VOUCHER_STATUS_LABEL, VOUCHER_STATUS_STYLE } from '@entities/voucher/data/vouchers';
 import type { Voucher, VoucherStatus } from '@entities/voucher/data/vouchers';
 import {
@@ -67,7 +67,7 @@ export default function ManagerVoucherApproval() {
   const [search, setSearch] = useState('');
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [approveId, setApproveId] = useState<string | null>(null);
-  const getTourName = (id: string) => tourPrograms.find((tour) => tour.id === id)?.name ?? id;
+  const getTourName = useCallback((id: string) => tourPrograms.find((tour) => tour.id === id)?.name ?? id, [tourPrograms]);
   const vouchers = useMemo(
     () => storeVouchers.map((voucher) => normalizeVoucherLifecycle(voucher)).filter((voucher) => VISIBLE.has(voucher.status)).sort((a, b) => a.startDate.localeCompare(b.startDate)),
     [storeVouchers],
@@ -78,7 +78,7 @@ export default function ManagerVoucherApproval() {
       .filter((voucher) => voucher.status === status)
       .filter((voucher) => !keyword || `${voucher.code} ${voucher.description ?? ''} ${voucher.applicableTours.map(getTourName).join(' ')}`.toLowerCase().includes(keyword))
       .sort((a, b) => a.startDate.localeCompare(b.startDate));
-  }, [search, status, vouchers]);
+  }, [getTourName, search, status, vouchers]);
   const approveTarget = vouchers.find((voucher) => voucher.id === approveId);
   const rejectTarget = vouchers.find((voucher) => voucher.id === rejectId);
 

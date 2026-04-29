@@ -14,13 +14,12 @@ test.describe('Customer + Public Booking Verification', () => {
     await expect(page.getByRole('columnheader', { name: /Phụ thu phòng đơn/i })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: /Mã tour/i })).toBeVisible();
     await expect(page.getByRole('heading', { name: /Thông tin cần lưu ý/i })).toBeVisible();
-    await expect(page.getByRole('heading', { name: /Tour liên quan/i })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: /Chỗ trống/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Ngày khác/i })).toBeVisible();
 
     const bookButton = page.getByRole('button', { name: /Đặt ngay/i });
     await expect(bookButton).toBeEnabled();
-    await page.getByRole('row', { name: /01\/05\/2026/ }).click();
+    await page.locator('tbody tr').first().click();
     await expect(bookButton).toBeEnabled();
 
     await page.getByRole('button', { name: /Giá tour bao gồm/i }).click();
@@ -82,7 +81,7 @@ test.describe('Customer + Public Booking Verification', () => {
 
   test('Row 21: customer cancellation stays in a popup and uses the requested submit label', async ({ page }) => {
     await loginAs(page, 'customer', undefined, { clearBookings: true });
-    await page.goto('/customer/bookings/B001');
+    await page.goto('/customer/bookings/B003');
     await page.waitForLoadState('domcontentloaded');
 
     await page.getByRole('button', { name: /Yêu cầu hủy tour/i }).click();
@@ -91,7 +90,7 @@ test.describe('Customer + Public Booking Verification', () => {
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole('button', { name: /Gửi yêu cầu hủy/i })).toBeVisible();
     await expect(dialog.getByRole('button', { name: /Xác nhận hủy/i })).toHaveCount(0);
-    await expect(page).toHaveURL(/\/customer\/bookings\/B001$/);
+    await expect(page).toHaveURL(/\/customer\/bookings\/B003$/);
   });
 
   test('Row 22: lookup uses two-column layout, matches contact info, and shows actions by booking status', async ({ page }) => {
@@ -132,7 +131,7 @@ test.describe('Customer + Public Booking Verification', () => {
 
     await lookupBooking(page, 'BK-582910', '0988888888');
     await expect(resultRegion.getByText('BK-582910')).toBeVisible();
-    await expect(resultRegion.getByRole('button', { name: /Hủy/i })).toBeVisible();
+    await expect(resultRegion.getByRole('button', { name: /Hủy/i })).toHaveCount(0);
     await expect(resultRegion.getByRole('button', { name: /Thanh toán/i })).toHaveCount(0);
 
     await lookupBooking(page, 'BK-102938', '0988888888');

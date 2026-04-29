@@ -51,7 +51,8 @@ type RoomCounts = {
   triple: number;
 };
 
-const BOOKING_DRAFT_STORAGE_KEY = 'travela-public-booking-draft';
+const LEGACY_BOOKING_DRAFT_STORAGE_KEY = 'travela-public-booking-draft';
+const BOOKING_DRAFT_STORAGE_PREFIX = 'travela-public-booking-draft';
 
 function buildPassengers(counts: Counts, previous: Passenger[] = []) {
   const nextPassengers: Passenger[] = [];
@@ -98,26 +99,35 @@ function SummaryRow({ label, value, strong = false }: { label: string; value: st
   );
 }
 
-function saveDraftToStorage(payload: Record<string, unknown>) {
+function buildDraftStorageKey(ownerKey: string, slug?: string, scheduleId?: string) {
+  return `${BOOKING_DRAFT_STORAGE_PREFIX}:${ownerKey}:${slug ?? 'unknown-tour'}:${scheduleId ?? 'unknown-schedule'}`;
+}
+
+function saveDraftToStorage(storageKey: string, payload: Record<string, unknown>) {
   try {
-    localStorage.setItem(BOOKING_DRAFT_STORAGE_KEY, JSON.stringify(payload));
+    localStorage.removeItem(LEGACY_BOOKING_DRAFT_STORAGE_KEY);
+    localStorage.setItem(storageKey, JSON.stringify(payload));
   } catch {
     // Ignore storage failures.
   }
 }
 
-function loadDraftFromStorage() {
+function loadDraftFromStorage(storageKey: string) {
   try {
-    const raw = localStorage.getItem(BOOKING_DRAFT_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_BOOKING_DRAFT_STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     return raw ? JSON.parse(raw) as Record<string, unknown> : null;
   } catch {
     return null;
   }
 }
 
-function clearDraftFromStorage() {
+function clearDraftFromStorage(storageKey?: string) {
   try {
-    localStorage.removeItem(BOOKING_DRAFT_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_BOOKING_DRAFT_STORAGE_KEY);
+    if (storageKey) {
+      localStorage.removeItem(storageKey);
+    }
   } catch {
     // Ignore storage failures.
   }
@@ -140,6 +150,15 @@ function shouldResetAppliedPromo(promoCode: string, discountAmount: number) {
   return promoCode.trim().length > 0 || discountAmount > 0;
 }
 
+function getDefaultContact(user?: { name?: string; phone?: string; email?: string } | null): ContactState {
+  return {
+    name: user?.name ?? '',
+    phone: user?.phone ?? '',
+    email: user?.email ?? '',
+    note: '',
+  };
+}
+
 export default function BookingCheckout() {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
@@ -157,14 +176,14 @@ export default function BookingCheckout() {
 
   const tour = tours.find((item) => item.slug === slug);
   const schedule: DepartureScheduleEntry | undefined = tour?.departureSchedule.find((item) => item.id === scheduleId);
+  const draftOwnerKey = user?.id ? `user-${user.id}` : 'guest';
+  const draftStorageKey = useMemo(
+    () => buildDraftStorageKey(draftOwnerKey, slug, scheduleId),
+    [draftOwnerKey, scheduleId, slug],
+  );
 
   const [activeStep, setActiveStep] = useState<CheckoutStep>(0);
-  const [contact, setContact] = useState<ContactState>({
-    name: user?.name ?? '',
-    phone: user?.phone ?? '',
-    email: user?.email ?? '',
-    note: '',
-  });
+  const [contact, setContact] = useState<ContactState>(() => getDefaultContact(user));
   const [counts, setCounts] = useState<Counts>({ adult: 1, child: 0, infant: 0 });
   const [passengers, setPassengers] = useState<Passenger[]>(buildPassengers({ adult: 1, child: 0, infant: 0 }));
   const [roomCounts, setRoomCounts] = useState<RoomCounts>({ single: 0, double: 1, triple: 0 });
@@ -207,23 +226,43 @@ export default function BookingCheckout() {
     [counts.adult, counts.child, counts.infant, priceAdult, priceChild, priceInfant, surchargeTotal],
   );
   const totalAfterDiscount = Math.max(subtotal - discountAmount, 0);
-  const isDepositDisabled = Boolean(schedule && Math.ceil((new Date(schedule.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) < 7);
+  const isDepositDisabled = Boolean(schedule && Math.ceil((new Date(schedule.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) <= 7);
   const payableAmount = paymentRatio === 'deposit' ? Math.ceil(totalAfterDiscount * 0.5) : totalAfterDiscount;
+
+  useEffect(() => {
+    clearDraftFromStorage();
+  }, []);
 
   useEffect(() => {
     if (!tour || !schedule) {
       return;
     }
 
-    const draft = loadDraftFromStorage();
+    const draft = loadDraftFromStorage(draftStorageKey);
     if (!draft || draft.slug !== slug || draft.scheduleId !== schedule.id) {
+      if (!bookingIdParam && !payosState) {
+        clearDraftFromStorage(draftStorageKey);
+        setContact(getDefaultContact(user));
+        setCounts({ adult: 1, child: 0, infant: 0 });
+        setPassengers(buildPassengers({ adult: 1, child: 0, infant: 0 }));
+        setRoomCounts({ single: 0, double: 1, triple: 0 });
+        setPromoCode('');
+        setPromoMessage('');
+        setDiscountAmount(0);
+        setPaymentMethod('bank');
+        setPaymentRatio('full');
+        setCreatedBooking(null);
+        setActiveStep(0);
+        setError('');
+        setStatusMessage('');
+      }
       return;
     }
 
     const draftBooking = (draft.booking as Booking | null | undefined) ?? null;
     const draftStep = (draft.activeStep as CheckoutStep | undefined) ?? 0;
     if (draftStep === 2 || isSuccessfulPaymentStatus(draftBooking?.paymentStatus)) {
-      clearDraftFromStorage();
+      clearDraftFromStorage(draftStorageKey);
       return;
     }
 
@@ -240,7 +279,7 @@ export default function BookingCheckout() {
     setPaymentRatio((draft.paymentRatio as 'deposit' | 'full' | undefined) ?? (isDepositDisabled ? 'full' : 'full'));
     setCreatedBooking(draftBooking);
     setActiveStep(draftStep);
-  }, [isDepositDisabled, schedule, slug, tour]);
+  }, [bookingIdParam, draftStorageKey, isDepositDisabled, payosState, schedule, slug, tour, user]);
 
   useEffect(() => {
     if (!bookingIdParam || createdBooking || effectiveBooking || !accessToken) {
@@ -283,7 +322,7 @@ export default function BookingCheckout() {
         }
 
         const latestSchedule = response.tour.departureSchedule.find((item) => item.id === schedule.id);
-        setLiveScheduleAvailableSeats(latestSchedule?.availableSeats ?? schedule.availableSeats ?? null);
+        setLiveScheduleAvailableSeats(latestSchedule ? latestSchedule.availableSeats : 0);
       })
       .catch(() => {
         if (!cancelled) {
@@ -308,13 +347,13 @@ export default function BookingCheckout() {
     }
 
     if (isSuccessfulPaymentStatus(checkoutBooking.paymentStatus)) {
-      clearDraftFromStorage();
+      clearDraftFromStorage(draftStorageKey);
       setActiveStep(2);
       return;
     }
 
     setActiveStep((current) => (current === 2 ? current : 1));
-  }, [bookingIdParam, checkoutBooking]);
+  }, [bookingIdParam, checkoutBooking, draftStorageKey]);
 
   useEffect(() => {
     if (!tour || !schedule) {
@@ -322,11 +361,11 @@ export default function BookingCheckout() {
     }
 
     if (activeStep === 2 || isSuccessfulPaymentStatus(checkoutBooking?.paymentStatus)) {
-      clearDraftFromStorage();
+      clearDraftFromStorage(draftStorageKey);
       return;
     }
 
-    saveDraftToStorage({
+    saveDraftToStorage(draftStorageKey, {
       slug,
       scheduleId: schedule.id,
       contact,
@@ -340,7 +379,7 @@ export default function BookingCheckout() {
       booking: checkoutBooking,
       activeStep,
     });
-  }, [activeStep, checkoutBooking, contact, counts, discountAmount, passengers, paymentMethod, paymentRatio, promoCode, roomCounts, schedule, slug, tour]);
+  }, [activeStep, checkoutBooking, contact, counts, discountAmount, draftStorageKey, passengers, paymentMethod, paymentRatio, promoCode, roomCounts, schedule, slug, tour]);
 
   useEffect(() => {
     if (!bookingIdParam || !payosState) {
@@ -350,7 +389,7 @@ export default function BookingCheckout() {
     let cancelled = false;
 
     const syncBookingAfterPayment = async () => {
-      const stored = loadDraftFromStorage();
+      const stored = loadDraftFromStorage(draftStorageKey);
       const draftBooking = (stored?.booking as Booking | undefined) ?? effectiveBooking ?? null;
       const lookupContact = draftBooking?.contactInfo.email || draftBooking?.contactInfo.phone || contact.email || contact.phone;
       const lookupCode = draftBooking?.bookingCode;
@@ -393,7 +432,7 @@ export default function BookingCheckout() {
     return () => {
       cancelled = true;
     };
-  }, [bookingIdParam, contact.email, contact.phone, effectiveBooking, payosState, searchParams, setSearchParams, upsertBooking]);
+  }, [bookingIdParam, contact.email, contact.phone, draftStorageKey, effectiveBooking, payosState, searchParams, setSearchParams, upsertBooking]);
 
   const updatePassenger = (index: number, field: keyof Passenger, value: string | number) => {
     setPassengers((current) => current.map((passenger, passengerIndex) => (
@@ -656,7 +695,7 @@ export default function BookingCheckout() {
                 <section className="bg-white border border-outline-variant/30 p-6 space-y-5">
                   <div className="flex items-center justify-between gap-4 flex-wrap">
                     <h2 className="font-headline text-xl text-primary">Số lượng hành khách</h2>
-                    <p className="text-sm text-primary/60">Còn {availableSeats} chỗ trống</p>
+                    <p className="text-sm text-primary/60">Còn {selectableSeatLimit} chỗ trống</p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {([
@@ -838,7 +877,7 @@ export default function BookingCheckout() {
                 <div className="mt-8 flex flex-wrap justify-center gap-3">
                   <button
                     onClick={() => {
-                      clearDraftFromStorage();
+                      clearDraftFromStorage(draftStorageKey);
                       navigate('/customer/bookings');
                     }}
                     className="px-6 py-3 bg-primary text-white font-sans uppercase tracking-[0.15em] text-[11px] font-bold hover:bg-[var(--color-secondary)] transition-colors"

@@ -11,6 +11,9 @@ const prismaMock = {
     findMany: vi.fn(),
     update: vi.fn(),
   },
+  emailOutbox: {
+    create: vi.fn(),
+  },
   tourProgram: {
     findFirst: vi.fn(),
   },
@@ -112,6 +115,7 @@ describe('tour-instance routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.user.findUnique.mockResolvedValue({ id: 'coordinator-1', status: 'ACTIVE' });
+    prismaMock.emailOutbox.create.mockResolvedValue({});
     prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => Promise<unknown>) => callback(prismaMock));
   });
 
@@ -242,6 +246,10 @@ describe('tour-instance routes', () => {
     prismaMock.booking.findMany.mockResolvedValue([
       {
         id: 'booking-1',
+        bookingCode: 'BK001',
+        contactName: 'Nguyen Van A',
+        contactEmail: 'a@example.com',
+        contactPhone: '0900000001',
         status: 'CONFIRMED',
         paidAmount: 4500000,
         cancelledConfirmedById: null,
@@ -249,6 +257,10 @@ describe('tour-instance routes', () => {
       },
       {
         id: 'booking-2',
+        bookingCode: 'BK002',
+        contactName: 'Tran Thi B',
+        contactEmail: 'b@example.com',
+        contactPhone: '0900000002',
         status: 'PENDING',
         paidAmount: 0,
         cancelledConfirmedById: null,
@@ -302,6 +314,18 @@ describe('tour-instance routes', () => {
         refundTotal: 4500000,
       }),
     }));
+    expect(prismaMock.emailOutbox.create).toHaveBeenCalledTimes(2);
+    expect(prismaMock.emailOutbox.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        template: 'booking_cancel_confirmed',
+        recipient: expect.any(String),
+        bookingId: expect.any(String),
+        payloadJson: expect.objectContaining({
+          cancellationReason: 'Không đủ điều kiện khởi hành',
+          cancellationSource: 'manager_tour_cancel',
+        }),
+      }),
+    }));
     expect(response.body.tourInstance.status).toBe('da_huy');
   });
 
@@ -311,6 +335,10 @@ describe('tour-instance routes', () => {
     prismaMock.booking.findMany.mockResolvedValue([
       {
         id: 'booking-3',
+        bookingCode: 'BK003',
+        contactName: 'Le Van C',
+        contactEmail: 'c@example.com',
+        contactPhone: '0900000003',
         status: 'CONFIRMED',
         paidAmount: 32000000,
         cancelledConfirmedById: null,

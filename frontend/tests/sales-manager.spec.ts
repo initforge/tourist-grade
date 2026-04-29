@@ -13,7 +13,7 @@ async function fillPendingPassengerData(page: Page) {
   await page?.getByRole('button', { name: 'Chỉnh sửa danh sách HK' })?.click();
 
   const modal = page?.getByRole('dialog');
-  await modal?.locator('input[placeholder="Số GKS"]')?.fill('GKS-2018-0001');
+  await modal?.locator('input[placeholder="Số GKS"]')?.fill('001201800001');
   await modal?.getByRole('combobox')?.last()?.click();
   await page?.keyboard?.type('Việt Nam');
   await page?.keyboard?.press('Enter');
@@ -48,7 +48,7 @@ test?.describe('Sales + Manager Verification', () => {
     await expect(page?.getByRole('button', { name: /Xuất Excel/i }))?.toHaveCount(0);
 
     await page?.getByRole('button', { name: /Đã xác nhận/ })?.first()?.click();
-    await expect(page?.getByText('Đã đặt'))?.toBeVisible();
+    await expect(page?.locator('tbody'))?.toContainText('Đã xác nhận');
 
     await page?.getByRole('button', { name: /Hoàn thành/ })?.first()?.click();
     await expect(page?.getByRole('columnheader', { name: 'Trạng thái đơn' }))?.toBeVisible();
@@ -104,7 +104,7 @@ test?.describe('Sales + Manager Verification', () => {
     await expect(page?.getByRole('columnheader', { name: 'Ngày gửi phê duyệt' }))?.toHaveCount(0);
 
     const filterOptions = page?.locator('select option');
-    await expect(filterOptions)?.toContainText(['Chờ phê duyệt', 'Chưa diễn ra', 'Đang hoạt động', 'Vô hiệu/Hết hạn']);
+    await expect(filterOptions)?.toContainText(['Chờ phê duyệt', 'Sắp diễn ra', 'Đang hoạt động', 'Vô hiệu/Hết hạn']);
     await expect(filterOptions?.filter({ hasText: 'Tất cả trạng thái' }))?.toHaveCount(0);
     await expect(filterOptions?.filter({ hasText: 'Nháp' }))?.toHaveCount(0);
     await expect(filterOptions?.filter({ hasText: 'Không được phê duyệt' }))?.toHaveCount(0);
@@ -127,8 +127,8 @@ test?.describe('Sales + Manager Verification', () => {
     await loginAsManager(page);
 
     const rows = page?.locator('tbody tr');
-    await expect(rows?.nth(0))?.toContainText('VIPONLY30');
-    await expect(rows?.nth(1))?.toContainText('AUTUMN20');
+    await expect(rows?.nth(0))?.toContainText('APPROVENOW');
+    await expect(rows?.nth(1))?.toContainText('VIPONLY30');
 
     await rows?.nth(0)?.getByRole('button', { name: 'Từ chối' })?.click();
     const modal = page?.getByRole('dialog');

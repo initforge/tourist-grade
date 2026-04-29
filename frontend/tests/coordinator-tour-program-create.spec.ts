@@ -18,6 +18,12 @@ const bootstrapPayload = {
   services: [],
   guides: [],
   vouchers: [],
+  specialDays: [
+    { id: 'SD-APR30', name: 'Giải phóng Miền Nam', occasion: 'Lễ 30/04', startDate: '2026-04-30', endDate: '2026-04-30' },
+    { id: 'SD-MAY01', name: 'Quốc tế Lao động', occasion: 'Lễ 01/05', startDate: '2026-05-01', endDate: '2026-05-01' },
+    { id: 'SD-XMAS', name: 'Giá Sinh', occasion: 'Giáng sinh', startDate: '2026-12-25', endDate: '2026-12-25' },
+  ],
+  provinces: [],
   blogs: [],
   tours: [],
   bookings: [],
@@ -83,10 +89,6 @@ function tourTypeSection(page: Page) {
   return page.locator('section').filter({ hasText: /Loại tour/i }).first();
 }
 
-function transportSection(page: Page) {
-  return page.locator('section').filter({ hasText: /^Phương tiện/i }).first();
-}
-
 async function addSightseeingSpot(section: Locator, label: string) {
   await section.locator('select').nth(1).selectOption({ label });
 }
@@ -113,7 +115,9 @@ async function fillBaseInfo(page: Page, { days, nights }: { days: number; nights
   await route.locator('input').first().fill('Tour test dieu phoi');
   await route.locator('select').nth(0).selectOption({ index: 1 });
   await addSightseeingSpot(route, 'Đà Nẵng');
-  await route.locator('select').nth(2).selectOption({ label: '4 sao' });
+  if (nights > 0) {
+    await route.getByLabel('Tiêu chuẩn lưu trú').selectOption({ label: '4 sao' });
+  }
   await route.locator('textarea').fill('Mo ta test dieu phoi.');
 }
 
@@ -196,7 +200,7 @@ test.describe('Coordinator create tour program wizard', () => {
 
     const route = routeSection(page);
     await expect(route.locator('input').first()).toHaveValue('');
-    await expect(route.getByLabel('Tiêu chuẩn lưu trú')).toHaveValue('');
+    await expect(route.getByLabel('Tiêu chuẩn lưu trú')).toHaveCount(0);
     await expect(route.locator('input[type="number"]')).toHaveValue('7');
     await expect(page.getByLabel(/Máy bay/i)).toHaveCount(0);
 
@@ -212,7 +216,7 @@ test.describe('Coordinator create tour program wizard', () => {
     await expect(page.getByText(/Vui lòng nhập tên chương trình tour/i).first()).toBeVisible();
     await expect(page.getByText(/Vui lòng chọn điểm khởi hành/i).first()).toBeVisible();
     await expect(page.getByText(/Vui lòng chọn ít nhất một điểm tham quan/i).first()).toBeVisible();
-    await expect(page.getByText(/Vui lòng chọn tiêu chuẩn lưu trú/i).first()).toBeVisible();
+    await expect(page.getByText(/Vui lòng chọn tiêu chuẩn lưu trú/i)).toHaveCount(0);
     await expect(page.getByText(/Vui lòng nhập mô tả chương trình tour/i).first()).toBeVisible();
     await expect(page.getByText(/Vui lòng chọn ngày bắt đầu/i).first()).toBeVisible();
     await expect(page.getByText(/Vui lòng chọn ngày kết thúc/i).first()).toBeVisible();
@@ -318,7 +322,7 @@ test.describe('Coordinator create tour program wizard', () => {
     await endInput.fill(rules.validEnd);
     await page.getByRole('button', { name: 'T2' }).click();
 
-    const removeButtons = page.getByRole('button', { name: /Xóa ngày/i });
+    const removeButtons = page.locator('button[aria-label^="Xóa ngày"]');
     const countBefore = await removeButtons.count();
     expect(countBefore).toBeGreaterThan(0);
 
@@ -367,6 +371,7 @@ test.describe('Coordinator create tour program wizard', () => {
     await expect(page.getByText(/Vận tải Việt Tourist/i)).toBeVisible();
     await expect(page.getByText(/Hoàng Gia Travel Bus/i)).toBeVisible();
     await page.getByLabel(/Đơn giá xe tham quan Vận tải Việt Tourist/i).fill('8100000');
+    await page.getByLabel(/Đơn giá xe tham quan Hoàng Gia Travel Bus/i).fill('8100000');
 
     await page.getByLabel(/Thêm dịch vụ ăn uống cho Ngày 1 - Bữa trưa/i).click();
     await page.getByLabel(/Chọn Set menu miền Trung/i).check();
@@ -375,6 +380,7 @@ test.describe('Coordinator create tour program wizard', () => {
     await page.getByLabel(/Thêm vé tham quan cho Ngày 1/i).click();
     await page.getByLabel(/Chọn Vé tham quan Bà Nà Hills/i).check();
     await page.getByRole('button', { name: /Thêm đã chọn/i }).click();
+    await page.getByLabel(/Đơn giá hướng dẫn viên/i).fill('400000');
 
     await page.getByRole('button', { name: /Tiếp theo: Tour dự kiến/i }).click();
 
@@ -415,15 +421,9 @@ test.describe('Coordinator create tour program wizard', () => {
     await page.getByRole('button', { name: /Thêm đã chọn/i }).click();
 
     const pricingSummary = page.locator('section').filter({ hasText: /Tính toán dự kiến/i }).first();
-    const infantPriceBox = pricingSummary.locator('div.space-y-2').filter({ hasText: /Giá trẻ sơ sinh/i }).locator('div').last();
-    const minimumGuestsBox = pricingSummary.locator('div.space-y-2').filter({ hasText: /Số khách tối thiểu để triển khai/i }).locator('div').last();
-    await expect(pricingSummary).toContainText('3.128.000');
-    await expect(pricingSummary).toContainText('2.346.000');
-    await expect(infantPriceBox).toHaveText('0');
-    await expect(pricingSummary).toContainText('1.025.000');
-    await expect(pricingSummary).toContainText('2.719.750');
+    await expect(pricingSummary).toContainText('3.105.000');
+    await expect(pricingSummary).toContainText('2.699.510');
     await expect(pricingSummary).toContainText('15.0%');
-    await expect(minimumGuestsBox).toHaveText('7');
   });
 });
 

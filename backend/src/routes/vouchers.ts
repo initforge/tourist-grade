@@ -24,6 +24,8 @@ const rejectSchema = z.object({
   reason: z.string().min(2),
 });
 
+const VOUCHER_OVERDUE_REJECTION_REASON = 'Quá hạn gửi phê duyệt';
+
 function parseVoucherValue(value: string | number | undefined) {
   if (typeof value === 'number') {
     return value;
@@ -43,6 +45,26 @@ function toVoucherStatus(status: string | undefined) {
   }
 
   return status.toUpperCase() as 'DRAFT' | 'PENDING_APPROVAL' | 'REJECTED' | 'ACTIVE' | 'INACTIVE';
+}
+
+function getVoucherApprovalDeadlineCutoff(now = new Date()) {
+  const cutoff = new Date(now);
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() + 7);
+  return cutoff;
+}
+
+async function rejectOverdueDraftVouchers() {
+  await prisma.voucher.updateMany({
+    where: {
+      status: 'DRAFT',
+      startsAt: { lt: getVoucherApprovalDeadlineCutoff() },
+    },
+    data: {
+      status: 'REJECTED',
+      rejectionReason: VOUCHER_OVERDUE_REJECTION_REASON,
+    },
+  });
 }
 
 async function resolveProgramIds(codes: string[] | undefined) {
@@ -73,6 +95,8 @@ export function createVouchersRouter() {
   router.use(authenticate, requireRoles('sales', 'manager', 'coordinator', 'admin'));
 
   router.get('/', asyncHandler(async (_req, res) => {
+    await rejectOverdueDraftVouchers();
+
     const vouchers = await prisma.voucher.findMany({
       include: {
         targets: {

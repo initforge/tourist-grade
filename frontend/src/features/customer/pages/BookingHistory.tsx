@@ -132,6 +132,20 @@ export default function BookingHistory() {
                       {activeTab === 'cancelled' && (
                         <p className="text-xs text-primary/55 mt-2">
                           Hoàn tiền: <strong>{booking.refundAmount ? formatCurrency(booking.refundAmount) : '0đ'}</strong>
+                          {booking.refundBillUrl && (
+                            <>
+                              <span className="mx-2">·</span>
+                              <a
+                                href={booking.refundBillUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={(event) => event.stopPropagation()}
+                                className="text-[var(--color-secondary)] hover:underline"
+                              >
+                                Xem bill hoàn tiền
+                              </a>
+                            </>
+                          )}
                         </p>
                       )}
                     </div>

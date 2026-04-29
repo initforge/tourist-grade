@@ -188,7 +188,7 @@ export default function ManagerTourEstimateApproval() {
                       {cat?.name}
                     </td>
                   </tr>,
-                  ...(cat?.items ?? [])?.map((item: CostItem, ii: number) => (
+                  ...(cat?.items ?? []).map((item: CostItem, ii: number) => (
                     <tr key={`${ci}-${ii}`} className={ci % 2 === 0 ? 'bg-white' : 'bg-[#FAFAF5]/50'}>
                       <td className="px-6 py-3 text-sm text-[#2A2421] pl-10">{item?.name}</td>
                       <td className="px-6 py-3 text-sm text-[#2A2421]/70">{item?.unit}</td>

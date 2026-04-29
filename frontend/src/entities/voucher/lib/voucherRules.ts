@@ -1,6 +1,6 @@
 import type { Voucher, VoucherStatus, VoucherType } from '@entities/voucher/data/vouchers';
 
-export const VOUCHER_OVERDUE_REJECTION_REASON = 'Quá thời gian phê duyệt';
+export const VOUCHER_OVERDUE_REJECTION_REASON = 'Quá hạn gửi phê duyệt';
 export const SALES_DRAFT_WARNING = 'Voucher sắp đến hạn gửi phê duyệt. Bạn nên gửi ngay để đảm bảo kịp thời gian xét duyệt.';
 export const MANAGER_APPROVAL_WARNING = 'Voucher sắp đến hạn bắt đầu, cần phải phê duyệt ngay.';
 export const VOUCHER_DATE_RULE_HELP = 'Nhập cách ít nhất 10 ngày để lưu, nhập cách ít nhất 7 ngày để gửi phê duyệt.';
@@ -45,7 +45,15 @@ export function approvedVoucherStatus(startDate: string, today = voucherTodayIso
 }
 
 export function normalizeVoucherLifecycle(voucher: Voucher, today = voucherTodayIso()): Voucher {
-  if (['draft', 'pending_approval'].includes(voucher.status) && voucher.startDate <= today) {
+  if (voucher.status === 'draft' && !canSendVoucherApproval(voucher.startDate, today)) {
+    return {
+      ...voucher,
+      status: 'rejected',
+      rejectionReason: voucher.rejectionReason ?? VOUCHER_OVERDUE_REJECTION_REASON,
+    };
+  }
+
+  if (voucher.status === 'pending_approval' && voucher.startDate <= today) {
     return {
       ...voucher,
       status: 'rejected',

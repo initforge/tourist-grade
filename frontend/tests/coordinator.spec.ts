@@ -1,13 +1,13 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { loginAs } from './support/app';
 
-async function loginAsCoordinator(page: any) {
+async function loginAsCoordinator(page: Page) {
   await loginAs(page, 'coordinator', '/coordinator/dashboard');
   await page?.waitForLoadState('domcontentloaded');
   await page?.waitForTimeout(500);
 }
 
-async function loginAsManager(page: any) {
+async function loginAsManager(page: Page) {
   await loginAs(page, 'manager', '/manager/dashboard');
   await page?.waitForLoadState('domcontentloaded');
   await page?.waitForTimeout(500);
@@ -73,20 +73,20 @@ test?.describe('Coordinator Role — Full Verification', () => {
     await page?.locator('button', { hasText: 'Phân công HDV' })?.click();
     await page?.waitForTimeout(300);
 
-    // Table row action button phải l? "Phân công HDV" (KHÔNG phải "Xem chi tiết")
-    // Use ?.nth(1) because ?.first() grabs the tab button itself
-    const btn = page?.locator('button', { hasText: 'Phân công HDV' })?.nth(1);
+    // Row action can be "Phân công HDV" for unassigned tours or "Thay đổi HDV" after a previous assignment.
+    const btn = page?.locator('tbody tr')?.first()?.getByRole('button', { name: /Phân công HDV|Thay đổi HDV/i });
     await expect(btn)?.toBeVisible();
 
     // Click → modal mở
+    page?.once('dialog', dialog => dialog.accept());
     await btn?.click();
     await page?.waitForTimeout(500);
 
     // Modal title phải hiện
-    await expect(page?.locator('h3', { hasText: 'Phân công HDV' }))?.toBeVisible({ timeout: 3000 });
+    await expect(page?.locator('h3', { hasText: /Phân công HDV|Thay đổi HDV/i }))?.toBeVisible({ timeout: 3000 });
 
     // Danh sách HDV phải hiện
-    await expect(page?.locator('p', { hasText: 'Chọn hướng dẫn viên' }))?.toBeVisible();
+    await expect(page?.locator('p', { hasText: /Danh sách phù hợp|Chọn hướng dẫn viên/i }))?.toBeVisible();
 
     // Nút Xác nhận điều phối phải có
     await expect(page?.locator('button', { hasText: 'Xác nhận điều phối' }))?.toBeVisible();
@@ -134,12 +134,12 @@ test?.describe('Coordinator Role — Full Verification', () => {
 
     await page?.locator('button', { hasText: 'Phân công HDV' })?.click();
     await page?.waitForTimeout(300);
-    // ?.nth(1) skips the tab button itself
-    await page?.locator('button', { hasText: 'Phân công HDV' })?.nth(1)?.click();
+    page?.once('dialog', dialog => dialog.accept());
+    await page?.locator('tbody tr')?.first()?.getByRole('button', { name: /Phân công HDV|Thay đổi HDV/i })?.click();
     await page?.waitForTimeout(500);
 
     // Phải có title modal
-    await expect(page?.locator('h3', { hasText: 'Phân công HDV' }))?.toBeVisible({ timeout: 3000 });
+    await expect(page?.locator('h3', { hasText: /Phân công HDV|Thay đổi HDV/i }))?.toBeVisible({ timeout: 3000 });
 
     // KHÔNG có input nhập thông tin xe (biển số, loại xe...)
     const xeInput = page?.locator('input[placeholder*="xe"], input[placeholder*="Xe"], input[placeholder*="biển"]');
@@ -169,7 +169,7 @@ test?.describe('Coordinator Role — Full Verification', () => {
     await page?.waitForTimeout(1000);
 
     const options = page?.locator('select option');
-    await expect(options)?.toContainText(['Chờ phê duyệt', 'Chưa diễn ra', 'Đang hoạt động', 'Vô hiệu/Hết hạn']);
+    await expect(options)?.toContainText(['Chờ phê duyệt', 'Sắp diễn ra', 'Đang hoạt động', 'Vô hiệu/Hết hạn']);
     await expect(options?.filter({ hasText: 'Tất cả trạng thái' }))?.toHaveCount(0);
     await expect(options?.filter({ hasText: 'Nháp' }))?.toHaveCount(0);
     await expect(options?.filter({ hasText: 'Không được phê duyệt' }))?.toHaveCount(0);
@@ -279,14 +279,15 @@ test?.describe('Coordinator Role — Full Verification', () => {
   });
 
   // ── 14. ServiceList: revised catalog columns ─────────────────
-  test('14. ServiceList: có cột Đơn vị / Thiết lập giá và dịch vụ HDV mặc định', async ({ page }) => {
+  test('14. ServiceList: có cột Đơn vị / Thiết lập giá và dịch vụ mặc định', async ({ page }) => {
     await loginAsCoordinator(page);
     await page?.goto('/coordinator/services');
     await page?.waitForTimeout(500);
 
     await expect(page?.locator('th', { hasText: 'Đơn vị' }))?.toBeVisible();
     await expect(page?.locator('th', { hasText: 'Thiết lập giá' }))?.toBeVisible();
-    await expect(page?.locator('text=Dịch vụ Hướng dẫn viên'))?.toBeVisible();
+    await expect(page?.locator('text=Bảo hiểm du lịch'))?.toBeVisible();
+    await expect(page?.locator('text=Vé tham quan Sun World'))?.toBeVisible();
 
     // Breadcrumb
     await expect(page?.locator('a', { hasText: 'Kho Dịch vụ' })?.first())?.toBeVisible();

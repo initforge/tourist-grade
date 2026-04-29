@@ -11,7 +11,7 @@ import type {
 export const FINAL_PAYMENT_DEADLINE_DAYS = 7;
 export const DEPOSIT_RATIO = 0.5;
 export const DEFAULT_SINGLE_ROOM_SURCHARGE = 500000;
-export const OVERDUE_DEPOSIT_CANCEL_REASON = 'Không thanh toán đủ trước hạn 7 ngày khởi hành';
+export const OVERDUE_DEPOSIT_CANCEL_REASON = 'Không thanh toán đầy đủ trước 7 ngày khởi hành';
 
 const REGION_RULES = [
   { key: 'north', terms: ['hà nội', 'ha noi', 'hạ long', 'ha long', 'sa pa', 'sapa', 'lào cai', 'lao cai', 'ninh bình', 'ninh binh', 'quảng ninh', 'quang ninh'] },

@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { completeFinishedTourBookings, getTourCompletionDate, shouldMarkBookingCompleted } from './booking-lifecycle.js';
+import {
+  completeFinishedTourBookings,
+  getTourCompletionDate,
+  promoteReadyTourInstances,
+  shouldMarkBookingCompleted,
+} from './booking-lifecycle.js';
 
 describe('booking lifecycle', () => {
   it('treats the last calendar day of the tour as not yet completed', () => {
@@ -45,6 +50,57 @@ describe('booking lifecycle', () => {
       },
       data: {
         status: 'COMPLETED',
+      },
+    });
+    expect(result).toEqual({ count: 1 });
+  });
+
+  it('moves only deadline-passed tours with enough resolved confirmed guests to operations intake', async () => {
+    const prisma = {
+      tourInstance: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'ready-instance',
+            minParticipants: 2,
+            bookings: [
+              { status: 'CONFIRMED', passengers: [{ id: 'P1' }, { id: 'P2' }] },
+            ],
+          },
+          {
+            id: 'pending-instance',
+            minParticipants: 2,
+            bookings: [
+              { status: 'CONFIRMED', passengers: [{ id: 'P3' }] },
+              { status: 'PENDING', passengers: [{ id: 'P4' }] },
+            ],
+          },
+          {
+            id: 'insufficient-instance',
+            minParticipants: 3,
+            bookings: [
+              { status: 'CONFIRMED', passengers: [{ id: 'P5' }, { id: 'P6' }] },
+            ],
+          },
+        ]),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+
+    const result = await promoteReadyTourInstances(prisma as never, new Date('2026-04-29T08:00:00.000Z'));
+
+    expect(prisma.tourInstance.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        status: { in: ['DANG_MO_BAN'] },
+        bookingDeadlineAt: { lte: expect.any(Date) },
+      }),
+    }));
+    expect(prisma.tourInstance.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ['ready-instance'] },
+        status: { in: ['DANG_MO_BAN'] },
+      },
+      data: {
+        status: 'CHO_NHAN_DIEU_HANH',
       },
     });
     expect(result).toEqual({ count: 1 });

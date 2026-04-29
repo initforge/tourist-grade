@@ -108,6 +108,10 @@ function matchesRefundSubFilter(booking: Booking, filter: RefundSubFilter) {
   return booking?.refundStatus === 'refunded' || booking?.refundStatus === 'not_required';
 }
 
+function pendingCancelSortTime(booking: Booking) {
+  return new Date(booking.cancelledAt ?? booking.createdAt).getTime();
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function BookingManagement() {
@@ -164,7 +168,9 @@ export default function BookingManagement() {
     if (activeTab !== 'pending_confirm') return tabFiltered;
     if (confirmSubFilter === 'all') return tabFiltered;
     if (confirmSubFilter === 'pending_cancel') {
-      return tabFiltered?.filter(b => b.status === 'pending_cancel');
+      return tabFiltered
+        ?.filter(b => b.status === 'pending_cancel')
+        .sort((left, right) => pendingCancelSortTime(left) - pendingCancelSortTime(right));
     }
     return tabFiltered?.filter(b => b.status === 'pending');
   }, [tabFiltered, activeTab, confirmSubFilter]);

@@ -50,7 +50,7 @@ test.describe('Strict role hardening audit', () => {
     const issues = installRuntimeAudit(page);
 
     await loginAs(page, 'customer');
-    await page.goto('/customer/bookings/B001');
+    await page.goto('/customer/bookings/B003');
     await page.waitForLoadState('domcontentloaded');
 
     await expect(page.getByRole('button', { name: /Yêu cầu hủy tour/i })).toBeVisible();
@@ -62,8 +62,10 @@ test.describe('Strict role hardening audit', () => {
 
     await page.goto('/booking/lookup');
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForURL(/\/customer\/bookings$/);
-    await expect(page.getByRole('heading', { name: /Lịch Sử Đặt Tour|Lich Su Dat Tour/i })).toBeVisible();
+    await page.getByPlaceholder('VD: BK-582910').fill('BK-394821');
+    await page.getByPlaceholder('0988 123 456').fill('0912345678');
+    await page.getByRole('button', { name: /Tra c.*u th.*ng tin/i }).click();
+    await expect(page.getByRole('region', { name: /K.*t qu.* tra c.*u .*n .*t/i })).toBeVisible();
 
     await expectCleanRuntime(issues, testInfo);
   });

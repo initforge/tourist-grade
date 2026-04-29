@@ -39,17 +39,6 @@ function fmtCurrency(n: number) {
   return n?.toString();
 }
 
-function getProjectedProfitPercent(instance: TourInstance, programs: TourProgram[] = []) {
-  if (instance?.costEstimate) {
-    const revenue = instance?.costEstimate?.estimatedGuests * instance?.costEstimate?.pricingConfig?.sellPriceAdult;
-    const profit = revenue - instance?.costEstimate?.totalCost;
-    return revenue > 0 ? Number(((profit / revenue) * 100)?.toFixed(1)) : 0;
-  }
-
-  const program = programs?.find(item => item?.id === instance?.programId);
-  return program?.pricingConfig?.profitMargin ?? 0;
-}
-
 function getDefaultExtendDate() {
   const d = new Date();
   d?.setDate(d?.getDate() + 7);
@@ -245,6 +234,8 @@ function ExtendDeadlinePopup({ onConfirm, onCancel }: { onConfirm: (newDate: str
 
 type BatchActionMode = 'cancel' | 'extend' | 'continue';
 
+void ExtendDeadlinePopup;
+
 function SelectedToursActionPopup({
   mode,
   instances,
@@ -264,6 +255,8 @@ function SelectedToursActionPopup({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  void programs;
+
   const config = {
     cancel: {
       title: 'Hủy tour không đủ điều kiện',
@@ -516,9 +509,6 @@ export default function AdminActiveTours() {
     setBatchActionMode(null);
   };
 
-  const insufficientIds = new Set(
-    instances?.filter(i => TAB_STATUS_MAP?.insufficient?.includes(i?.status))?.map(i => i?.id)
-  );
   const selectedInsufficientInstances = filtered?.filter(instance => selectedIds?.has(instance?.id));
 
   return (
@@ -674,7 +664,7 @@ export default function AdminActiveTours() {
                     </td>
                     <td className="px-4 py-4">
                       {t?.costEstimate ? (() => {
-                        const est = t?.costEstimate!;
+                        const est = t.costEstimate;
                         const revenue = est?.estimatedGuests * est?.pricingConfig?.sellPriceAdult;
                         const profit = revenue - est?.totalCost;
                         const profitPct = revenue > 0 ? ((profit / revenue) * 100)?.toFixed(1) : '—';
@@ -852,4 +842,3 @@ export default function AdminActiveTours() {
     </div>
   );
 }
-

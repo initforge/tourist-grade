@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import TourProgramWizard from '@features/coordinator/pages/TourProgramWizard';
 import type { TourProgram } from '@entities/tour-program/data/tourProgram';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
@@ -94,6 +94,7 @@ function ApproveConfirmPopup({ tourName, onConfirm, onCancel }: { tourName: stri
 
 export default function AdminTourProgramApproval() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [showReject, setShowReject] = useState(false);
   const [showApprove, setShowApprove] = useState(false);
   const [rejected, setRejected] = useState<string | null>(null);
@@ -129,6 +130,7 @@ export default function AdminTourProgramApproval() {
     setApproved(true);
     setRejected(null);
     setShowApprove(false);
+    navigate('/manager/tour-programs?tab=active');
   };
 
   const handleReject = async (reason: string) => {

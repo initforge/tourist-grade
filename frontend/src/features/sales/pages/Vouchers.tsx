@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Modal } from 'antd';
+import { Modal, message } from 'antd';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { TourProgram } from '@entities/tour-program/data/tourProgram';
 import { VOUCHER_STATUS_LABEL, VOUCHER_STATUS_STYLE } from '@entities/voucher/data/vouchers';
@@ -531,6 +531,10 @@ export default function SalesVoucherManagement() {
   const removeVoucher = useAppDataStore((state) => state.removeVoucher);
   const [form, setForm] = useState<FormState | null>(null);
   const vouchers = useMemo(() => storeVouchers.map((voucher) => normalizeVoucherLifecycle(voucher)), [storeVouchers]);
+  const activeTourPrograms = useMemo(
+    () => tourPrograms.filter((tour) => tour.status === 'active'),
+    [tourPrograms],
+  );
   const current = useMemo(() => vouchers.find((voucher) => voucher.id === id), [id, vouchers]);
   const getTourName = (tourId: string) => tourPrograms.find((tour) => tour.id === tourId)?.name ?? tourId;
 
@@ -558,14 +562,27 @@ export default function SalesVoucherManagement() {
       content: `Gửi voucher ${next.code} cho quản lý phê duyệt?`,
       okText: 'Gửi phê duyệt',
       cancelText: 'Hủy',
-      onOk: () => persist(next).then(() => setForm(null)),
+      onOk: () => persist(next).then(() => {
+        setForm(null);
+        message.success('Gửi phê duyệt thành công.');
+      }),
     });
   };
 
   const handleDelete = (voucher: Voucher) => {
-    removeVoucher(voucher.id);
-    if (token) void deleteVoucher(token, voucher.id).catch(() => null);
-    if (id === voucher.id) navigate('/sales/vouchers');
+    Modal.confirm({
+      title: 'Xóa voucher',
+      content: `Xóa voucher ${voucher.code}?`,
+      okText: 'Xóa',
+      okButtonProps: { danger: true },
+      cancelText: 'Hủy',
+      onOk: async () => {
+        removeVoucher(voucher.id);
+        if (token) await deleteVoucher(token, voucher.id).catch(() => null);
+        if (id === voucher.id) navigate('/sales/vouchers');
+        message.success('Đã xóa voucher.');
+      },
+    });
   };
 
   const handleSendExisting = (voucher: Voucher) => {
@@ -575,7 +592,9 @@ export default function SalesVoucherManagement() {
       content: `Gửi voucher ${voucher.code} cho quản lý phê duyệt?`,
       okText: 'Gửi phê duyệt',
       cancelText: 'Hủy',
-      onOk: () => persist(next),
+      onOk: () => persist(next).then(() => {
+        message.success('Gửi phê duyệt thành công.');
+      }),
     });
   };
 
@@ -606,7 +625,7 @@ export default function SalesVoucherManagement() {
           onClose={() => setForm(null)}
           onSave={handleSave}
           onSend={handleSend}
-          tourPrograms={tourPrograms}
+          tourPrograms={activeTourPrograms}
         />
       )}
     </>

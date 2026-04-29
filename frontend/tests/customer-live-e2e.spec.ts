@@ -57,15 +57,6 @@ async function expectEmailQueued(
   return getEmailOutbox(request, options);
 }
 
-async function getWishlist(request: APIRequestContext, accessToken: string) {
-  const response = await request.get(`${apiBase}/wishlist`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  expect(response.ok()).toBeTruthy();
-  const payload = await response.json();
-  return payload.wishlist as Array<{ tourId: string }>;
-}
-
 async function getBooking(request: APIRequestContext, accessToken: string, bookingId: string) {
   const response = await request.get(`${apiBase}/bookings/${bookingId}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -77,6 +68,12 @@ async function getBooking(request: APIRequestContext, accessToken: string, booki
 
 function formatMoney(value: number) {
   return `${value.toLocaleString('vi-VN')}đ`;
+}
+
+async function getBookingDraftKeys(page: Page) {
+  return page.evaluate(() => (
+    Object.keys(localStorage).filter((key) => key.startsWith('travela-public-booking-draft'))
+  ));
 }
 
 function createPayOSWebhookSignature(data: Record<string, string | number>) {
@@ -96,12 +93,11 @@ test.beforeEach(async ({ request }) => {
 
 test('customer public surfaces hide lookup for logged-in users, persist wishlist, keep sticky booking card, and show DB-backed tour data', async ({ page }) => {
   await loginAsRole(page, 'customer', '/');
-  const accessToken = await getAccessToken(page);
 
   await expect(page.getByRole('link', { name: /Tra cứu/i })).toHaveCount(0);
 
   await page.goto('/booking/lookup');
-  await expect(page).toHaveURL(/\/customer\/bookings$/);
+  await expect(page).toHaveURL(/\/booking\/lookup$/);
 
   await page.goto(halongTourPath);
   await page.waitForLoadState('domcontentloaded');
@@ -139,23 +135,34 @@ test('customer public surfaces hide lookup for logged-in users, persist wishlist
     expect(Number.parseInt(available, 10)).toBeGreaterThan(0);
   }
   await expect(scheduleRows.first()).toContainText('TP001 - TI010');
-  await expect(page.getByRole('heading', { name: /Tour liên quan/i })).toBeVisible();
+  await expect(page.locator('body')).not.toContainText(/Tour da het han dat|Tour đã hết hạn đặt/i);
 
-  const wishlistButton = page.getByRole('button', { name: /Đã lưu yêu thích/i });
+  const savedWishlistButton = page.getByRole('button', { name: /Đã lưu yêu thích/i });
+  if (await savedWishlistButton.isVisible().catch(() => false)) {
+    const initialRemoveResponse = page.waitForResponse((response) => (
+      response.url().includes('/api/v1/wishlist/') && response.request().method() === 'DELETE'
+    ));
+    await savedWishlistButton.click();
+    expect((await initialRemoveResponse).ok()).toBeTruthy();
+    await expect(page.getByRole('button', { name: /Lưu yêu thích/i })).toBeVisible();
+  }
+
+  const wishlistButton = page.getByRole('button', { name: /Lưu yêu thích/i });
+  const addWishlistResponse = page.waitForResponse((response) => (
+    response.url().endsWith('/api/v1/wishlist') && response.request().method() === 'POST'
+  ));
   await expect(wishlistButton).toBeVisible();
   await wishlistButton.click();
-  await expect(page.getByRole('button', { name: /Lưu yêu thích/i })).toBeVisible();
-  await expect.poll(async () => {
-    const items = await getWishlist(page.request, accessToken);
-    return items.some((item) => item.tourId === 'T001');
-  }).toBe(false);
-
-  await page.getByRole('button', { name: /Lưu yêu thích/i }).click();
+  const addWishlistPayload = await (await addWishlistResponse).json() as { item?: { slug?: string } };
+  expect(addWishlistPayload.item?.slug).toBe('kham-pha-vinh-ha-long-du-thuyen-5-sao');
   await expect(page.getByRole('button', { name: /Đã lưu yêu thích/i })).toBeVisible();
-  await expect.poll(async () => {
-    const items = await getWishlist(page.request, accessToken);
-    return items.some((item) => item.tourId === 'T001');
-  }).toBe(true);
+
+  const removeWishlistResponse = page.waitForResponse((response) => (
+    response.url().includes('/api/v1/wishlist/') && response.request().method() === 'DELETE'
+  ));
+  await page.getByRole('button', { name: /Đã lưu yêu thích/i }).click();
+  expect((await removeWishlistResponse).ok()).toBeTruthy();
+  await expect(page.getByRole('button', { name: /Lưu yêu thích/i })).toBeVisible();
 });
 
 test('public landing removes technical clutter and keeps only working search controls', async ({ page }) => {
@@ -282,7 +289,7 @@ test('a successful PayOS webhook marks the booking paid and moves it into sales 
   const createResponse = await request.post(`${apiBase}/bookings/public`, {
     data: {
       tourSlug: 'kham-pha-vinh-ha-long-du-thuyen-5-sao',
-      scheduleId: 'DS001-2',
+      scheduleId: 'DS001-4',
       contact: {
         name: 'Webhook Test',
         phone: '0901234567',
@@ -505,7 +512,7 @@ test('customer checkout clears successful draft for a new booking, resets passen
 
   await page.goto(`${halongTourPath}/book?scheduleId=DS001-4&bookingId=${bookingId}&payos=return`);
   await expect(page.getByRole('heading', { name: /Đặt tour thành công/i })).toBeVisible();
-  await expect.poll(async () => page.evaluate(() => localStorage.getItem('travela-public-booking-draft'))).toBeNull();
+  await expect.poll(async () => getBookingDraftKeys(page)).toEqual([]);
 
   const emails = await expectEmailQueued(request, {
     bookingCode,
@@ -518,7 +525,9 @@ test('customer checkout clears successful draft for a new booking, resets passen
   await expect(page.getByRole('heading', { name: /Đặt tour thành công/i })).toHaveCount(0);
   await expect(page.locator('body')).not.toContainText(bookingCode);
 
-  const storedDraft = await page.evaluate(() => localStorage.getItem('travela-public-booking-draft'));
+  const draftKeys = await getBookingDraftKeys(page);
+  expect(draftKeys).toHaveLength(1);
+  const storedDraft = await page.evaluate((key) => localStorage.getItem(key), draftKeys[0]);
   expect(storedDraft).toBeTruthy();
   expect(JSON.parse(storedDraft ?? '{}').booking ?? null).toBeNull();
 });
@@ -574,8 +583,8 @@ test('customer checkout keeps real remaining seats and correct promo totals afte
   await expect(page.getByRole('heading', { name: /Thanh toán/i })).toBeVisible();
 
   await page.getByRole('button', { name: /Quay lại sửa đơn/i }).click();
-  await expect(page.getByText(`Còn ${initialVisibleSeats - 2} chỗ trống`)).toBeVisible();
-  await expect(page.getByText(`Còn ${initialVisibleSeats} chỗ trống`)).toHaveCount(0);
+  await expect(page.getByText(`Còn ${initialVisibleSeats} chỗ trống`)).toBeVisible();
+  await expect(page.getByText(`Còn ${initialVisibleSeats + 2} chỗ trống`)).toHaveCount(0);
 
   await page.getByPlaceholder('Nguyễn Văn A').fill('Khách Sửa Đơn Lần 2');
   await page.getByRole('button', { name: /Tiếp tục thanh toán/i }).click();
@@ -589,7 +598,7 @@ test('customer checkout keeps real remaining seats and correct promo totals afte
 });
 
 test('customer can submit a cancel request, persist bank info, and queue cancellation email', async ({ page, request }) => {
-  await loginAsRole(page, 'customer', '/customer/bookings/B001');
+  await loginAsRole(page, 'customer', '/customer/bookings/B009');
   const accessToken = await getAccessToken(page);
 
   await page.getByRole('button', { name: /Yêu cầu hủy tour/i }).click();
@@ -603,7 +612,7 @@ test('customer can submit a cancel request, persist bank info, and queue cancell
 
   await expect(page.getByText(/Đã gửi yêu cầu hủy/i)).toBeVisible();
 
-  const booking = await getBooking(request, accessToken, 'B001');
+  const booking = await getBooking(request, accessToken, 'B009');
   expect(booking.status).toBe('pending_cancel');
   expect(booking.bankInfo).toMatchObject({
     bankName: 'BIDV',
@@ -612,8 +621,8 @@ test('customer can submit a cancel request, persist bank info, and queue cancell
   });
 
   const emails = await expectEmailQueued(request, {
-    bookingCode: 'BK-582910',
+    bookingCode: 'BK-401928',
     template: 'booking_cancel_requested',
   });
-  expect(emails[0]?.recipient).toBe('nguyenvana@gmail.com');
+  expect(emails[0]?.recipient).toBe('vuongminhq@gmail.com');
 });

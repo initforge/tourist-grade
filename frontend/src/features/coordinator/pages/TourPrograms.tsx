@@ -15,6 +15,18 @@ function tourTypeLabel(type: TourProgram['tourType']) {
   return type === 'mua_le' ? 'Mùa lễ' : 'Quanh năm';
 }
 
+function draftStatusLabel(program: TourProgram) {
+  if (program.approvalStatus === 'pending') return 'Chờ duyệt';
+  if (program.approvalStatus === 'rejected') return 'Từ chối duyệt';
+  return 'Nháp';
+}
+
+function draftStatusClass(program: TourProgram) {
+  if (program.approvalStatus === 'pending') return 'text-sky-700 bg-sky-50 border-sky-200';
+  if (program.approvalStatus === 'rejected') return 'text-red-700 bg-red-50 border-red-200';
+  return 'text-amber-700 bg-amber-50 border-amber-200';
+}
+
 interface StopProgramModalProps {
   program: TourProgram;
   onCancel: () => void;
@@ -197,7 +209,11 @@ export default function CoordinatorTourPrograms() {
                   {activeTab === 'draft' && (
                     <>
                       <td className="px-5 py-4 text-sm text-primary/70">{new Date(program?.updatedAt)?.toLocaleDateString('vi-VN')}</td>
-                      <td className="px-5 py-4 text-xs text-amber-700 font-bold">Nháp</td>
+                      <td className="px-5 py-4">
+                        <span className={`inline-flex border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${draftStatusClass(program)}`}>
+                          {draftStatusLabel(program)}
+                        </span>
+                      </td>
                       <td className="px-5 py-4">
                         <button
                           onClick={() => navigate(`/coordinator/tour-programs/${program?.id}`)}

@@ -24,20 +24,6 @@ export default function TourEstimate() {
   const instance = tourInstances?.find(i => i.id === id);
   const program = instance ? tourPrograms?.find(p => p.id === instance?.programId) : undefined;
 
-  if (!instance || !program) {
-    return (
-      <div className="p-8 bg-[var(--color-background)] min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-3">
-          <span className="material-symbols-outlined text-5xl text-[var(--color-primary)]/20">calculate</span>
-          <h1 className="font-serif text-2xl text-[var(--color-primary)]">Chưa có dữ liệu dự toán</h1>
-          <p className="text-sm text-[var(--color-primary)]/50">
-            API tour instance và tour program chưa được kết nối hoặc chưa có dữ liệu khả dụng?.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   // Tab state: 'overview' | 'guests' | 'itinerary' | 'estimate'
   const [activeTab, setActiveTab] = useState<'overview' | 'guests' | 'itinerary' | 'estimate'>('overview');
 
@@ -58,6 +44,20 @@ export default function TourEstimate() {
       }))
     );
   });
+
+  if (!instance || !program) {
+    return (
+      <div className="p-8 bg-[var(--color-background)] min-h-screen flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <span className="material-symbols-outlined text-5xl text-[var(--color-primary)]/20">calculate</span>
+          <h1 className="font-serif text-2xl text-[var(--color-primary)]">Chưa có dữ liệu dự toán</h1>
+          <p className="text-sm text-[var(--color-primary)]/50">
+            API tour instance và tour program chưa được kết nối hoặc chưa có dữ liệu khả dụng?.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const addItem = () => {
     setItems(prev => [...prev, { id: Date.now()?.toString(), category: '', supplier: '', quantity: 1, unitPrice: 0, note: '' }]);

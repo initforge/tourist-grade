@@ -59,7 +59,6 @@ type ActiveProgramRow = {
   latestRequestCreatedAt: string;
 };
 
-const DEPLOYED_STATUSES = new Set(['san_sang_trien_khai', 'dang_trien_khai', 'cho_quyet_toan', 'hoan_thanh']);
 const REQUEST_PIPELINE_STATUSES = new Set(['cho_duyet_ban', 'yeu_cau_chinh_sua', 'dang_mo_ban']);
 const REQUEST_STATUSES = new Set(['cho_duyet_ban', 'yeu_cau_chinh_sua', 'dang_mo_ban', 'cho_nhan_dieu_hanh', 'cho_du_toan', 'cho_duyet_du_toan', 'san_sang_trien_khai', 'dang_trien_khai', 'cho_quyet_toan', 'hoan_thanh']);
 const WEEKDAY_VALUES = ['cn', 't2', 't3', 't4', 't5', 't6', 't7'] as const;

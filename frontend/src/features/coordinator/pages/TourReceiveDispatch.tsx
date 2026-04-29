@@ -64,14 +64,6 @@ export default function TourReceiveDispatch() {
   const bookings = allBookings?.filter((b: Booking) => b?.tourName?.includes(instance?.programName ?? ''));
   const createdByName = program?.createdBy ?? '-';
 
-  if (!instance) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-primary/50">Tour không tồn tại</p>
-      </div>
-    );
-  }
-
   const TABS: { key: Tab; label: string }[] = [
     { key: 'tong_quan', label: 'Tổng quan' },
     { key: 'ds_kh', label: 'Danh sách booking' },
@@ -124,6 +116,14 @@ export default function TourReceiveDispatch() {
   }, [estimateRows]);
 
   const totalEstimate = estimateRows?.reduce((sum, row) => sum + row?.total, 0);
+
+  if (!instance) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-primary/50">Tour không tồn tại</p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full bg-[var(--color-background)] min-h-screen pb-32">

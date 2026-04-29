@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { asyncHandler, badRequest, notFound } from '../lib/http.js';
-import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
+import { sendWishlistReminderEmails } from '../lib/wishlist-reminders.js';
+import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js';
 
 async function resolveProgram(tourRef: string) {
   const trimmed = tourRef.trim();
@@ -108,6 +109,14 @@ export function createWishlistRouter() {
         slug: item.tourProgram.slug,
         addedAt: item.createdAt.toISOString(),
       },
+    });
+  }));
+
+  router.post('/reminders/run', requireRoles('sales', 'manager', 'admin'), asyncHandler(async (_req, res) => {
+    const result = await sendWishlistReminderEmails(prisma);
+    res.json({
+      success: true,
+      reminders: result,
     });
   }));
 

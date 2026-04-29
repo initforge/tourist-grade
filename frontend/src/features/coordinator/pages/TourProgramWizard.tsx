@@ -301,7 +301,7 @@ function pricingFromProgram(program: TourProgram): PricingConfigState {
     profitMargin: program?.pricingConfig?.profitMargin ?? 15,
     taxRate: program?.pricingConfig?.taxRate ?? 10,
     otherCostFactor: otherCostFactorPercent,
-    guideUnitPrice: 400000,
+    guideUnitPrice: 0,
   };
 }
 
@@ -334,7 +334,6 @@ export default function AdminTourProgramWizard({
   readOnly = false,
   headerTitle = 'Thêm mới chương trình tour',
   headerActions,
-  persistMode = readOnly ? 'readOnly' : (initialProgram ? 'edit' : 'create'),
 }: WizardProps) {
   const navigate = useNavigate();
   const upsertTourProgram = useAppDataStore(state => state.upsertTourProgram);
@@ -401,7 +400,7 @@ export default function AdminTourProgramWizard({
     profitMargin: 15,
     taxRate: 10,
     otherCostFactor: 15,
-    guideUnitPrice: 400000,
+    guideUnitPrice: 0,
   }));
   const [pricingTableValue, setPricingTableValue] = useState<PricingTablesValue>(() => initialProgram ? pricingTablesFromProgram(initialProgram) : EMPTY_PRICING_VALUE);
   const [pricingSummary, setPricingSummary] = useState<PricingSummary>(EMPTY_PRICING_SUMMARY);
@@ -459,13 +458,17 @@ export default function AdminTourProgramWizard({
       return;
     }
 
-    setForm((current) => {
-      const nextItinerary = current.itinerary.map((day, index) => (
-        index < nightCount ? { ...day, accommodationPoint: singleSightseeingSpot } : day
-      ));
-      const unchanged = nextItinerary.every((day, index) => day.accommodationPoint === current.itinerary[index]?.accommodationPoint);
-      return unchanged ? current : { ...current, itinerary: nextItinerary };
-    });
+    const timer = window.setTimeout(() => {
+      setForm((current) => {
+        const nextItinerary = current.itinerary.map((day, index) => (
+          index < nightCount ? { ...day, accommodationPoint: singleSightseeingSpot } : day
+        ));
+        const unchanged = nextItinerary.every((day, index) => day.accommodationPoint === current.itinerary[index]?.accommodationPoint);
+        return unchanged ? current : { ...current, itinerary: nextItinerary };
+      });
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [nightCount, readOnly, singleSightseeingSpot]);
 
   const updateForm = <K extends keyof FormState>(key: K, value: FormState[K]) => {
@@ -532,41 +535,49 @@ export default function AdminTourProgramWizard({
 
   useEffect(() => {
     if (readOnly) return;
-    setForm(prev => {
-      let changed = false;
-      const next = { ...prev };
+    const timer = window.setTimeout(() => {
+      setForm(prev => {
+        let changed = false;
+        const next = { ...prev };
 
-      if (!shouldShowTransportSelector) {
-        if (next.transport !== 'xe') {
-          next.transport = 'xe';
-          changed = true;
+        if (!shouldShowTransportSelector) {
+          if (next.transport !== 'xe') {
+            next.transport = 'xe';
+            changed = true;
+          }
+          if (next.arrivalPoint) {
+            next.arrivalPoint = '';
+            changed = true;
+          }
+        } else if (next.transport === 'maybay') {
+          if (airportSightseeingSpots.length === 1 && next.arrivalPoint !== airportSightseeingSpots[0]) {
+            next.arrivalPoint = airportSightseeingSpots[0];
+            changed = true;
+          } else if (next.arrivalPoint && !airportSightseeingSpots.includes(next.arrivalPoint)) {
+            next.arrivalPoint = '';
+            changed = true;
+          }
         }
-        if (next.arrivalPoint) {
-          next.arrivalPoint = '';
-          changed = true;
-        }
-      } else if (next.transport === 'maybay') {
-        if (airportSightseeingSpots.length === 1 && next.arrivalPoint !== airportSightseeingSpots[0]) {
-          next.arrivalPoint = airportSightseeingSpots[0];
-          changed = true;
-        } else if (next.arrivalPoint && !airportSightseeingSpots.includes(next.arrivalPoint)) {
-          next.arrivalPoint = '';
-          changed = true;
-        }
-      }
 
-      return changed ? next : prev;
-    });
+        return changed ? next : prev;
+      });
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [airportSightseeingSpots, readOnly, shouldShowTransportSelector]);
 
   useEffect(() => {
     if (!enforceCreateRules || readOnly) return;
     if (form?.holiday && !availableHolidays.some(holiday => holiday.name === form.holiday)) {
-      setForm(prev => ({
-        ...prev,
-        holiday: '',
-        selectedDates: [],
-      }));
+      const timer = window.setTimeout(() => {
+        setForm(prev => ({
+          ...prev,
+          holiday: '',
+          selectedDates: [],
+        }));
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
   }, [availableHolidays, enforceCreateRules, form?.holiday, readOnly]);
 
@@ -699,7 +710,7 @@ export default function AdminTourProgramWizard({
   };
 
   const navigateToStep = (targetStep: WizardStep) => {
-    if (readOnly || targetStep <= step) {
+    if (readOnly || targetStep <= step || initialProgram) {
       setStep(targetStep);
       return;
     }
@@ -918,29 +929,33 @@ export default function AdminTourProgramWizard({
       return;
     }
 
-    setForm((current) => {
-      if (current.tourType !== 'quanh_nam') {
-        yearRoundGeneratedDatesRef.current = [];
-        return current;
-      }
+    const timer = window.setTimeout(() => {
+      setForm((current) => {
+        if (current.tourType !== 'quanh_nam') {
+          yearRoundGeneratedDatesRef.current = [];
+          return current;
+        }
 
-      const previousGeneratedDates = yearRoundGeneratedDatesRef.current;
-      let nextSelectedDates: string[];
+        const previousGeneratedDates = yearRoundGeneratedDatesRef.current;
+        let nextSelectedDates: string[];
 
-      if (previousGeneratedDates.length === 0) {
-        nextSelectedDates = current.selectedDates.length > 0
-          ? yearRoundDepartureDates.filter((dateKey) => current.selectedDates.includes(dateKey))
-          : yearRoundDepartureDates;
-      } else {
-        const manuallyRemovedDates = previousGeneratedDates.filter((dateKey) => !current.selectedDates.includes(dateKey));
-        nextSelectedDates = yearRoundDepartureDates.filter((dateKey) => !manuallyRemovedDates.includes(dateKey));
-      }
+        if (previousGeneratedDates.length === 0) {
+          nextSelectedDates = current.selectedDates.length > 0
+            ? yearRoundDepartureDates.filter((dateKey) => current.selectedDates.includes(dateKey))
+            : yearRoundDepartureDates;
+        } else {
+          const manuallyRemovedDates = previousGeneratedDates.filter((dateKey) => !current.selectedDates.includes(dateKey));
+          nextSelectedDates = yearRoundDepartureDates.filter((dateKey) => !manuallyRemovedDates.includes(dateKey));
+        }
 
-      yearRoundGeneratedDatesRef.current = yearRoundDepartureDates;
-      return areDateListsEqual(current.selectedDates, nextSelectedDates)
-        ? current
-        : { ...current, selectedDates: nextSelectedDates };
-    });
+        yearRoundGeneratedDatesRef.current = yearRoundDepartureDates;
+        return areDateListsEqual(current.selectedDates, nextSelectedDates)
+          ? current
+          : { ...current, selectedDates: nextSelectedDates };
+      });
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [form?.tourType, readOnly, yearRoundDepartureDates]);
 
   const suggestedAdultPrice = roundToThousand(
@@ -965,10 +980,6 @@ export default function AdminTourProgramWizard({
     ? ((actualPrices.adult - pricingSummary.currentNetPrice) / pricingSummary.currentNetPrice) * 100
     : 0;
   const roundedActualProfitRate = Math.round(actualProfitRate);
-  const minimumOperatingGuests = actualPrices.adult > pricingSummary.currentAdultVariableCost
-    ? Math.ceil(pricingSummary.currentFixedCost / (actualPrices.adult - pricingSummary.currentAdultVariableCost))
-    : 0;
-
   const basePreviewRows = useMemo<PreviewRow[]>(() => expectedDepartureDates.map((departureDate, index) => {
     const departurePricing = pricingSummary.departurePricing[departureDate] ?? {
       adultNet: 0,

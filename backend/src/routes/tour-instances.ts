@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma.js';
 import { asyncHandler, badRequest, notFound } from '../lib/http.js';
 import { mapTourInstance } from '../lib/mappers.js';
 import { toPrismaJson, unwrapEstimatePayload, wrapEstimatePayload } from '../lib/coordinator.js';
+import { queueEmail } from '../lib/email-outbox.js';
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js';
 
 const estimateSchema = z.object({
@@ -419,6 +420,29 @@ export function createTourInstancesRouter() {
               cancelledConfirmedAt: now.toISOString(),
               cancellationSource: 'manager_tour_cancel',
             } satisfies Prisma.InputJsonObject,
+          },
+        });
+
+        await queueEmail(tx, {
+          template: 'booking_cancel_confirmed',
+          recipient: booking.contactEmail,
+          subject: `Thong bao huy tour ${booking.bookingCode}`,
+          bookingId: booking.id,
+          createdById: req.auth?.sub,
+          payload: {
+            bookingCode: booking.bookingCode,
+            tourName: existing.programNameSnapshot,
+            tourDate: existing.departureDate.toISOString().slice(0, 10),
+            contact: {
+              name: booking.contactName,
+              email: booking.contactEmail,
+              phone: booking.contactPhone,
+            },
+            cancellationReason: normalizedReason,
+            cancellationSource: 'manager_tour_cancel',
+            refundAmount,
+            cancelledConfirmedBy: actorName,
+            cancelledConfirmedAt: now.toISOString(),
           },
         });
       }

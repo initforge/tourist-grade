@@ -19,11 +19,12 @@ import {
   validatePassengerAge,
   validatePassengerDocument,
 } from '../lib/customer.js';
-import { queueEmail } from '../lib/email-outbox.js';
+import { queueEmail, type QueueEmailInput } from '../lib/email-outbox.js';
 import { asyncHandler, badRequest, notFound, unauthorized } from '../lib/http.js';
 import { mapBooking } from '../lib/mappers.js';
 import { syncBookingPaymentWithPayOS } from '../lib/payos-bookings.js';
 import { prisma } from '../lib/prisma.js';
+import { isPubliclyBookableInstance } from '../lib/public-tours.js';
 import { authenticate, authenticateOptional, type AuthenticatedRequest } from '../middleware/auth.js';
 
 const phonePattern = /^(0|\+84)\d{9,10}$/;
@@ -80,9 +81,9 @@ const promoValidationSchema = z.object({
 });
 
 const refundBillUrlSchema = z.string()
-  .max(5_000_000, 'Ảnh bill hoàn tiền quá lớn.')
+  .max(12_000_000, 'Ảnh bill hoàn tiền quá lớn.')
   .refine((value) => (
-    /^data:image\/(?:png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/i.test(value)
+    /^data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/i.test(value)
     || /^data:image\/svg\+xml(?:;charset=[^,]+)?(?:;base64)?,.+$/i.test(value)
   ), 'Định dạng ảnh bill hoàn tiền không hợp lệ.');
 
@@ -185,6 +186,36 @@ function bookingMapOptions(booking: BookingWithInclude) {
     tourName: booking.tourInstance.programNameSnapshot,
     tourDuration: `${booking.tourInstance.program.durationDays}N${booking.tourInstance.program.durationNights}D`,
     tourDate: booking.tourInstance.departureDate.toISOString().slice(0, 10),
+  };
+}
+
+function buildPassengerEmailPayload(passengers: BookingWithInclude['passengers']) {
+  return passengers.map((passenger, index) => ({
+    order: index + 1,
+    type: passenger.type.toLowerCase(),
+    name: passenger.fullName,
+    dateOfBirth: passenger.dateOfBirth?.toISOString().slice(0, 10) ?? '',
+    gender: passenger.gender.toLowerCase(),
+    documentNumber: passenger.cccd ?? '',
+    nationality: passenger.nationality ?? '',
+  }));
+}
+
+function buildBookingEmailPayload(booking: BookingWithInclude) {
+  return {
+    bookingCode: booking.bookingCode,
+    tourName: booking.tourInstance.programNameSnapshot,
+    tourCode: booking.tourInstance.code,
+    tourDate: booking.tourInstance.departureDate.toISOString().slice(0, 10),
+    contact: {
+      name: booking.contactName,
+      email: booking.contactEmail,
+      phone: booking.contactPhone,
+    },
+    totalAmount: Number(booking.totalAmount),
+    paidAmount: Number(booking.paidAmount),
+    remainingAmount: Number(booking.remainingAmount),
+    passengers: buildPassengerEmailPayload(booking.passengers),
   };
 }
 
@@ -457,6 +488,9 @@ async function buildBookingDraft(
   const instance = schedule
     ? await resolveInstanceForSchedule(program.id, schedule)
     : await resolveInstanceForPublicScheduleId(program.id, input.scheduleId);
+  if (!isPubliclyBookableInstance(instance)) {
+    throw badRequest('Tour da het han dat hoac khong con mo ban');
+  }
   const resolvedSchedule = schedule ?? {
     id: input.scheduleId,
     date: instance.departureDate.toISOString().slice(0, 10),
@@ -651,21 +685,21 @@ export function createBookingsRouter() {
         include: bookingInclude,
       });
 
-      await queueEmail(tx, {
-        template: 'booking_created',
-        recipient: next.contactEmail,
-        subject: `Booking ${next.bookingCode} da duoc tao`,
-        bookingId: next.id,
-        createdById: req.auth?.sub,
-        payload: {
-          bookingCode: next.bookingCode,
-          amount: Number(next.totalAmount),
-          paymentWindowExpiresAt: draft.expiresAt.toISOString(),
-          paymentRatio: input.data.paymentRatio,
-        },
-      });
-
       return next;
+    });
+
+    await queueEmail(prisma, {
+      template: 'booking_created',
+      recipient: booking.contactEmail,
+      subject: `Booking ${booking.bookingCode} da duoc tao`,
+      bookingId: booking.id,
+      createdById: req.auth?.sub,
+      payload: {
+        bookingCode: booking.bookingCode,
+        amount: Number(booking.totalAmount),
+        paymentWindowExpiresAt: draft.expiresAt.toISOString(),
+        paymentRatio: input.data.paymentRatio,
+      },
     });
 
     res.status(201).json({
@@ -737,6 +771,27 @@ export function createBookingsRouter() {
       include: bookingInclude,
     });
 
+    if (updated.contactEmail.toLowerCase() !== booking.contactEmail.toLowerCase()) {
+      await queueEmail(prisma, {
+        template: 'booking_updated',
+        recipient: updated.contactEmail,
+        subject: `Cap nhat booking ${updated.bookingCode}`,
+        bookingId: updated.id,
+        createdById: req.auth?.sub,
+        payload: {
+          bookingCode: updated.bookingCode,
+          tourName: updated.tourInstance.programNameSnapshot,
+          tourDate: updated.tourInstance.departureDate.toISOString().slice(0, 10),
+          amount: Number(updated.totalAmount),
+          contact: {
+            name: updated.contactName,
+            email: updated.contactEmail,
+            phone: updated.contactPhone,
+          },
+        },
+      });
+    }
+
     res.json({
       success: true,
       booking: mapBooking(updated, bookingMapOptions(updated)),
@@ -795,19 +850,19 @@ export function createBookingsRouter() {
         include: bookingInclude,
       });
 
-      await queueEmail(tx, {
-        template: 'booking_cancel_requested',
-        recipient: next.contactEmail,
-        subject: `Yeu cau huy booking ${next.bookingCode}`,
-        bookingId: next.id,
-        payload: {
-          bookingCode: next.bookingCode,
-          cancellationReason: next.cancellationReason,
-          refundAmount,
-        },
-      });
-
       return next;
+    });
+
+    await queueEmail(prisma, {
+      template: 'booking_cancel_requested',
+      recipient: updated.contactEmail,
+      subject: `Yeu cau huy booking ${updated.bookingCode}`,
+      bookingId: updated.id,
+      payload: {
+        bookingCode: updated.bookingCode,
+        cancellationReason: updated.cancellationReason,
+        refundAmount,
+      },
     });
 
     res.json({
@@ -963,6 +1018,8 @@ export function createBookingsRouter() {
     delete nextPayload.refundBillEditedBy;
     delete nextPayload.refundBillEditedAt;
 
+    const postCommitEmails: QueueEmailInput[] = [];
+
     const updated = await prisma.$transaction(async (tx): Promise<BookingWithInclude> => {
       const next: BookingWithInclude = await tx.booking.update({
         where: { id: booking.id },
@@ -1007,30 +1064,31 @@ export function createBookingsRouter() {
       });
 
       if (isConfirmTransition) {
-        await queueEmail(tx, {
+        postCommitEmails.push({
           template: 'booking_confirmed',
           recipient: next.contactEmail,
           subject: `Xac nhan booking ${next.bookingCode}`,
           bookingId: next.id,
           createdById: actorId,
           payload: {
+            ...buildBookingEmailPayload(next),
             bookingCode: next.bookingCode,
             confirmedBy: actorName,
             confirmedAt: confirmedAt?.toISOString(),
-            passengers: next.passengers.length,
             roomCounts: next.roomCountsJson,
           },
         });
       }
 
       if (isCancelConfirmTransition) {
-        await queueEmail(tx, {
+        postCommitEmails.push({
           template: 'booking_cancel_confirmed',
           recipient: next.contactEmail,
           subject: `Xac nhan huy booking ${next.bookingCode}`,
           bookingId: next.id,
           createdById: actorId,
           payload: {
+            ...buildBookingEmailPayload(next),
             bookingCode: next.bookingCode,
             cancellationReason: next.cancellationReason,
             refundAmount: Number(next.refundAmount ?? 0),
@@ -1041,7 +1099,7 @@ export function createBookingsRouter() {
       }
 
       if (isRefundAuditUpdate) {
-        await queueEmail(tx, {
+        postCommitEmails.push({
           template: booking.refundBillUrl ? 'booking_refund_bill_updated' : 'booking_refund_completed',
           recipient: next.contactEmail,
           subject: booking.refundBillUrl
@@ -1050,7 +1108,10 @@ export function createBookingsRouter() {
           bookingId: next.id,
           createdById: actorId,
           payload: {
+            ...buildBookingEmailPayload(next),
             bookingCode: next.bookingCode,
+            cancellationReason: next.cancellationReason,
+            cancelledAt: next.cancelledAt?.toISOString(),
             refundAmount: Number(next.refundAmount ?? 0),
             refundBillUrl: next.refundBillUrl,
             refundedBy: actorName,
@@ -1061,6 +1122,8 @@ export function createBookingsRouter() {
 
       return next;
     });
+
+    await Promise.all(postCommitEmails.map((email) => queueEmail(prisma, email)));
 
     res.json({
       success: true,

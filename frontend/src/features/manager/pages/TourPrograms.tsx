@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { message } from 'antd';
 import { type TourProgram } from '@entities/tour-program/data/tourProgram';
 import { patchTourProgram } from '@shared/lib/api/tourPrograms';
@@ -12,19 +12,23 @@ function fmtPrice(n: number) {
 
 export default function AdminTourPrograms() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const token = useAuthStore(state => state.accessToken);
   const programs = useAppDataStore(state => state.tourPrograms);
   const setPrograms = useAppDataStore(state => state.setTourPrograms);
-  const [activeTab, setActiveTab] = useState<'pending' | 'active' | 'inactive'>('pending');
+  const initialTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<'pending' | 'active' | 'inactive'>(
+    initialTab === 'active' || initialTab === 'inactive' ? initialTab : 'pending',
+  );
   const [stopDraft, setStopDraft] = useState<{ program: TourProgram; reason: string } | null>(null);
 
   const filtered = useMemo(() => programs.filter((program) => {
-    if (activeTab === 'pending') return program.status === 'draft';
+    if (activeTab === 'pending') return program.status === 'draft' && program.approvalStatus === 'pending';
     return program.status === activeTab;
   }), [activeTab, programs]);
 
   const tabCounts = useMemo(() => ({
-    pending: programs.filter(program => program.status === 'draft').length,
+    pending: programs.filter(program => program.status === 'draft' && program.approvalStatus === 'pending').length,
     active: programs.filter(program => program.status === 'active').length,
     inactive: programs.filter(program => program.status === 'inactive').length,
   }), [programs]);
@@ -58,6 +62,7 @@ export default function AdminTourPrograms() {
         persistPrograms(programs.map(item => item.id === response.tourProgram.id ? response.tourProgram : item));
       }
       setActiveTab('inactive');
+      setSearchParams({ tab: 'inactive' });
       setStopDraft(null);
       message.success(`Đã ngừng kinh doanh ${stopDraft.program.name}`);
     } catch (error) {
@@ -85,7 +90,10 @@ export default function AdminTourPrograms() {
             ].map(tab => (
               <button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => {
+                  setActiveTab(tab.key);
+                  setSearchParams({ tab: tab.key });
+                }}
                 className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-5 py-3.5 font-['Inter'] text-xs uppercase tracking-widest transition-all ${
                   activeTab === tab.key
                     ? 'border-[#D4AF37] bg-[#D0C5AF]/5 font-bold text-[#D4AF37]'

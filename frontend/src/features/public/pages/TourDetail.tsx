@@ -19,6 +19,7 @@ const MONTH_NAMES: Record<number, string> = {
   11: 'Tháng 11',
   12: 'Tháng 12',
 };
+const FALLBACK_TOUR_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1200' height='800' viewBox='0 0 1200 800'%3E%3Crect width='1200' height='800' fill='%23f7f3ea'/%3E%3Cpath d='M180 560 470 250l180 190 120-130 250 250H180Z' fill='%23d8c89f'/%3E%3Ccircle cx='875' cy='190' r='82' fill='%23d4af37'/%3E%3Ctext x='90' y='710' font-family='Georgia,serif' font-size='54' fill='%232a2421'%3ETRAVELA%3C/text%3E%3C/svg%3E";
 
 interface ScheduleRow {
   month: number;
@@ -49,7 +50,6 @@ export default function TourDetail() {
   const wishlist = useAppDataStore((state) => state.wishlist);
   const upsertWishlistItem = useAppDataStore((state) => state.upsertWishlistItem);
   const removeWishlistStoreItem = useAppDataStore((state) => state.removeWishlistItem);
-  const isCustomer = user?.role === 'customer';
   const [selectedSchedule, setSelectedSchedule] = useState<DepartureScheduleEntry | null>(null);
   const [expandedAccordion, setExpandedAccordion] = useState<string | null>(null);
   const [collapsedItineraryDays, setCollapsedItineraryDays] = useState<number[]>([]);
@@ -112,12 +112,28 @@ export default function TourDetail() {
   const displayRelatedTours = relatedTours.length > 0 ? relatedTours : fallbackRelatedTours;
   const activeAdultPrice = activeSchedule?.priceAdult ?? tour.price.adult;
   const galleryImages = Array.from(new Set([tour.image, ...tour.gallery].filter(Boolean)));
+  const safeGalleryImages = galleryImages.length > 0 ? galleryImages : [FALLBACK_TOUR_IMAGE];
   const secondaryImages = galleryImages.slice(1, 4);
   const reviewItems = tour.reviews ?? [];
+  const useFallbackImage = (event: React.SyntheticEvent<HTMLImageElement>) => {
+    if (event.currentTarget.src !== FALLBACK_TOUR_IMAGE) {
+      event.currentTarget.src = FALLBACK_TOUR_IMAGE;
+    }
+  };
 
   const toggleWishlist = async (event: React.MouseEvent) => {
     event.preventDefault();
-    if (!isCustomer) {
+    const storedAccessToken = (() => {
+      try {
+        const raw = localStorage.getItem('__travela_auth_tokens');
+        return raw ? (JSON.parse(raw) as { accessToken?: string }).accessToken : null;
+      } catch {
+        return null;
+      }
+    })();
+    const effectiveAccessToken = accessToken ?? storedAccessToken;
+
+    if (!effectiveAccessToken || (user && user.role !== 'customer')) {
       navigate('/login');
       return;
     }
@@ -128,10 +144,10 @@ export default function TourDetail() {
     setWishlistBusy(true);
     try {
       if (isWishlisted) {
-        await removeWishlistItem(tour.id, accessToken);
+        await removeWishlistItem(tour.id, effectiveAccessToken);
         removeWishlistStoreItem(tour.id);
       } else {
-        const response = await addWishlistItem(tour.id, accessToken);
+        const response = await addWishlistItem(tour.id, effectiveAccessToken);
         upsertWishlistItem(response.item);
       }
     } finally {
@@ -191,7 +207,7 @@ export default function TourDetail() {
         <section className="mb-5 md:mb-6">
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.85fr)]">
             <button type="button" onClick={() => setActiveImageIndex(0)} className="public-media-frame relative aspect-[16/11] md:aspect-[16/10] lg:min-h-[420px] group text-left">
-              <img alt={tour.title} className="w-full h-full object-cover" src={galleryImages[0] ?? tour.image} />
+              <img alt={tour.title} className="w-full h-full object-cover" src={safeGalleryImages[0]} onError={useFallbackImage} />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all" />
               <div className="absolute bottom-4 left-4 bg-white/90 px-3 py-1 text-[10px] tracking-[0.2em] uppercase font-medium text-primary">
                 {tour.category === 'domestic' ? 'Trong nước' : 'Quốc tế'}
@@ -199,14 +215,14 @@ export default function TourDetail() {
             </button>
 
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-2 auto-rows-fr">
-              {(secondaryImages.length > 0 ? secondaryImages : [tour.image]).map((image, imageIndex) => (
+              {(secondaryImages.length > 0 ? secondaryImages : [safeGalleryImages[0]]).map((image, imageIndex) => (
                 <button
                   key={`${image}-${imageIndex}`}
                   type="button"
                   onClick={() => setActiveImageIndex(imageIndex + 1)}
                   className={`public-media-frame overflow-hidden ${imageIndex === 0 ? 'aspect-[16/10] md:col-span-2' : 'aspect-[4/3]'}`}
                 >
-                  <img alt={`${tour.title} ${imageIndex + 2}`} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" src={image} />
+                  <img alt={`${tour.title} ${imageIndex + 2}`} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" src={image} onError={useFallbackImage} />
                 </button>
               ))}
             </div>
@@ -337,7 +353,7 @@ export default function TourDetail() {
                             Ngày {String(day.day).padStart(2, '0')}: {day.title.toUpperCase()}
                             {meals && <span className="font-sans text-sm font-semibold normal-case"> (Ăn {meals})</span>}
                           </h4>
-                          <span className={`material-symbols-outlined shrink-0 h-9 w-9 rounded-full bg-sky-50 text-sky-600 grid place-items-center leading-none transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}>
+                          <span className={`material-symbols-outlined shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-full bg-sky-50 text-sky-600 leading-none transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}>
                             keyboard_arrow_down
                           </span>
                         </button>
@@ -576,7 +592,8 @@ export default function TourDetail() {
                   <div className="aspect-[16/10] overflow-hidden">
                     <img
                       alt={item.title}
-                      src={item.image}
+                      src={item.image || FALLBACK_TOUR_IMAGE}
+                      onError={useFallbackImage}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                     />
                   </div>
@@ -606,7 +623,7 @@ export default function TourDetail() {
             <button onClick={() => setActiveImageIndex(null)} className="absolute right-0 -top-12 text-white">
               <span className="material-symbols-outlined text-3xl">close</span>
             </button>
-            <img src={galleryImages[activeImageIndex] ?? galleryImages[0]} alt={`${tour.title} preview`} className="w-full max-h-[80vh] object-contain rounded-sm" />
+            <img src={safeGalleryImages[activeImageIndex] ?? safeGalleryImages[0]} alt={`${tour.title} preview`} className="w-full max-h-[80vh] object-contain rounded-sm" onError={useFallbackImage} />
           </div>
         </div>
       )}

@@ -190,18 +190,30 @@ export function createTourProgramsRouter() {
 
     const publicContent = getProgramPublicContent(existing);
     const now = new Date().toISOString();
-    const updated = await prisma.tourProgram.update({
-      where: { id: existing.id },
-      data: {
-        status: 'ACTIVE',
-        updatedById: req.auth!.sub,
-        publicContentJson: toPrismaObject({
-          ...publicContent,
-          approvalStatus: 'approved',
-          rejectionReason: null,
-          approvedAt: now,
-        }),
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const approvedProgram = await tx.tourProgram.update({
+        where: { id: existing.id },
+        data: {
+          status: 'ACTIVE',
+          updatedById: req.auth!.sub,
+          publicContentJson: toPrismaObject({
+            ...publicContent,
+            approvalStatus: 'approved',
+            rejectionReason: null,
+            approvedAt: now,
+          }),
+        },
+      });
+
+      const instanceRows = buildApprovedProgramInstances(existing, req.auth!.sub);
+      if (instanceRows.length > 0) {
+        await tx.tourInstance.createMany({
+          data: instanceRows,
+          skipDuplicates: true,
+        });
+      }
+
+      return approvedProgram;
     });
 
     res.json({
@@ -275,7 +287,7 @@ function buildProgramPublicContent(
     coverageMonths: input.coverageMonths ?? existing.coverageMonths ?? 3,
     inactiveReason: input.inactiveReason ?? existing.inactiveReason ?? null,
     rejectionReason: input.rejectionReason ?? existing.rejectionReason ?? null,
-    approvalStatus: input.approvalStatus ?? existing.approvalStatus ?? 'pending',
+    approvalStatus: input.approvalStatus ?? existing.approvalStatus ?? null,
     lodgingStandard: input.lodgingStandard ?? existing.lodgingStandard ?? null,
     draftPreviewRows: input.draftPreviewRows ?? existing.draftPreviewRows ?? [],
     submittedAt: input.submittedAt ?? existing.submittedAt ?? null,
@@ -370,4 +382,48 @@ function mapProgramStatus(status?: 'draft' | 'active' | 'inactive') {
   if (status === 'active') return 'ACTIVE';
   if (status === 'inactive') return 'INACTIVE';
   return 'DRAFT';
+}
+
+function roundToThousand(value: number) {
+  return Math.ceil(value / 1000) * 1000;
+}
+
+function toNumber(value: unknown, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function buildApprovedProgramInstances(
+  program: Prisma.TourProgramGetPayload<Record<string, never>>,
+  actorId: string,
+): Prisma.TourInstanceCreateManyInput[] {
+  const publicContent = getProgramPublicContent(program);
+  const rows = Array.isArray(publicContent.draftPreviewRows)
+    ? publicContent.draftPreviewRows as Array<z.infer<typeof previewRowSchema>>
+    : [];
+  const pricingPayload = getProgramPricingPayload(program);
+  const pricingConfig = ((pricingPayload.pricingConfig as Record<string, unknown> | undefined) ?? pricingPayload);
+  const minParticipants = Math.max(1, toNumber(pricingConfig.minParticipants, 1));
+
+  return rows
+    .filter((row) => row.checked)
+    .map((row): Prisma.TourInstanceCreateManyInput => ({
+      code: `REQ-${program.code}-${row.departureDate}`,
+      programId: program.id,
+      programNameSnapshot: program.name,
+      departureDate: new Date(row.departureDate),
+      bookingDeadlineAt: new Date(row.bookingDeadline),
+      status: 'CHO_DUYET_BAN',
+      departurePoint: program.departurePoint,
+      arrivalPoint: program.arrivalPoint,
+      sightseeingSpots: program.sightseeingSpots as Prisma.InputJsonValue,
+      transport: program.transport,
+      expectedGuests: row.expectedGuests,
+      minParticipants,
+      priceAdult: row.sellPrice,
+      priceChild: roundToThousand(row.sellPrice * 0.75),
+      priceInfant: 0,
+      createdById: actorId,
+      submittedAt: new Date(),
+    }));
 }

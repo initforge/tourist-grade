@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useLocation, Link, useNavigate } from 'react-router-dom';
 import { Breadcrumb, message } from 'antd';
 import type { Booking } from '@entities/booking/data/bookings';
@@ -77,24 +77,17 @@ export default function TourSettlement() {
   const bookings = useAppDataStore(state => state.bookings);
   const upsertTourInstance = useAppDataStore(state => state.upsertTourInstance);
 
-  if (!instance) {
-    return (
-      <div className="p-8 bg-[var(--color-background)] min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-3">
-          <span className="material-symbols-outlined text-5xl text-[var(--color-primary)]/20">receipt_long</span>
-          <h1 className="font-serif text-2xl text-[var(--color-primary)]">Chưa có dữ liệu quyết toán</h1>
-          <p className="text-sm text-[var(--color-primary)]/50">
-            API tour instance chưa sẵn sàng hoặc chưa có tour phù hợp để quyết toán.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   const [activeTab, setActiveTab] = useState<'settlement' | 'summary'>('settlement');
-  const [rows, setRows] = useState<SettlementRow[]>(() => buildRows(instance));
+  const [rows, setRows] = useState<SettlementRow[]>(() => (instance ? buildRows(instance) : []));
+
+  useEffect(() => {
+    if (!instance) return;
+    const timer = window.setTimeout(() => setRows(buildRows(instance)), 0);
+    return () => window.clearTimeout(timer);
+  }, [instance]);
 
   const actualRevenue = useMemo(() => {
+    if (!instance) return 0;
     const tourBookings = bookings.filter((booking: Booking) => booking.instanceCode === instance.id || (!booking.instanceCode && booking.tourId === instance.id));
     const activeRevenue = tourBookings
       .filter((booking) => booking.status !== 'cancelled')
@@ -115,6 +108,20 @@ export default function TourSettlement() {
     });
     return Array.from(byCategory.values());
   }, [rows]);
+
+  if (!instance) {
+    return (
+      <div className="p-8 bg-[var(--color-background)] min-h-screen flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <span className="material-symbols-outlined text-5xl text-[var(--color-primary)]/20">receipt_long</span>
+          <h1 className="font-serif text-2xl text-[var(--color-primary)]">Chưa có dữ liệu quyết toán</h1>
+          <p className="text-sm text-[var(--color-primary)]/50">
+            API tour instance chưa sẵn sàng hoặc chưa có tour phù hợp để quyết toán.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const updateActual = (rowId: string, actual: number) => {
     setRows(previous => previous.map(row => row.rowId === rowId ? { ...row, actual: Math.max(0, actual) } : row));

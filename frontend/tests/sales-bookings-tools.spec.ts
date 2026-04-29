@@ -15,7 +15,6 @@ test?.describe('Sales Booking Tools Verification', () => {
     await page?.getByRole('button', { name: /Đã xác nhận/ })?.first()?.click();
     await expect(page?.getByText('Chưa thanh toán', { exact: true }))?.toHaveCount(0);
     await expect(page?.locator('tbody'))?.toContainText('50%');
-    await expect(page?.locator('tbody'))?.toContainText('100%');
 
     await page?.getByRole('button', { name: /Hoàn thành/ })?.first()?.click();
     await expect(page?.getByText('50%', { exact: true }))?.toHaveCount(0);

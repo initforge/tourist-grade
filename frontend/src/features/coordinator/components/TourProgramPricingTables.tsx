@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { MEAL_LABELS } from '@entities/tour-program/data/tourProgram';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
 
@@ -110,7 +110,10 @@ interface TransportOption {
   id: string;
   supplierName: string;
   operatingArea: string;
+  serviceName: string;
   serviceLabel: string;
+  capacity: number;
+  suggestedPrice: number;
 }
 
 interface FlightOption {
@@ -186,22 +189,28 @@ interface PickerState {
   groupId?: string;
 }
 
-const transportOptions: TransportOption[] = [
+const fallbackTransportOptions: TransportOption[] = [
   {
     id: 'transport-van-tai-viet-29',
     supplierName: 'Vận tải Việt Tourist',
     operatingArea: 'Hà Nội, Đà Nẵng, Quảng Ninh',
+    serviceName: 'Xe 29 chỗ',
     serviceLabel: 'Xe 29 chỗ, Xe 35 chỗ',
+    capacity: 29,
+    suggestedPrice: 0,
   },
   {
     id: 'transport-hoang-gia-29',
     supplierName: 'Hoàng Gia Travel Bus',
     operatingArea: 'Hà Nội, Ninh Bình, Quảng Ninh',
+    serviceName: 'Xe 29 chỗ',
     serviceLabel: 'Xe 29 chỗ, Xe 45 chỗ',
+    capacity: 29,
+    suggestedPrice: 0,
   },
 ];
 
-const flightOptions: FlightOption[] = [
+const fallbackFlightOptions: FlightOption[] = [
   {
     id: 'flight-vietnam-airlines',
     supplierName: 'Vietnam Airlines Corp',
@@ -216,7 +225,7 @@ const flightOptions: FlightOption[] = [
   },
 ];
 
-const hotelOptions: HotelOption[] = [
+const fallbackHotelOptions: HotelOption[] = [
   {
     id: 'hotel-da-nang-4-pearl',
     supplierName: 'Pearl Beach Hotel',
@@ -304,7 +313,7 @@ const hotelOptions: HotelOption[] = [
   },
 ];
 
-const mealOptions: MealOption[] = [
+const fallbackMealOptions: MealOption[] = [
   {
     id: 'meal-da-nang-ocean',
     supplierName: 'Nhà hàng Biển Xanh',
@@ -345,7 +354,7 @@ const mealOptions: MealOption[] = [
   },
 ];
 
-const attractionOptions: AttractionOption[] = [
+const fallbackAttractionOptions: AttractionOption[] = [
   {
     id: 'ticket-ba-na',
     serviceName: 'Vé tham quan Bà Nà Hills',
@@ -391,7 +400,7 @@ const attractionOptions: AttractionOption[] = [
   },
 ];
 
-const otherOptions: OtherOption[] = [
+const defaultOtherOptions: OtherOption[] = [
   {
     id: 'other-insurance',
     supplierName: 'Bảo Việt Travel Care',
@@ -497,6 +506,15 @@ function resolveApplicablePrice(prices: DatedPrice[], dateKey: string) {
     .filter(price => price.startDate <= dateKey && !price.endDate)
     .sort((left, right) => right.startDate.localeCompare(left.startDate))[0];
   return fallback?.price ?? 0;
+}
+
+function getServiceCapacity(service: { capacity?: number; name: string }) {
+  if (typeof service.capacity === 'number' && service.capacity > 0) {
+    return service.capacity;
+  }
+
+  const matched = service.name.match(/(\d+)\s*chỗ/i);
+  return matched ? Number(matched[1]) : 0;
 }
 
 function average(values: number[]) {
@@ -647,21 +665,40 @@ export default function TourProgramPricingTables({
   const lastSummaryRef = useRef('');
   const lastValidationRef = useRef('');
   const pricingValue = value ?? internalValue;
-  const transportOptions = useMemo<TransportOption[]>(() => suppliers
-    .filter((supplier) => supplier.category === 'Vận chuyển')
-    .map((supplier) => {
-      const roadServices = supplier.services.filter((item) => item.transportType === 'Xe' || item.name.toLowerCase().includes('xe'));
-      return {
-        id: `${supplier.id}-transport`,
+  const firstDepartureDate = departureDates[0] ?? toDateKey(new Date());
+  const allDepartureDates = departureDates.length > 0 ? departureDates : [firstDepartureDate];
+  const transportOptions: TransportOption[] = (() => {
+    const derived = suppliers
+      .filter((supplier) => supplier.category === 'Vận chuyển')
+      .flatMap((supplier) => {
+      const roadServices = supplier.services
+        .filter((item) => item.transportType === 'Xe' || item.name.toLowerCase().includes('xe'))
+        .map((item) => ({ service: item, capacity: getServiceCapacity(item) }))
+        .filter((item) => item.capacity >= expectedGuests)
+        .sort((left, right) => left.capacity - right.capacity);
+      const best = roadServices[0];
+      if (!best) return [];
+      const suggestedPrice = resolveApplicablePrice(
+        best.service.prices.map((price) => ({ startDate: price.fromDate, endDate: price.toDate || undefined, price: price.unitPrice })),
+        firstDepartureDate,
+      );
+      return [{
+        id: `${supplier.id}-${best.service.id}`,
         supplierName: supplier.name,
         operatingArea: supplier.operatingArea || supplier.address || '-',
-        serviceLabel: roadServices.map((item) => item.name).join(', '),
-      };
-    })
-    .filter((item) => item.serviceLabel.trim().length > 0), [suppliers]);
-  const flightOptions = useMemo<FlightOption[]>(() => suppliers
-    .filter((supplier) => supplier.category === 'Vận chuyển')
-    .map((supplier) => {
+        serviceName: best.service.name,
+        serviceLabel: `${best.service.name} (${best.capacity} chỗ)`,
+        capacity: best.capacity,
+        suggestedPrice,
+      }];
+      })
+      .filter((item) => item.serviceLabel.trim().length > 0);
+    return derived.length > 0 ? derived : fallbackTransportOptions;
+  })();
+  const flightOptions = useMemo<FlightOption[]>(() => {
+    const derived = suppliers
+      .filter((supplier) => supplier.category === 'Vận chuyển')
+      .map((supplier) => {
       const flightServices = supplier.services.filter((item) => item.transportType === 'Máy bay' || item.name.toLowerCase().includes('vé'));
       const lastCollaboration = flightServices
         .flatMap((item) => item.prices)
@@ -674,11 +711,14 @@ export default function TourProgramPricingTables({
         collaborationCount: flightServices.reduce((sum, item) => sum + Math.max(1, item.prices.length), 0),
         lastCollaboration,
       };
-    })
-    .filter((item) => item.collaborationCount > 0), [suppliers]);
-  const hotelOptions = useMemo<HotelOption[]>(() => suppliers
-    .filter((supplier) => supplier.category === 'Khách sạn')
-    .reduce<HotelOption[]>((result, supplier) => {
+      })
+      .filter((item) => item.collaborationCount > 0);
+    return derived.length > 0 ? derived : fallbackFlightOptions;
+  }, [suppliers]);
+  const hotelOptions = useMemo<HotelOption[]>(() => {
+    const derived = suppliers
+      .filter((supplier) => supplier.category === 'Khách sạn')
+      .reduce<HotelOption[]>((result, supplier) => {
       const single = supplier.services.find((item) => item.name.toLowerCase().includes('đơn'));
       const double = supplier.services.find((item) => item.name.toLowerCase().includes('đôi'));
       const triple = supplier.services.find((item) => item.name.toLowerCase().includes('ba'));
@@ -694,20 +734,32 @@ export default function TourProgramPricingTables({
         triplePrices: triple.prices.map((price): DatedPrice => ({ startDate: price.fromDate, endDate: price.toDate || undefined, price: price.unitPrice })),
       });
       return result;
-    }, []), [sightseeingSpots, suppliers]);
-  const mealOptions = useMemo<MealOption[]>(() => suppliers
-    .flatMap((supplier) => supplier.mealServices.map((service) => ({
-      id: service.id,
-      supplierName: supplier.name,
-      serviceName: service.name,
-      description: service.description || service.menu || '',
-      address: supplier.address || supplier.operatingArea || '-',
-      spots: extractSpotsFromText(`${supplier.address} ${supplier.operatingArea}`, sightseeingSpots),
-      prices: service.prices.map((price) => ({ startDate: price.fromDate, endDate: price.toDate || undefined, price: price.unitPrice })),
-    }))), [sightseeingSpots, suppliers]);
-  const attractionOptions = useMemo<AttractionOption[]>(() => services
-    .filter((service) => service.category === 'Vé tham quan')
-    .map((service) => {
+      }, []);
+    return derived.length > 0 ? derived : fallbackHotelOptions;
+  }, [sightseeingSpots, suppliers]);
+  const mealOptions = useMemo<MealOption[]>(() => {
+    const derived = suppliers
+      .flatMap((supplier) => {
+      const sourceServices = supplier.category === 'Nhà hàng'
+        ? [...supplier.mealServices, ...supplier.services]
+        : supplier.mealServices;
+      const uniqueServices = Array.from(new Map(sourceServices.map((service) => [service.id, service])).values());
+      return uniqueServices.map((service) => ({
+        id: service.id,
+        supplierName: supplier.name,
+        serviceName: service.name,
+        description: service.description || service.menu || '',
+        address: supplier.address || supplier.operatingArea || '-',
+        spots: extractSpotsFromText(`${supplier.address} ${supplier.operatingArea}`, sightseeingSpots),
+        prices: service.prices.map((price) => ({ startDate: price.fromDate, endDate: price.toDate || undefined, price: price.unitPrice })),
+      }));
+    });
+    return derived.length > 0 ? derived : fallbackMealOptions;
+  }, [sightseeingSpots, suppliers]);
+  const attractionOptions = useMemo<AttractionOption[]>(() => {
+    const derived = services
+      .filter((service) => service.category === 'Vé tham quan')
+      .map((service) => {
       const adultPrices = service.prices
         .filter((price) => !price.note || price.note.toLowerCase().includes('người lớn'))
         .map((price) => ({ startDate: price.effectiveDate, endDate: price.endDate || undefined, price: price.unitPrice }));
@@ -725,10 +777,13 @@ export default function TourProgramPricingTables({
         adultPrices,
         childPrices: childPrices.length > 0 ? childPrices : adultPrices,
       };
-    }), [services, sightseeingSpots]);
-  const otherOptions = useMemo<OtherOption[]>(() => services
-    .filter((service) => service.category !== 'Vé tham quan')
-    .map((service) => ({
+      });
+    return derived.length > 0 ? derived : fallbackAttractionOptions;
+  }, [services, sightseeingSpots]);
+  const otherOptions = useMemo<OtherOption[]>(() => {
+    const serviceOptions = services
+      .filter((service) => service.category !== 'Vé tham quan')
+      .map((service) => ({
       id: service.id,
       supplierName: service.supplierName || '-',
       serviceName: service.name,
@@ -741,9 +796,13 @@ export default function TourProgramPricingTables({
         : undefined,
       prices: service.prices.map((price) => ({ startDate: price.effectiveDate, endDate: price.endDate || undefined, price: price.unitPrice })),
       isInsurance: service.name.toLowerCase().includes('bảo hiểm'),
-    })), [services]);
+    }));
+    return serviceOptions.some((option) => option.isInsurance)
+      ? serviceOptions
+      : [...defaultOtherOptions.filter((option) => option.isInsurance), ...serviceOptions];
+  }, [services]);
 
-  const updateValue = (updater: PricingTablesValue | ((current: PricingTablesValue) => PricingTablesValue)) => {
+  const updateValue = useCallback((updater: PricingTablesValue | ((current: PricingTablesValue) => PricingTablesValue)) => {
     const next = typeof updater === 'function' ? updater(pricingValue) : updater;
     const nextSerialized = JSON.stringify(next);
     const currentSerialized = JSON.stringify(pricingValue);
@@ -756,7 +815,7 @@ export default function TourProgramPricingTables({
     }
     setInternalValue(next);
     onChange?.(next);
-  };
+  }, [onChange, pricingValue, value]);
 
   const hotelGroups = useMemo<HotelGroup[]>(() => {
     const groups: HotelGroup[] = [];
@@ -807,99 +866,114 @@ export default function TourProgramPricingTables({
       group.id,
       hotelOptions.filter(option => option.city === group.city && (!lodgingStandard || option.standard === lodgingStandard)),
     ]),
-  ) as Record<string, HotelOption[]>, [hotelGroups, lodgingStandard]);
+  ) as Record<string, HotelOption[]>, [hotelGroups, hotelOptions, lodgingStandard]);
 
   const mealOptionsByGroup = useMemo(() => Object.fromEntries(
     mealGroups.map(group => [
       group.id,
       mealOptions.filter(option => option.spots.some(spot => sightseeingSpots.includes(spot))),
     ]),
-  ) as Record<string, MealOption[]>, [mealGroups, sightseeingSpots]);
+  ) as Record<string, MealOption[]>, [mealGroups, mealOptions, sightseeingSpots]);
 
   const attractionOptionsByGroup = useMemo(() => Object.fromEntries(
     attractionGroups.map(group => [
       group.id,
       attractionOptions.filter(option => !group.spot || option.spots.includes(group.spot)),
     ]),
-  ) as Record<string, AttractionOption[]>, [attractionGroups]);
+  ) as Record<string, AttractionOption[]>, [attractionGroups, attractionOptions]);
 
   useEffect(() => {
-    updateValue(current => {
-      const normalized: PricingTablesValue = {
-        transport: normalizeDefaults(current.transport.filter(selection => transportOptions.some(option => option.id === selection.optionId))),
-        flight: transport === 'maybay'
-          ? normalizeDefaults(current.flight.filter(selection => flightOptions.some(option => option.id === selection.optionId)))
-          : [],
-        hotels: {},
-        meals: {},
-        attractions: {},
-        otherCosts: current.otherCosts.filter(selection => otherOptions.some(option => option.id === selection.optionId)),
-      };
+    const timer = window.setTimeout(() => {
+      updateValue(current => {
+        const normalized: PricingTablesValue = {
+          transport: normalizeDefaults(current.transport.filter(selection => transportOptions.some(option => option.id === selection.optionId))),
+          flight: transport === 'maybay'
+            ? normalizeDefaults(current.flight.filter(selection => flightOptions.some(option => option.id === selection.optionId)))
+            : [],
+          hotels: {},
+          meals: {},
+          attractions: {},
+          otherCosts: current.otherCosts.filter(selection => otherOptions.some(option => option.id === selection.optionId)),
+        };
 
-      if (!normalized.otherCosts.some(selection => otherOptions.find(option => option.id === selection.optionId)?.isInsurance)) {
-        normalized.otherCosts.unshift({ optionId: 'other-insurance' });
-      }
+        const defaultInsuranceOption = otherOptions.find(option => option.isInsurance);
+        if (defaultInsuranceOption && !normalized.otherCosts.some(selection => otherOptions.find(option => option.id === selection.optionId)?.isInsurance)) {
+          normalized.otherCosts.unshift({ optionId: defaultInsuranceOption.id });
+        }
 
-      if (hideActionColumn && normalized.transport.length === 0 && transportOptions.length > 0) {
-        normalized.transport = [{ optionId: transportOptions[0].id, isDefault: true, manualPrice: 0 }];
-      }
+        if (hideActionColumn && normalized.transport.length === 0 && transportOptions.length > 0) {
+          normalized.transport = [{ optionId: transportOptions[0].id, isDefault: true, manualPrice: 0 }];
+        }
 
-      if (hideActionColumn && transport === 'maybay' && normalized.flight.length === 0 && flightOptions.length > 0) {
-        normalized.flight = [{ optionId: flightOptions[0].id, isDefault: true, manualPrice: 0 }];
-      }
+        if (hideActionColumn && transport === 'maybay' && normalized.flight.length === 0 && flightOptions.length > 0) {
+          normalized.flight = [{ optionId: flightOptions[0].id, isDefault: true, manualPrice: 0 }];
+        }
 
-      hotelGroups.forEach(group => {
-        const kept = current.hotels[group.id]?.filter(selection =>
-          (hotelOptionsByGroup[group.id] ?? []).some(option => option.id === selection.optionId),
-        ) ?? [];
-        normalized.hotels[group.id] = normalizeDefaults(
-          hideActionColumn && kept.length === 0 && (hotelOptionsByGroup[group.id] ?? []).length > 0
-            ? [{ optionId: hotelOptionsByGroup[group.id][0].id, isDefault: true }]
-            : kept,
-        );
+        hotelGroups.forEach(group => {
+          const kept = current.hotels[group.id]?.filter(selection =>
+            (hotelOptionsByGroup[group.id] ?? []).some(option => option.id === selection.optionId),
+          ) ?? [];
+          normalized.hotels[group.id] = normalizeDefaults(
+            hideActionColumn && kept.length === 0 && (hotelOptionsByGroup[group.id] ?? []).length > 0
+              ? [{ optionId: hotelOptionsByGroup[group.id][0].id, isDefault: true }]
+              : kept,
+          );
+        });
+
+        mealGroups.forEach(group => {
+          const kept = current.meals[group.id]?.filter(selection =>
+            (mealOptionsByGroup[group.id] ?? []).some(option => option.id === selection.optionId),
+          ) ?? [];
+          normalized.meals[group.id] = normalizeDefaults(
+            hideActionColumn && kept.length === 0 && (mealOptionsByGroup[group.id] ?? []).length > 0
+              ? [{ optionId: mealOptionsByGroup[group.id][0].id, isDefault: true }]
+              : kept,
+          );
+        });
+
+        attractionGroups.forEach(group => {
+          const kept = current.attractions[group.id]?.filter(selection =>
+            (attractionOptionsByGroup[group.id] ?? []).some(option => option.id === selection.optionId),
+          ) ?? [];
+          normalized.attractions[group.id] = normalizeDefaults(
+            hideActionColumn && kept.length === 0 && (attractionOptionsByGroup[group.id] ?? []).length > 0
+              ? [{ optionId: attractionOptionsByGroup[group.id][0].id, isDefault: true }]
+              : kept,
+          );
+        });
+
+        const currentSerialized = JSON.stringify(current);
+        const normalizedSerialized = JSON.stringify(normalized);
+        return currentSerialized === normalizedSerialized ? current : normalized;
       });
+    }, 0);
 
-      mealGroups.forEach(group => {
-        const kept = current.meals[group.id]?.filter(selection =>
-          (mealOptionsByGroup[group.id] ?? []).some(option => option.id === selection.optionId),
-        ) ?? [];
-        normalized.meals[group.id] = normalizeDefaults(
-          hideActionColumn && kept.length === 0 && (mealOptionsByGroup[group.id] ?? []).length > 0
-            ? [{ optionId: mealOptionsByGroup[group.id][0].id, isDefault: true }]
-            : kept,
-        );
-      });
-
-      attractionGroups.forEach(group => {
-        const kept = current.attractions[group.id]?.filter(selection =>
-          (attractionOptionsByGroup[group.id] ?? []).some(option => option.id === selection.optionId),
-        ) ?? [];
-        normalized.attractions[group.id] = normalizeDefaults(
-          hideActionColumn && kept.length === 0 && (attractionOptionsByGroup[group.id] ?? []).length > 0
-            ? [{ optionId: attractionOptionsByGroup[group.id][0].id, isDefault: true }]
-            : kept,
-        );
-      });
-
-      const currentSerialized = JSON.stringify(current);
-      const normalizedSerialized = JSON.stringify(normalized);
-      return currentSerialized === normalizedSerialized ? current : normalized;
-    });
+    return () => window.clearTimeout(timer);
   }, [
     attractionGroups,
     attractionOptionsByGroup,
+    flightOptions,
     hideActionColumn,
     hotelGroups,
     hotelOptionsByGroup,
     mealGroups,
     mealOptionsByGroup,
+    otherOptions,
     transport,
+    transportOptions,
+    updateValue,
   ]);
 
-  const firstDepartureDate = departureDates[0] ?? toDateKey(new Date());
-  const allDepartureDates = departureDates.length > 0 ? departureDates : [firstDepartureDate];
   const defaultTransport = normalizeDefaults(pricingValue.transport).find(item => item.isDefault);
   const defaultFlight = normalizeDefaults(pricingValue.flight).find(item => item.isDefault);
+  const selectedMealOptionIds = useMemo(
+    () => new Set(Object.values(pricingValue.meals).flatMap((rows) => rows.map((row) => row.optionId))),
+    [pricingValue.meals],
+  );
+  const selectedAttractionOptionIds = useMemo(
+    () => new Set(Object.values(pricingValue.attractions).flatMap((rows) => rows.map((row) => row.optionId))),
+    [pricingValue.attractions],
+  );
 
   const getHotelDisplayPrices = (selection: BaseSelection, group: HotelGroup, departureDate: string) => {
     const option = hotelOptionsByGroup[group.id]?.find(item => item.id === selection.optionId);
@@ -928,14 +1002,18 @@ export default function TourProgramPricingTables({
       return sum + (option ? resolveApplicablePrice(option.prices, addDays(departureDate, group.day - 1)) : 0);
     }, 0);
     const attractionAdultCost = attractionGroups.reduce((sum, group) => {
-      const selected = normalizeDefaults(pricingValue.attractions[group.id] ?? []).find(item => item.isDefault);
-      const option = attractionOptionsByGroup[group.id]?.find(item => item.id === selected?.optionId);
-      return sum + (option ? resolveApplicablePrice(option.adultPrices, addDays(departureDate, group.day - 1)) : 0);
+      const selections = pricingValue.attractions[group.id] ?? [];
+      return sum + selections.reduce((groupSum, selection) => {
+        const option = attractionOptionsByGroup[group.id]?.find(item => item.id === selection.optionId);
+        return groupSum + (option ? resolveApplicablePrice(option.adultPrices, addDays(departureDate, group.day - 1)) : 0);
+      }, 0);
     }, 0);
     const attractionChildCost = attractionGroups.reduce((sum, group) => {
-      const selected = normalizeDefaults(pricingValue.attractions[group.id] ?? []).find(item => item.isDefault);
-      const option = attractionOptionsByGroup[group.id]?.find(item => item.id === selected?.optionId);
-      return sum + (option ? resolveApplicablePrice(option.childPrices, addDays(departureDate, group.day - 1)) : 0);
+      const selections = pricingValue.attractions[group.id] ?? [];
+      return sum + selections.reduce((groupSum, selection) => {
+        const option = attractionOptionsByGroup[group.id]?.find(item => item.id === selection.optionId);
+        return groupSum + (option ? resolveApplicablePrice(option.childPrices, addDays(departureDate, group.day - 1)) : 0);
+      }, 0);
     }, 0);
     const otherBreakdown = pricingValue.otherCosts.reduce((acc, selection) => {
       const option = otherOptions.find(item => item.id === selection.optionId);
@@ -984,7 +1062,7 @@ export default function TourProgramPricingTables({
     };
   };
 
-  const summary = useMemo<PricingSummary>(() => {
+  const summary: PricingSummary = (() => {
     const currentPricing = buildDeparturePricing(firstDepartureDate);
     const currentHotel = hotelGroups.reduce((sum, group) => {
       const selected = normalizeDefaults(pricingValue.hotels[group.id] ?? []).find(item => item.isDefault);
@@ -996,9 +1074,11 @@ export default function TourProgramPricingTables({
       return sum + (option ? resolveApplicablePrice(option.prices, addDays(firstDepartureDate, group.day - 1)) : 0);
     }, 0);
     const currentAttraction = attractionGroups.reduce((sum, group) => {
-      const selected = normalizeDefaults(pricingValue.attractions[group.id] ?? []).find(item => item.isDefault);
-      const option = attractionOptionsByGroup[group.id]?.find(item => item.id === selected?.optionId);
-      return sum + (option ? resolveApplicablePrice(option.adultPrices, addDays(firstDepartureDate, group.day - 1)) : 0);
+      const selections = pricingValue.attractions[group.id] ?? [];
+      return sum + selections.reduce((groupSum, selection) => {
+        const option = attractionOptionsByGroup[group.id]?.find(item => item.id === selection.optionId);
+        return groupSum + (option ? resolveApplicablePrice(option.adultPrices, addDays(firstDepartureDate, group.day - 1)) : 0);
+      }, 0);
     }, 0);
     const otherBreakdown = pricingValue.otherCosts.reduce((acc, selection) => {
       const option = otherOptions.find(item => item.id === selection.optionId);
@@ -1043,27 +1123,7 @@ export default function TourProgramPricingTables({
       otherVariableAdultCost: otherBreakdown.variableAdult,
       departurePricing: Object.fromEntries(allDepartureDates.map(date => [date, buildDeparturePricing(date)])),
     };
-  }, [
-    allDepartureDates,
-    attractionGroups,
-    attractionOptionsByGroup,
-    days,
-    defaultFlight?.manualPrice,
-    defaultTransport?.manualPrice,
-    expectedGuests,
-    firstDepartureDate,
-    guideUnitPrice,
-    hotelGroups,
-    mealGroups,
-    mealOptionsByGroup,
-    otherCostFactor,
-    pricingValue.attractions,
-    pricingValue.hotels,
-    pricingValue.meals,
-    pricingValue.otherCosts,
-    taxRate,
-    transport,
-  ]);
+  })();
 
   useEffect(() => {
     const serialized = JSON.stringify(summary);
@@ -1074,10 +1134,12 @@ export default function TourProgramPricingTables({
     onSummaryChange?.(summary);
   }, [onSummaryChange, summary]);
 
-  const validation = useMemo<PricingValidationState>(() => {
+  const validation: PricingValidationState = (() => {
     const messages: string[] = [];
 
-    if (pricingValue.transport.length === 0) {
+    if (transportOptions.length === 0) {
+      messages.push('Không có dịch vụ xe đủ sức chứa số lượng khách dự kiến. Vui lòng giảm số khách hoặc chọn phương án vận chuyển khác.');
+    } else if (pricingValue.transport.length === 0) {
       messages.push('Xe tham quan chưa có nhà cung cấp.');
     } else if ((defaultTransport?.manualPrice ?? 0) <= 0) {
       messages.push('Xe tham quan chưa nhập đơn giá.');
@@ -1099,13 +1161,21 @@ export default function TourProgramPricingTables({
 
     mealGroups.forEach(group => {
       if ((pricingValue.meals[group.id] ?? []).length === 0) {
-        messages.push(`${group.label} chưa có dịch vụ ăn uống.`);
+        const selectableOptions = (mealOptionsByGroup[group.id] ?? [])
+          .filter(option => !selectedMealOptionIds.has(option.id));
+        if (selectableOptions.length > 0) {
+          messages.push(`${group.label} chưa có dịch vụ ăn uống.`);
+        }
       }
     });
 
     attractionGroups.forEach(group => {
       if ((pricingValue.attractions[group.id] ?? []).length === 0) {
-        messages.push(`${group.label} chưa có vé tham quan.`);
+        const selectableOptions = (attractionOptionsByGroup[group.id] ?? [])
+          .filter(option => !selectedAttractionOptionIds.has(option.id));
+        if (selectableOptions.length > 0) {
+          messages.push(`${group.label} chưa có vé tham quan.`);
+        }
       }
     });
 
@@ -1124,20 +1194,7 @@ export default function TourProgramPricingTables({
       isValid: messages.length === 0,
       messages,
     };
-  }, [
-    attractionGroups,
-    defaultFlight?.manualPrice,
-    defaultTransport?.manualPrice,
-    hotelGroups,
-    mealGroups,
-    pricingValue.attractions,
-    pricingValue.flight.length,
-    pricingValue.hotels,
-    pricingValue.meals,
-    pricingValue.otherCosts,
-    pricingValue.transport.length,
-    transport,
-  ]);
+  })();
 
   useEffect(() => {
     const serialized = JSON.stringify(validation);
@@ -1177,14 +1234,18 @@ export default function TourProgramPricingTables({
       }));
     }
     if (picker.kind === 'meal') {
-      return (mealOptionsByGroup[picker.groupId ?? ''] ?? []).map(option => ({
+      return (mealOptionsByGroup[picker.groupId ?? ''] ?? [])
+        .filter(option => !selectedMealOptionIds.has(option.id))
+        .map(option => ({
         id: option.id,
         title: option.serviceName,
         columns: [`Mô tả: ${option.description}`, `Địa chỉ: ${option.address}`, `Nhà cung cấp: ${option.supplierName}`],
       }));
     }
     if (picker.kind === 'attraction') {
-      return (attractionOptionsByGroup[picker.groupId ?? ''] ?? []).map(option => ({
+      return (attractionOptionsByGroup[picker.groupId ?? ''] ?? [])
+        .filter(option => !selectedAttractionOptionIds.has(option.id))
+        .map(option => ({
         id: option.id,
         title: option.serviceName,
         columns: [`Mô tả: ${option.description}`, `Địa chỉ: ${option.address}`],
@@ -1195,7 +1256,7 @@ export default function TourProgramPricingTables({
       title: option.serviceName,
       columns: [`Nhà cung cấp: ${option.supplierName}`],
     }));
-  }, [attractionOptionsByGroup, hotelOptionsByGroup, mealOptionsByGroup, picker]);
+  }, [attractionOptionsByGroup, flightOptions, hotelOptionsByGroup, mealOptionsByGroup, otherOptions, picker, selectedAttractionOptionIds, selectedMealOptionIds, transportOptions]);
 
   const appendSelections = (kind: PickerKind, selectedIds: string[], groupId?: string) => {
     updateValue(current => {
@@ -1205,7 +1266,10 @@ export default function TourProgramPricingTables({
           ...current,
           transport: normalizeDefaults([
             ...current.transport,
-            ...selectedIds.filter(id => !existing.has(id)).map(id => ({ optionId: id, manualPrice: 0 })),
+            ...selectedIds.filter(id => !existing.has(id)).map(id => ({
+              optionId: id,
+              manualPrice: transportOptions.find(option => option.id === id)?.suggestedPrice ?? 0,
+            })),
           ]),
         };
       }
@@ -1233,7 +1297,7 @@ export default function TourProgramPricingTables({
         };
       }
       if (kind === 'meal' && groupId) {
-        const existing = new Set((current.meals[groupId] ?? []).map(item => item.optionId));
+        const existing = new Set(Object.values(current.meals).flatMap(rows => rows.map(item => item.optionId)));
         return {
           ...current,
           meals: {
@@ -1246,7 +1310,7 @@ export default function TourProgramPricingTables({
         };
       }
       if (kind === 'attraction' && groupId) {
-        const existing = new Set((current.attractions[groupId] ?? []).map(item => item.optionId));
+        const existing = new Set(Object.values(current.attractions).flatMap(rows => rows.map(item => item.optionId)));
         return {
           ...current,
           attractions: {
@@ -1288,7 +1352,7 @@ export default function TourProgramPricingTables({
     </button>
   );
 
-  const deleteSelection = (kind: Exclude<PickerKind, 'hotel' | 'meal' | 'attraction'>, optionId: string, groupId?: string) => {
+  const deleteSelection = (kind: Exclude<PickerKind, 'hotel' | 'meal' | 'attraction'>, optionId: string) => {
     updateValue(current => {
       if (kind === 'transport') {
         return { ...current, transport: normalizeDefaults(current.transport.filter(item => item.optionId !== optionId)) };
@@ -1320,7 +1384,7 @@ export default function TourProgramPricingTables({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-[var(--color-surface)] text-left">
-              {['Tên khoản mục', 'Nhà cung cấp', 'Thông tin', 'Thành tiền / Đơn giá áp dụng', 'Mặc định', ...(hideActionColumn ? [] : ['Thao tác'])].map(header => (
+              {['Nhà cung cấp', 'Dịch vụ', 'Đơn giá', 'Mặc định', ...(hideActionColumn ? [] : ['Thao tác'])].map(header => (
                 <th key={header} className="border border-outline-variant/20 px-3 py-2 font-medium">{header}</th>
               ))}
             </tr>
@@ -1328,7 +1392,6 @@ export default function TourProgramPricingTables({
           <tbody>
             <tr className="bg-gray-50">
               <td className="border border-outline-variant/20 px-3 py-2 font-medium">Xe tham quan</td>
-              <td className="border border-outline-variant/20 px-3 py-2" />
               <td className="border border-outline-variant/20 px-3 py-2">{selectedTransportLabel}</td>
               <td className="border border-outline-variant/20 px-3 py-2 text-right">Đơn giá áp dụng: {formatMoney(defaultTransport?.manualPrice ?? 0)}</td>
               <td className="border border-outline-variant/20 px-3 py-2" />
@@ -1343,12 +1406,12 @@ export default function TourProgramPricingTables({
               if (!option) return null;
               return (
                 <tr key={selection.optionId}>
-                  <td className="border border-outline-variant/20 px-3 py-2 text-primary/50">Xe tham quan</td>
                   <td className="border border-outline-variant/20 px-3 py-2">{option.supplierName}</td>
                   <td className="border border-outline-variant/20 px-3 py-2">
                     <div className="space-y-1 text-xs text-primary/60">
                       <p>Khu vực hoạt động: {option.operatingArea}</p>
-                      <p>Dịch vụ: {option.serviceLabel}</p>
+                      <p>Dịch vụ: {option.serviceName}</p>
+                      <p>Sức chứa: {option.capacity} khách</p>
                     </div>
                   </td>
                   <td className="border border-outline-variant/20 px-3 py-2">
@@ -1388,7 +1451,7 @@ export default function TourProgramPricingTables({
               <>
                 <tr className="bg-gray-50">
                   <td className="border border-outline-variant/20 px-3 py-2 font-medium">Vé máy bay</td>
-                  <td className="border border-outline-variant/20 px-3 py-2" colSpan={2}>
+                  <td className="border border-outline-variant/20 px-3 py-2">
                     {departurePoint || '-'} đến {arrivalPoint || '-'}
                   </td>
                   <td className="border border-outline-variant/20 px-3 py-2 text-right">Đơn giá áp dụng: {formatMoney(defaultFlight?.manualPrice ?? 0)}</td>
@@ -1404,7 +1467,6 @@ export default function TourProgramPricingTables({
                   if (!option) return null;
                   return (
                     <tr key={selection.optionId}>
-                      <td className="border border-outline-variant/20 px-3 py-2 text-primary/50">Vé máy bay</td>
                       <td className="border border-outline-variant/20 px-3 py-2">{option.supplierName}</td>
                       <td className="border border-outline-variant/20 px-3 py-2">
                         <div className="space-y-1 text-xs text-primary/60">
@@ -1450,12 +1512,13 @@ export default function TourProgramPricingTables({
         </table>
       </div>
 
+      {nights > 0 && (
       <div>
         <h4 className="font-semibold text-sm text-primary mb-2">II. Khách sạn</h4>
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-[var(--color-surface)] text-left">
-              {['Tên khoản mục', 'Nhà cung cấp', 'Địa chỉ', 'Thành tiền / Đơn giá áp dụng', 'Mặc định', ...(hideActionColumn ? [] : ['Thao tác'])].map(header => (
+              {['Nhà cung cấp', 'Địa chỉ', 'Thành tiền', 'Mặc định', ...(hideActionColumn ? [] : ['Thao tác'])].map(header => (
                 <th key={header} className="border border-outline-variant/20 px-3 py-2 font-medium">{header}</th>
               ))}
             </tr>
@@ -1463,7 +1526,7 @@ export default function TourProgramPricingTables({
           <tbody>
             {hotelGroups.length === 0 ? (
               <tr>
-                <td colSpan={hideActionColumn ? 5 : 6} className="border border-outline-variant/20 px-3 py-4 text-primary/45 italic">
+                <td colSpan={hideActionColumn ? 4 : 5} className="border border-outline-variant/20 px-3 py-4 text-primary/45 italic">
                   Chọn địa điểm lưu trú trong lịch trình để hiển thị khách sạn.
                 </td>
               </tr>
@@ -1476,7 +1539,7 @@ export default function TourProgramPricingTables({
                   rows={[
                     <tr key={`${group.id}-header`} className="bg-gray-50">
                       <td className="border border-outline-variant/20 px-3 py-2 font-medium">{group.label}</td>
-                      <td className="border border-outline-variant/20 px-3 py-2" colSpan={2}>Điểm lưu trú: {group.city}</td>
+                      <td className="border border-outline-variant/20 px-3 py-2">Điểm lưu trú: {group.city}</td>
                       <td className="border border-outline-variant/20 px-3 py-2 text-right">Đơn giá áp dụng: {formatMoney(display?.doublePrice ?? 0)}</td>
                       <td className="border border-outline-variant/20 px-3 py-2" />
                       {!hideActionColumn && (
@@ -1491,7 +1554,6 @@ export default function TourProgramPricingTables({
                       const price = getHotelDisplayPrices(selection, group, firstDepartureDate);
                       return (
                         <tr key={`${group.id}-${selection.optionId}`}>
-                          <td className="border border-outline-variant/20 px-3 py-2 text-primary/50">{group.label}</td>
                           <td className="border border-outline-variant/20 px-3 py-2">{option.supplierName}</td>
                           <td className="border border-outline-variant/20 px-3 py-2">{option.address}</td>
                           <td className="border border-outline-variant/20 px-3 py-2 text-right">
@@ -1527,13 +1589,14 @@ export default function TourProgramPricingTables({
           </tbody>
         </table>
       </div>
+      )}
 
       <div>
         <h4 className="font-semibold text-sm text-primary mb-2">III. Dịch vụ ăn uống</h4>
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-[var(--color-surface)] text-left">
-              {['Tên khoản mục', 'Tên dịch vụ', 'Mô tả / Địa chỉ / Nhà cung cấp', 'Thành tiền / Đơn giá áp dụng', 'Mặc định', ...(hideActionColumn ? [] : ['Thao tác'])].map(header => (
+              {['Nhà cung cấp', 'Địa chỉ', 'Tên dịch vụ', 'Đơn giá', 'Mặc định', ...(hideActionColumn ? [] : ['Thao tác'])].map(header => (
                 <th key={header} className="border border-outline-variant/20 px-3 py-2 font-medium">{header}</th>
               ))}
             </tr>
@@ -1555,7 +1618,8 @@ export default function TourProgramPricingTables({
                   rows={[
                     <tr key={`${group.id}-header`} className="bg-gray-50">
                       <td className="border border-outline-variant/20 px-3 py-2 font-medium">{group.label}</td>
-                      <td className="border border-outline-variant/20 px-3 py-2" colSpan={2} />
+                      <td className="border border-outline-variant/20 px-3 py-2" />
+                      <td className="border border-outline-variant/20 px-3 py-2" />
                       <td className="border border-outline-variant/20 px-3 py-2 text-right">Đơn giá áp dụng: {formatMoney(displayPrice)}</td>
                       <td className="border border-outline-variant/20 px-3 py-2" />
                       {!hideActionColumn && (
@@ -1570,15 +1634,9 @@ export default function TourProgramPricingTables({
                       const price = resolveApplicablePrice(option.prices, addDays(firstDepartureDate, group.day - 1));
                       return (
                         <tr key={`${group.id}-${selection.optionId}`}>
-                          <td className="border border-outline-variant/20 px-3 py-2 text-primary/50">{group.label}</td>
+                          <td className="border border-outline-variant/20 px-3 py-2">{option.supplierName}</td>
+                          <td className="border border-outline-variant/20 px-3 py-2">{option.address}</td>
                           <td className="border border-outline-variant/20 px-3 py-2">{option.serviceName}</td>
-                          <td className="border border-outline-variant/20 px-3 py-2">
-                            <div className="space-y-1 text-xs text-primary/60">
-                              <p>Mô tả: {option.description}</p>
-                              <p>Địa chỉ: {option.address}</p>
-                              <p>Nhà cung cấp: {option.supplierName}</p>
-                            </div>
-                          </td>
                           <td className="border border-outline-variant/20 px-3 py-2 text-right">
                             <input readOnly value={formatMoney(price)} className="w-full border border-outline-variant/30 bg-[var(--color-surface)] px-3 py-2 text-right outline-none" />
                           </td>
@@ -1618,25 +1676,25 @@ export default function TourProgramPricingTables({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-[var(--color-surface)] text-left">
-              {['Tên khoản mục', 'Tên dịch vụ', 'Mô tả / Địa chỉ', 'Thành tiền / Đơn giá áp dụng', 'Mặc định', ...(hideActionColumn ? [] : ['Thao tác'])].map(header => (
+              {['Tên dịch vụ', 'Mô tả / Địa chỉ', 'Đơn giá', ...(hideActionColumn ? [] : ['Thao tác'])].map(header => (
                 <th key={header} className="border border-outline-variant/20 px-3 py-2 font-medium">{header}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {attractionGroups.map(group => {
-              const defaultSelection = normalizeDefaults(pricingValue.attractions[group.id] ?? []).find(item => item.isDefault);
-              const defaultOption = attractionOptionsByGroup[group.id]?.find(item => item.id === defaultSelection?.optionId);
-              const displayPrice = defaultOption ? resolveApplicablePrice(defaultOption.adultPrices, addDays(firstDepartureDate, group.day - 1)) : 0;
+              const displayPrice = (pricingValue.attractions[group.id] ?? []).reduce((sum, selection) => {
+                const option = attractionOptionsByGroup[group.id]?.find(item => item.id === selection.optionId);
+                return sum + (option ? resolveApplicablePrice(option.adultPrices, addDays(firstDepartureDate, group.day - 1)) : 0);
+              }, 0);
               return (
                 <FragmentRows
                   key={group.id}
                   rows={[
                     <tr key={`${group.id}-header`} className="bg-gray-50">
                       <td className="border border-outline-variant/20 px-3 py-2 font-medium">{group.label}</td>
-                      <td className="border border-outline-variant/20 px-3 py-2" colSpan={2}>Điểm tham quan: {group.spot || '-'}</td>
+                      <td className="border border-outline-variant/20 px-3 py-2">Điểm tham quan: {group.spot || '-'}</td>
                       <td className="border border-outline-variant/20 px-3 py-2 text-right">Đơn giá áp dụng: {formatMoney(displayPrice)}</td>
-                      <td className="border border-outline-variant/20 px-3 py-2" />
                       {!hideActionColumn && (
                         <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50">
                           {sectionButton('Chọn dịch vụ +', () => openPicker('attraction', `Chọn vé tham quan - ${group.label}`, group.id), `Thêm vé tham quan cho ${group.label}`)}
@@ -1649,7 +1707,6 @@ export default function TourProgramPricingTables({
                       const price = resolveApplicablePrice(option.adultPrices, addDays(firstDepartureDate, group.day - 1));
                       return (
                         <tr key={`${group.id}-${selection.optionId}`}>
-                          <td className="border border-outline-variant/20 px-3 py-2 text-primary/50">{group.label}</td>
                           <td className="border border-outline-variant/20 px-3 py-2">{option.serviceName}</td>
                           <td className="border border-outline-variant/20 px-3 py-2">
                             <div className="space-y-1 text-xs text-primary/60">
@@ -1659,21 +1716,6 @@ export default function TourProgramPricingTables({
                           </td>
                           <td className="border border-outline-variant/20 px-3 py-2 text-right">
                             <input readOnly value={formatMoney(price)} className="w-full border border-outline-variant/30 bg-[var(--color-surface)] px-3 py-2 text-right outline-none" />
-                          </td>
-                          <td className="border border-outline-variant/20 px-3 py-2 text-center">
-                            <input
-                              type="radio"
-                              checked={Boolean(selection.isDefault)}
-                              onChange={() => updateValue(current => ({
-                                ...current,
-                                attractions: {
-                                  ...current.attractions,
-                                  [group.id]: (current.attractions[group.id] ?? []).map(item => ({ ...item, isDefault: item.optionId === selection.optionId })),
-                                },
-                              }))}
-                              className="h-4 w-4 accent-[var(--color-secondary)]"
-                              aria-label={`Mặc định ${group.label} ${option.serviceName}`}
-                            />
                           </td>
                           {!hideActionColumn && (
                             <td className="border border-outline-variant/20 px-3 py-2 text-center">
@@ -1699,7 +1741,7 @@ export default function TourProgramPricingTables({
             <input
               aria-label="Đơn giá hướng dẫn viên"
               type="number"
-              value={guideUnitPrice}
+              value={guideUnitPrice > 0 ? guideUnitPrice : ''}
               onChange={event => onGuideUnitPriceChange(Number(event.target.value) || 0)}
               className="w-full border border-outline-variant/50 px-3 py-2.5 text-sm outline-none"
             />

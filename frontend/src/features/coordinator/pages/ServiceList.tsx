@@ -38,7 +38,6 @@ interface ServiceDraft {
 
 type DraftErrors = Partial<Record<keyof ServiceDraft | 'price', string>>;
 
-const provinceOptions: Province[] = ['Đà Nẵng', 'Hà Nội', 'Quảng Ninh', 'Lào Cai', 'Ninh Bình'];
 const lockedCategories = new Set<Category>(['Vận chuyển', 'Lưu trú', 'Hướng dẫn viên']);
 const countFormulaOptions: CountFormulaOption[] = ['Theo ngày', 'Giá trị mặc định', 'Nhập tay'];
 const quantityFormulaOptions: QuantityFormulaOption[] = ['Theo số người', 'Giá trị mặc định', 'Nhập tay'];

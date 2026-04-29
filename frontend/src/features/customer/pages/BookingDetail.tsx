@@ -25,7 +25,6 @@ export default function BookingDetail() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isBootstrapping = useAuthStore((state) => state.isBootstrapping);
   const bookings = useAppDataStore((state) => state.bookings);
-  const publicTours = useAppDataStore((state) => state.publicTours);
   const upsertBooking = useAppDataStore((state) => state.upsertBooking);
   const [publicBooking, setPublicBooking] = useState<(typeof bookings)[number] | null>(null);
   const [isLoadingBooking, setIsLoadingBooking] = useState(false);
@@ -37,7 +36,6 @@ export default function BookingDetail() {
   const isPublicLookupView = !user && lookupContact.length > 0;
   const isCustomerRoute = location.pathname.startsWith('/customer/');
   const booking = bookings.find((item) => item.id === id || item.bookingCode === id) ?? publicBooking;
-  const tour = publicTours.find((item) => item.id === booking?.tourId);
   const backTarget = isPublicLookupView ? '/booking/lookup' : '/customer/bookings';
 
   useEffect(() => {
@@ -272,23 +270,25 @@ export default function BookingDetail() {
               </div>
             </section>
 
-            {booking.status === 'cancelled' && booking.bankInfo && (
+            {booking.status === 'cancelled' && (
               <section className="bg-white border border-[#D0C5AF]/30 p-8 shadow-sm">
                 <h2 className="font-serif text-xl text-[var(--color-primary)] mb-5">Thông tin hoàn tiền</h2>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Ngân hàng</p>
-                    <p className="text-sm font-medium text-primary">{booking.bankInfo.bankName}</p>
+                {booking.bankInfo && (
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Ngân hàng</p>
+                      <p className="text-sm font-medium text-primary">{booking.bankInfo.bankName}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Số tài khoản</p>
+                      <p className="text-sm font-medium text-primary">{booking.bankInfo.accountNumber}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Chủ tài khoản</p>
+                      <p className="text-sm font-medium text-primary">{booking.bankInfo.accountHolder}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Số tài khoản</p>
-                    <p className="text-sm font-medium text-primary">{booking.bankInfo.accountNumber}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Chủ tài khoản</p>
-                    <p className="text-sm font-medium text-primary">{booking.bankInfo.accountHolder}</p>
-                  </div>
-                </div>
+                )}
                 <div className="mt-5 grid gap-4 sm:grid-cols-3">
                   <div>
                     <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Trạng thái hoàn tiền</p>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Breadcrumb, message } from 'antd';
+import { Breadcrumb } from 'antd';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import TourProgramPricingTables from '@features/coordinator/components/TourProgramPricingTables';
 import {
@@ -54,21 +54,6 @@ function toEditableProgram(program: TourProgram): EditableProgram {
     inactiveReason: program?.inactiveReason ?? '',
     sightseeingSpotsInput: program?.sightseeingSpots?.join(', '),
     selectedDatesInput: (program?.selectedDates ?? [])?.join(', '),
-  };
-}
-
-function toPersistedProgram(program: EditableProgram): TourProgram {
-  return {
-    ...program,
-    routeDescription: program?.routeDescription?.trim(),
-    sightseeingSpots: program?.sightseeingSpotsInput
-      ?.split(',')
-      ?.map(item => item?.trim())
-      ?.filter(Boolean),
-    selectedDates: program?.selectedDatesInput
-      ?.split(',')
-      ?.map(item => item?.trim())
-      ?.filter(Boolean),
   };
 }
 
@@ -182,9 +167,8 @@ export default function TourProgramDetailScreen({ role }: { role: DetailRole }) 
   const programs = useAppDataStore(state => state.tourPrograms);
   const protectedReady = useAppDataStore(state => state.protectedReady);
   const protectedLoading = useAppDataStore(state => state.protectedLoading);
-  const setPrograms = useAppDataStore(state => state.setTourPrograms);
   const [activeTab, setActiveTab] = useState<DetailTab>('general');
-  const [isEditing, setIsEditing] = useState(false);
+  const isEditing = false;
 
   const basePath = role === 'manager' ? '/manager/tour-programs' : '/coordinator/tour-programs';
   const roleLabel = role === 'manager' ? 'Quản lý' : 'NV điều phối';
@@ -241,41 +225,6 @@ export default function TourProgramDetailScreen({ role }: { role: DetailRole }) 
         itinerary: current?.itinerary?.map((day, index) => index === dayIndex ? { ...day, ...patch } : day),
       };
     });
-  };
-
-  const persistProgram = (nextProgram: TourProgram) => {
-    const nextPrograms = programs?.map(item => item?.id === nextProgram?.id ? nextProgram : item);
-    setPrograms(nextPrograms);
-    setDraft(toEditableProgram(nextProgram));
-  };
-
-  const saveChanges = () => {
-    if (!canEdit) return;
-    const persisted = toPersistedProgram({
-      ...draft,
-      updatedAt: new Date()?.toISOString(),
-    });
-    persistProgram(persisted);
-    setIsEditing(false);
-    message.success('Đã lưu thay đổi chương trình tour');
-  };
-
-  const sendForApproval = () => {
-    if (!canEdit) return;
-    const persisted = toPersistedProgram({
-      ...draft,
-      status: 'draft',
-      updatedAt: new Date()?.toISOString(),
-    });
-    persistProgram(persisted);
-    setIsEditing(false);
-    message.success('Đã gửi duyệt chương trình tour');
-    navigate(basePath);
-  };
-
-  const resetDraft = () => {
-    setDraft(toEditableProgram(program));
-    setIsEditing(false);
   };
 
   return (

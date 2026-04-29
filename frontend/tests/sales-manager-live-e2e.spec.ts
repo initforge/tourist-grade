@@ -103,14 +103,6 @@ async function openCoordinatorGuestList(page: Page) {
   await expect(page.locator('tbody')).toContainText(/BK-\d+/i);
 }
 
-async function selectPassengerNationality(page: Page, passengerIndex: number, query: string, optionText: RegExp) {
-  const trigger = page.locator(`[aria-label*="hành khách ${passengerIndex}"], [aria-label*="hanh khach ${passengerIndex}"]`).first();
-  await trigger.click();
-  const dropdownInput = page.locator('.ant-select-dropdown input').last();
-  await dropdownInput.fill(query);
-  await page.getByRole('option').filter({ hasText: optionText }).first().click();
-}
-
 test.describe.configure({ mode: 'serial' });
 
 test.beforeEach(async ({ request }) => {
@@ -144,6 +136,28 @@ test('sales confirms a paid booking, stores audit fields, moves it to confirmed,
     }, { timeout: 15000, intervals: [500, 1000, 2000] })
     .toBe('confirmed:true');
 
+  await loginAsRole(page, 'sales', '/sales/bookings/B002?tab=pending_confirm');
+  await page.getByRole('button', { name: /Xác nhận hủy đơn/i }).click();
+  await page.getByRole('button', { name: /Có, hủy đơn/i }).click();
+
+  await expect
+    .poll(async () => {
+      const booking = await getBookingDetail(request, salesToken, 'B002');
+      return booking.status;
+    }, { timeout: 15000, intervals: [500, 1000, 2000] })
+    .toBe('cancelled');
+
+  await loginAsRole(page, 'sales', '/sales/bookings/B010?tab=pending_confirm');
+  await page.getByRole('button', { name: /Xác nhận đơn đặt/i }).click();
+  await page.getByRole('button', { name: /Có, xác nhận/i }).click();
+
+  await expect
+    .poll(async () => {
+      const booking = await getBookingDetail(request, salesToken, 'B010');
+      return `${booking.status}:${Boolean(booking.confirmedAt)}`;
+    }, { timeout: 15000, intervals: [500, 1000, 2000] })
+    .toBe('confirmed:true');
+
   await expect
     .poll(async () => {
       const bookings = await getCoordinatorManifest(request, coordinatorToken, 'TI009');
@@ -172,10 +186,6 @@ test('sales accepts non-Vietnamese passenger documents without 12-digit validati
 });
 
 test('sales confirms cancellation, stores audit fields, removes the manifest from coordinator, and queues cancellation email', async ({ page, request }) => {
-  await loginAsRole(page, 'coordinator', '/coordinator/tours/TI009/estimate');
-  await openCoordinatorGuestList(page);
-  await expect(page.locator('tbody')).toContainText('BK-102938');
-
   await loginAsRole(page, 'sales', '/sales/bookings/B002?tab=pending_confirm');
   await page.getByRole('button', { name: /Xác nhận hủy đơn/i }).click();
   await page.getByRole('button', { name: /Có, hủy đơn/i }).click();
@@ -187,6 +197,17 @@ test('sales confirms cancellation, stores audit fields, removes the manifest fro
   await expect(page.locator('tbody')).not.toContainText('BK-102938');
   await page.getByRole('button', { name: /Đã hủy/i }).first().click();
   await expect(page.locator('tbody')).toContainText('BK-102938');
+
+  await loginAsRole(page, 'sales', '/sales/bookings/B003?tab=pending_confirm');
+  const dialog = await openPassengerEditor(page);
+  await dialog.locator('input[placeholder="Số GKS"]').fill('123456789012');
+  await dialog.getByRole('button', { name: /Lưu/i }).click();
+  await page.getByRole('button', { name: /Xác nhận đơn đặt/i }).click();
+  await page.getByRole('button', { name: /Có, xác nhận/i }).click();
+
+  await loginAsRole(page, 'sales', '/sales/bookings/B010?tab=pending_confirm');
+  await page.getByRole('button', { name: /Xác nhận đơn đặt/i }).click();
+  await page.getByRole('button', { name: /Có, xác nhận/i }).click();
 
   await loginAsRole(page, 'coordinator', '/coordinator/tours/TI009/estimate');
   await openCoordinatorGuestList(page);
@@ -207,7 +228,8 @@ test('sales refund upload and refund-bill edit persist the latest audit fields a
   await expect(page.getByText(/Đã hoàn tiền/i).first()).toBeVisible();
   await expect(page.getByText(/Người hoàn tiền/i)).toBeVisible();
 
-  let emails = await expectEmailQueued(request, { bookingCode: 'BK-192837', template: 'booking_refund_completed' });
+  const completedEmails = await expectEmailQueued(request, { bookingCode: 'BK-192837', template: 'booking_refund_completed' });
+  expect(completedEmails[0]?.payload?.refundBillUrl).toBeTruthy();
 
   await page.goto('/sales/bookings/B006?tab=cancelled');
   await page.getByRole('button', { name: /Chỉnh sửa bill/i }).click();
@@ -217,7 +239,8 @@ test('sales refund upload and refund-bill edit persist the latest audit fields a
 
   await expect(page.getByText(/Người hoàn tiền/i)).toBeVisible();
 
-  emails = await expectEmailQueued(request, { bookingCode: 'BK-564738', template: 'booking_refund_bill_updated' });
+  const updatedEmails = await expectEmailQueued(request, { bookingCode: 'BK-564738', template: 'booking_refund_bill_updated' });
+  expect(updatedEmails[0]?.payload?.refundBillUrl).toBeTruthy();
 });
 
 test('unpaid bookings stay in pending-confirm before 15 minutes and move to cancelled with timeout reason after bootstrap refresh', async ({ page, request }) => {
@@ -237,7 +260,7 @@ test('unpaid bookings stay in pending-confirm before 15 minutes and move to canc
 
   await loginAsRole(page, 'sales', '/sales/bookings?tab=cancelled');
   await expect(page.locator('tbody')).toContainText('BK-888012');
-  await expect(page.locator('tbody')).toContainText(/Quá hạn thanh toán giữ chỗ/i);
+  await expect(page.locator('tbody')).toContainText(/Không thanh toán đúng hạn/i);
   await expect(page.locator('tbody')).toContainText(/Hoàn thành/i);
 });
 

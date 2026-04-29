@@ -49,10 +49,12 @@ test.describe.serial('Real user role journeys', () => {
     await expect(page.getByText(/Thanh toán toàn bộ/i)).toBeVisible();
 
     await page.goto('/booking/lookup');
-    await page.waitForURL(/\/customer\/bookings$/);
-    await expect(page.getByRole('heading', { name: /Lịch Sử Đặt Tour|Lich Su Dat Tour/i })).toBeVisible();
+    await page.getByPlaceholder('VD: BK-582910').fill('BK-394821');
+    await page.getByPlaceholder('0988 123 456').fill('0912345678');
+    await page.getByRole('button', { name: /Tra cứu thông tin/i }).click();
+    await expect(page.getByRole('region', { name: /Kết quả tra cứu đơn đặt/i })).toBeVisible();
 
-    await page.goto('/customer/bookings/B001');
+    await page.goto('/customer/bookings/B003');
     await expect(page.getByRole('button', { name: /Yêu cầu hủy tour/i })).toBeVisible();
     await page.getByRole('button', { name: /Yêu cầu hủy tour/i }).click();
     await expect(page.getByRole('dialog', { name: /Gửi yêu cầu hủy/i })).toBeVisible();

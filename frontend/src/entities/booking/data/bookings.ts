@@ -64,6 +64,7 @@ export interface Booking {
   paymentWindowExpiresAt?: string;
   finalPaymentDueAt?: string;
   cancellationReason?: string;
+  cancellationSource?: 'customer_request' | 'manager_tour_cancel' | string;
   cancelledAt?: string;
   roomCounts?: {
     single: number;

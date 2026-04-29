@@ -111,7 +111,7 @@ test('successful PayOS payment keeps booking status pending, marks it paid, and 
   await loginAsRole(page, 'customer', '/');
   const customerToken = await getAccessToken(page);
 
-  const booking = await createBooking(request, customerToken, 'DS001-2', [buildAdultPassenger(0)], 'pay');
+  const booking = await createBooking(request, customerToken, 'DS001-4', [buildAdultPassenger(0)], 'pay');
   expect(booking.status).toBe('pending');
   expect(booking.paymentStatus).toBe('unpaid');
 
@@ -201,6 +201,11 @@ test('editing a held booking can increase passenger count up to remaining seats 
   await page.goto(`${tourPath}/book?scheduleId=${encodeURIComponent(schedule!.id)}&bookingId=${encodeURIComponent(targetBooking.id)}`);
   await page.waitForLoadState('domcontentloaded');
   await page.waitForLoadState('networkidle').catch(() => null);
+
+  const backToEditButton = page.getByRole('button', { name: /Quay lại sửa đơn/i });
+  if (await backToEditButton.isVisible().catch(() => false)) {
+    await backToEditButton.click();
+  }
 
   await expect(page.locator('body')).toContainText('Còn 2 chỗ trống');
 

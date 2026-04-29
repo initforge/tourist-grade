@@ -1305,19 +1305,17 @@ export default function AdminSuppliers() {
       )}
 
       {quotePopup && quoteSupplier && (
-        <QuotePopupModal quotePopup={quotePopup} supplier={quoteSupplier} onClose={() => setQuotePopup(null)} onApply={applyQuoteChanges} />
+        <QuotePopupModal supplier={quoteSupplier} onClose={() => setQuotePopup(null)} onApply={applyQuoteChanges} />
       )}
     </div>
   );
 }
 
 function QuotePopupModal({
-  quotePopup,
   supplier,
   onClose,
   onApply,
 }: {
-  quotePopup: QuotePopupState;
   supplier: SupplierRow;
   onClose: () => void;
   onApply: (priceMap: Record<string, number>, reason: string, fromDate: string, toDate: string) => void;

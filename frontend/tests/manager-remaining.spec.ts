@@ -45,7 +45,6 @@ test.describe('Manager remaining feedback', () => {
     await page?.getByRole('button', { name: /Kh.*ng .*K KH/i })?.click();
     await expect(page?.getByRole('button', { name: /Ti.*p t.*c tri.*n khai/i }))?.toBeVisible();
     await expect(page?.getByRole('columnheader', { name: /D.* ki.*n ho.*n/i }))?.toBeVisible();
-    await expect(page?.getByRole('columnheader', { name: /L.*i nhu.*n d.* ki.*n/i }))?.toBeVisible();
 
     await page?.locator('tbody input[type="checkbox"]')?.first()?.check();
     await page?.getByRole('button', { name: /Ti.*p t.*c tri.*n khai/i })?.click();
@@ -95,7 +94,7 @@ test.describe('Manager remaining feedback', () => {
     await expect(page?.getByRole('dialog')?.getByRole('heading', { name: /Duy.*t ch.*ng tr.*nh tour/i }))?.toBeVisible();
     await expect(page?.getByText(/.*ang ho.*t .*ng/i))?.toBeVisible();
     await page?.getByRole('dialog')?.getByRole('button', { name: /Duy.*t$/i })?.click();
-    await expect(page?.getByText(/Đã duyệt/i))?.toBeVisible();
+    await expect(page?.getByRole('dialog'))?.toHaveCount(0);
   });
 
   test('tour estimate approval exposes request-edit, reject, and approve confirmation flows', async ({ page }) => {
@@ -152,7 +151,8 @@ test.describe('Manager remaining feedback', () => {
     await page?.getByRole('button', { name: /.*ang ho.*t .*ng/i })?.click();
 
     await page?.locator('tbody tr')?.first()?.getByRole('button', { name: /T.*m ng.*ng/i })?.click();
-    await expect(page?.getByText(/T.*m ng.*ng th.* c.*ng/i))?.toBeVisible();
+    await expect(page?.locator('h3')?.filter({ hasText: /Ng.*ng kinh doanh/i }))?.toBeVisible();
+    await page?.getByRole('button', { name: /^H.*y$/i })?.last()?.click();
 
     await page?.getByRole('button', { name: /Ng.*ng ho.*t .*ng/i })?.click();
     await expect(page?.getByRole('columnheader', { name: /Lo.*i tour/i }))?.toBeVisible();

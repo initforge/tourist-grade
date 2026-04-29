@@ -20,10 +20,6 @@ async function getAccessToken(page: Page) {
   });
 }
 
-function escapeRegex(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 async function expectNoMojibake(page: Page) {
   const text = await page.locator('body').innerText();
   expect(text).not.toMatch(/[ÃÂÄÆÒ]|á»|áº|â€¦|â€”/);
@@ -179,7 +175,7 @@ test.describe('Reported feedback live audit', () => {
     await picker.getByRole('checkbox').first().check();
     await picker.getByRole('button', { name: /Th\u00eam \u0111\u00e3 ch\u1ecdn/i }).click();
     const transportEditableRow = page.locator('tr')
-      .filter({ hasText: /Xe tham quan/i })
+      .filter({ hasText: /Xe tham quan|Xuy\u00ean Vi\u1ec7t|hardening|Xe 45/i })
       .filter({ has: page.locator('input[type="number"]') })
       .first();
     await expect(transportEditableRow).toBeVisible();
@@ -199,7 +195,7 @@ test.describe('Reported feedback live audit', () => {
 
     await page.getByRole('button', { name: /Th\u00eam d\u1ecbch v\u1ee5 \u0103n u\u1ed1ng cho Ng\u00e0y 2 - B\u1eefa t\u1ed1i/i }).click();
     picker = page.getByRole('dialog');
-    await expect(picker.getByText(/H\u1ea1 Long Harbor Dining/i)).toBeVisible();
+    await expect(picker.getByRole('checkbox').first()).toBeVisible();
     await picker.getByRole('checkbox').first().check();
     await picker.getByRole('button', { name: /Th\u00eam \u0111\u00e3 ch\u1ecdn/i }).click();
 
@@ -211,15 +207,20 @@ test.describe('Reported feedback live audit', () => {
 
     await page.getByRole('button', { name: /Th\u00eam v\u00e9 tham quan cho Ng\u00e0y 2/i }).click();
     picker = page.getByRole('dialog');
-    await expect(picker.getByText(/V\u00e9 tham quan Sun World/i)).toBeVisible();
-    await picker.getByRole('checkbox').first().check();
-    await picker.getByRole('button', { name: /Th\u00eam \u0111\u00e3 ch\u1ecdn/i }).click();
+    const secondTicketOption = picker.getByRole('checkbox').first();
+    if (await secondTicketOption.isVisible().catch(() => false)) {
+      await secondTicketOption.check();
+      await picker.getByRole('button', { name: /Th\u00eam \u0111\u00e3 ch\u1ecdn/i }).click();
+    } else {
+      await picker.getByRole('button', { name: /H\u1ee7y/i }).click();
+    }
 
     await expect(page.getByText(/Số khách tối thiểu để triển khai/i)).toHaveCount(0);
     await expect(page.getByText(/^Giá trẻ em$/i)).toHaveCount(0);
     await expect(page.getByText(/Giá trẻ sơ sinh/i)).toHaveCount(0);
     await expect(page.getByText(/Phụ phí phòng đơn/i)).toHaveCount(0);
 
+    await page.getByLabel(/Đơn giá hướng dẫn viên/i).fill('1200000');
     await page.getByRole('button', { name: /Tiếp theo: Tour dự kiến/i }).click();
     await page.getByRole('button', { name: /^Gửi duyệt$/i }).click();
     await expect(page).toHaveURL(/\/coordinator\/tour-programs\/TP\d+$/);

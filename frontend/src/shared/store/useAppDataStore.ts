@@ -280,20 +280,21 @@ export const useAppDataStore = create<AppDataState>((set) => ({
 
     try {
       const response = await apiRequest<BootstrapResponse>('/bootstrap', { token });
+      const data = response.data;
 
       set({
-        users: response.data.users,
-        tourPrograms: response.data.tourPrograms,
-        tourInstances: response.data.tourInstances,
-        suppliers: response.data.suppliers,
-        services: response.data.services,
-        guides: response.data.guides,
-        vouchers: response.data.vouchers,
-        specialDays: response.data.specialDays,
-        provinces: response.data.provinces,
-        bookings: response.data.bookings,
-        wishlist: response.data.wishlist,
-        reviews: response.data.reviews,
+        users: data.users ?? [],
+        tourPrograms: data.tourPrograms ?? [],
+        tourInstances: data.tourInstances ?? [],
+        suppliers: data.suppliers ?? [],
+        services: data.services ?? [],
+        guides: data.guides ?? [],
+        vouchers: data.vouchers ?? [],
+        specialDays: data.specialDays ?? [],
+        provinces: data.provinces ?? [],
+        bookings: data.bookings ?? [],
+        wishlist: data.wishlist ?? [],
+        reviews: data.reviews ?? [],
         protectedReady: true,
         protectedLoading: false,
       });

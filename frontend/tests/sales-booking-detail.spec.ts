@@ -13,7 +13,7 @@ async function fillPendingPassengerData(page: Page) {
   const modal = page?.getByRole('dialog');
   await expect(modal?.getByRole('columnheader', { name: 'CCCD / GKS *' }))?.toBeVisible();
 
-  await modal?.locator('input[placeholder="Số GKS"]')?.fill('GKS-2018-0001');
+  await modal?.locator('input[placeholder="Số GKS"]')?.fill('001201800001');
   await modal?.getByRole('button', { name: /Lưu/ })?.click();
 }
 
@@ -37,7 +37,7 @@ test?.describe('Sales Booking Detail Verification', () => {
     await expect(confirmButton)?.toBeDisabled();
 
     await page?.getByRole('button', { name: /Chỉnh sửa$/ })?.first()?.click();
-    await modal?.locator('input[placeholder="Số GKS"]')?.fill('GKS-2018-0001');
+    await modal?.locator('input[placeholder="Số GKS"]')?.fill('001201800001');
     await modal?.getByRole('button', { name: /Lưu/ })?.click();
     await expect(confirmButton)?.toBeEnabled();
   });
@@ -63,16 +63,28 @@ test?.describe('Sales Booking Detail Verification', () => {
     const confirmButton = page?.getByRole('button', { name: /Xác nhận đơn đặt/i });
     await expect(confirmButton)?.toBeDisabled();
 
-    await page?.getByLabel('Đơn')?.fill('0');
-    await page?.getByLabel('Đôi')?.fill('0');
-    await page?.getByLabel('Ba')?.fill('0');
+    await page?.getByRole('textbox', { name: 'Đơn' })?.fill('0');
+    await page?.getByRole('textbox', { name: 'Đôi' })?.fill('0');
+    await page?.getByRole('textbox', { name: 'Ba' })?.fill('0');
+    const invalidRoomSave = page?.waitForResponse(response =>
+      response.request().method() === 'PATCH' && response.url().includes('/api/v1/bookings/B003'),
+    );
     await page?.getByRole('button', { name: /Lưu số phòng/i })?.click();
+    await invalidRoomSave;
     await expect(confirmButton)?.toBeDisabled();
 
-    await page?.getByLabel('Đơn')?.fill('2');
-    await page?.getByLabel('Đôi')?.fill('1');
-    await page?.getByLabel('Ba')?.fill('0');
+    await page?.getByRole('textbox', { name: 'Đơn' })?.fill('1');
+    await page?.getByRole('textbox', { name: 'Đôi' })?.fill('1');
+    await page?.getByRole('textbox', { name: 'Ba' })?.fill('0');
+    await expect(page?.getByRole('textbox', { name: 'Đơn' }))?.toHaveValue('1');
+    await expect(page?.getByRole('textbox', { name: 'Đôi' }))?.toHaveValue('1');
+    const validRoomSave = page?.waitForResponse(response =>
+      response.request().method() === 'PATCH' && response.url().includes('/api/v1/bookings/B003'),
+    );
     await page?.getByRole('button', { name: /Lưu số phòng/i })?.click();
+    await validRoomSave;
+    await expect(page?.getByRole('textbox', { name: 'Đơn' }))?.toHaveValue('1');
+    await expect(page?.getByRole('textbox', { name: 'Đôi' }))?.toHaveValue('1');
     await expect(confirmButton)?.toBeDisabled();
 
     await fillPendingPassengerData(page);
@@ -81,10 +93,10 @@ test?.describe('Sales Booking Detail Verification', () => {
     await page?.reload();
     await page?.waitForLoadState('domcontentloaded');
 
-    await expect(page?.getByLabel('Đơn'))?.toHaveValue('2');
-    await expect(page?.getByLabel('Đôi'))?.toHaveValue('1');
-    await expect(page?.getByLabel('Ba'))?.toHaveValue('0');
-    await expect(page?.locator('tbody tr').nth(2))?.toContainText('GKS-2018-0001');
+    await expect(page?.getByRole('textbox', { name: 'Đơn' }))?.toHaveValue('1');
+    await expect(page?.getByRole('textbox', { name: 'Đôi' }))?.toHaveValue('1');
+    await expect(page?.getByRole('textbox', { name: 'Ba' }))?.toHaveValue('0');
+    await expect(page?.locator('tbody tr').nth(2))?.toContainText('001201800001');
     await expect(page?.locator('tbody tr').nth(2))?.toContainText('Việt Nam');
   });
 
@@ -164,7 +176,7 @@ test?.describe('Sales Booking Detail Verification', () => {
     const currentBill = page?.getByAltText(/Bill hoàn tiền/i);
     await expect(currentBill)?.toBeVisible();
 
-    const previousEditLog = await page?.getByText(/Đã chỉnh sửa bởi/i)?.innerText();
+    const previousRefundLog = await page?.getByRole('heading', { name: /Người hoàn tiền/i })?.locator('..')?.innerText() ?? '';
 
     await page?.getByRole('button', { name: /Chỉnh sửa bill/i })?.click();
     const saveButton = page?.getByRole('button', { name: /Lưu/i });
@@ -175,7 +187,7 @@ test?.describe('Sales Booking Detail Verification', () => {
     await page?.getByRole('button', { name: /Hủy bỏ/i })?.click();
 
     await expect(currentBill)?.toBeVisible();
-    await expect(page?.getByText(previousEditLog))?.toBeVisible();
+    await expect(page?.getByText(previousRefundLog))?.toBeVisible();
   });
 
   test('Refunded booking keeps payment percentage and allows bill replacement with edit log', async ({ page }) => {
@@ -198,11 +210,11 @@ test?.describe('Sales Booking Detail Verification', () => {
     await saveButton?.click();
 
     await expect(page?.getByText(/Đã gửi email thông báo cho khách/i))?.toBeVisible();
-    await expect(page?.getByText(/Đã chỉnh sửa bởi/i))?.toBeVisible();
+    await expect(page?.getByRole('heading', { name: /Người hoàn tiền/i }))?.toBeVisible();
 
     await page?.reload();
     await page?.waitForLoadState('domcontentloaded');
     await expect(page?.getByAltText(/Bill hoàn tiền/i))?.toBeVisible();
-    await expect(page?.getByText(/Đã chỉnh sửa bởi/i))?.toBeVisible();
+    await expect(page?.getByRole('heading', { name: /Người hoàn tiền/i }))?.toBeVisible();
   });
 });

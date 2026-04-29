@@ -440,6 +440,7 @@ export function mapBooking(
       ((booking.payloadJson as { finalPaymentDueAt?: string } | null)?.finalPaymentDueAt)
       ?? getFinalPaymentDueAt(booking.tourInstance.departureDate).toISOString(),
     cancellationReason: booking.cancellationReason ?? undefined,
+    cancellationSource: (booking.payloadJson as { cancellationSource?: string } | null)?.cancellationSource,
     cancelledAt: booking.cancelledAt?.toISOString(),
     roomCounts: (booking.roomCountsJson as { single: number; double: number; triple: number } | null) ?? undefined,
     confirmedBy:

@@ -1,4 +1,4 @@
-import type { BookingStatus, PaymentStatus, PrismaClient, RefundStatus } from '@prisma/client';
+import type { BookingStatus, PaymentStatus, PrismaClient, RefundStatus, TourInstanceStatus } from '@prisma/client';
 import {
   addDays,
   getFinalPaymentDueAt,
@@ -7,7 +7,10 @@ import {
 } from './customer.js';
 
 export const UNPAID_BOOKING_TIMEOUT_MINUTES = 15;
-export const UNPAID_BOOKING_CANCEL_REASON = 'Quá hạn thanh toán giữ chỗ';
+export const UNPAID_BOOKING_CANCEL_REASON = 'Không thanh toán đúng hạn';
+export const CANCEL_REQUEST_AUTO_CONFIRM_HOURS = 24;
+export const AUTO_CANCEL_CONFIRM_ACTOR = 'Hệ thống';
+export const READY_FOR_OPERATIONS_STATUSES = ['DANG_MO_BAN'] satisfies TourInstanceStatus[];
 
 export async function normalizeLegacyBookedStatuses(prisma: PrismaClient) {
   return prisma.booking.updateMany({
@@ -88,6 +91,40 @@ export async function expireOverdueDepositBookings(prisma: PrismaClient, now = n
   }
 
   return { count: expiredCount };
+}
+
+export function getCancelRequestAutoConfirmCutoff(now = new Date()) {
+  return new Date(now.getTime() - CANCEL_REQUEST_AUTO_CONFIRM_HOURS * 60 * 60 * 1000);
+}
+
+export async function autoConfirmOverdueCancelRequests(prisma: PrismaClient, now = new Date()) {
+  const overdueBookings = await prisma.booking.findMany({
+    where: {
+      status: 'PENDING_CANCEL' satisfies BookingStatus,
+      cancelledAt: { lte: getCancelRequestAutoConfirmCutoff(now) },
+    },
+  });
+
+  let confirmedCount = 0;
+
+  for (const booking of overdueBookings) {
+    const existingPayload = ((booking.payloadJson as Record<string, unknown> | null) ?? {});
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        status: 'CANCELLED' satisfies BookingStatus,
+        cancelledConfirmedAt: now,
+        payloadJson: {
+          ...existingPayload,
+          cancelledConfirmedBy: AUTO_CANCEL_CONFIRM_ACTOR,
+          cancelledConfirmedAt: now.toISOString(),
+        },
+      },
+    });
+    confirmedCount += 1;
+  }
+
+  return { count: confirmedCount };
 }
 
 const HO_CHI_MINH_TIME_ZONE = 'Asia/Ho_Chi_Minh';
@@ -176,8 +213,56 @@ export async function completeFinishedTourBookings(prisma: PrismaClient, now = n
   });
 }
 
+export async function promoteReadyTourInstances(prisma: PrismaClient, now = new Date()) {
+  const candidates = await prisma.tourInstance.findMany({
+    where: {
+      status: { in: READY_FOR_OPERATIONS_STATUSES },
+      bookingDeadlineAt: { lte: now },
+    },
+    include: {
+      bookings: {
+        include: {
+          passengers: true,
+        },
+      },
+    },
+  });
+
+  const readyIds = candidates
+    .filter((instance) => {
+      const relevantBookings = instance.bookings.filter((booking) => booking.status !== 'CANCELLED');
+      const allBookingsResolved = relevantBookings.every((booking) => (
+        booking.status === 'CONFIRMED' || booking.status === 'COMPLETED'
+      ));
+      const confirmedGuestCount = relevantBookings
+        .filter((booking) => booking.status === 'CONFIRMED' || booking.status === 'COMPLETED')
+        .reduce((sum, booking) => sum + booking.passengers.length, 0);
+
+      return relevantBookings.length > 0
+        && allBookingsResolved
+        && confirmedGuestCount >= instance.minParticipants;
+    })
+    .map((instance) => instance.id);
+
+  if (readyIds.length === 0) {
+    return { count: 0 };
+  }
+
+  return prisma.tourInstance.updateMany({
+    where: {
+      id: { in: readyIds },
+      status: { in: READY_FOR_OPERATIONS_STATUSES },
+    },
+    data: {
+      status: 'CHO_NHAN_DIEU_HANH' satisfies TourInstanceStatus,
+    },
+  });
+}
+
 export async function runBookingLifecycleJobs(prisma: PrismaClient, now = new Date()) {
   await expireUnpaidBookings(prisma, now);
   await expireOverdueDepositBookings(prisma, now);
+  await autoConfirmOverdueCancelRequests(prisma, now);
+  await promoteReadyTourInstances(prisma, now);
   await completeFinishedTourBookings(prisma, now);
 }

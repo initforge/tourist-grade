@@ -1,13 +1,17 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { loginAs } from './support/app';
 
-async function loginAsCoordinator(page: any) {
+async function loginAsCoordinator(page: Page) {
   await loginAs(page, 'coordinator', '/coordinator/dashboard');
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(500);
   await page.evaluate(() => {
     window.localStorage?.removeItem('__travela_tour_programs');
   });
+}
+
+async function searchCurrentList(page: Page, query: string) {
+  await page.getByRole('textbox', { name: /Tìm/i }).fill(query);
 }
 
 test.describe('Coordinator remaining feedback', () => {
@@ -30,7 +34,7 @@ test.describe('Coordinator remaining feedback', () => {
     await expect(page).toHaveURL(/\/coordinator\/tours\/.*\/settle$/);
     await expect(page.getByRole('button', { name: /Lưu Nháp/i })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Hoàn Tất Quyết Toán/i })).toHaveCount(0);
-    await expect(page.locator('tbody input[type="number"]').first()).toBeDisabled();
+    await expect(page.locator('tbody input[type="number"]:enabled')).toHaveCount(0);
   });
 
   test('tour rule edit popup shows program info and preview table', async ({ page }) => {
@@ -57,14 +61,16 @@ test.describe('Coordinator remaining feedback', () => {
     await loginAsCoordinator(page);
     await page.goto('/coordinator/services');
 
-    await page.getByRole('row', { name: /Dịch vụ Hướng dẫn viên/i }).getByRole('button', { name: /Xem/i }).click();
+    await searchCurrentList(page, 'Bảo hiểm du lịch');
+    await page.getByRole('row', { name: /Bảo hiểm du lịch/i }).getByRole('button', { name: /Xem/i }).click();
     let dialog = page.getByRole('dialog');
     await expect(dialog.getByText(/Phân loại/i)).toBeVisible();
     await expect(dialog.getByText(/Đơn vị/i)).toBeVisible();
-    await expect(dialog.getByRole('button', { name: /^Sửa$/i })).toHaveCount(0);
-    await expect(dialog.getByText(/Bảng giá/i)).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: /^Sửa$/i })).toBeVisible();
+    await expect(dialog.getByText('Bảng giá', { exact: true })).toBeVisible();
     await dialog.getByLabel(/Đóng/i).click();
 
+    await searchCurrentList(page, 'Vé tham quan Sun World');
     await page.getByRole('row', { name: /Vé tham quan Sun World/i }).getByRole('button', { name: /Xem/i }).click();
     dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('button', { name: /^Sửa$/i })).toBeVisible();
@@ -75,7 +81,7 @@ test.describe('Coordinator remaining feedback', () => {
 
     dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('button', { name: /Thêm mới bảng giá/i })).toBeVisible();
-    await expect(dialog.getByRole('button', { name: /Chuyển trạng thái dịch vụ/i })).toBeVisible();
+    await expect(dialog.getByLabel(/Trạng thái/i)).toBeVisible();
   });
 
   test('service create flow captures supplier, contact, unit price, and dropdown formulas', async ({ page }) => {
@@ -84,15 +90,18 @@ test.describe('Coordinator remaining feedback', () => {
 
     await page.getByRole('button', { name: /Thêm dịch vụ/i }).click();
     const dialog = page.getByRole('dialog');
+    const serviceName = `Phí nước uống đoàn ${Date.now()}`;
 
+    await dialog.getByLabel(/Phân loại/i).selectOption('Các dịch vụ khác');
     await expect(dialog.getByText(/Tên nhà cung cấp/i)).toBeVisible();
     await expect(dialog.getByText(/Thông tin liên hệ/i)).toBeVisible();
     await expect(dialog.getByText(/^Đơn giá$/i)).toBeVisible();
 
-    await dialog.getByLabel(/Phân loại/i).selectOption('Các dịch vụ khác');
-    await dialog.getByLabel(/Tên dịch vụ/i).fill('Phí nước uống đoàn');
+    await dialog.getByLabel(/Tên dịch vụ/i).fill(serviceName);
+    await dialog.getByLabel(/Đơn vị/i).fill('khách');
     await dialog.getByLabel(/Tên nhà cung cấp/i).fill('Công ty Nước Suối');
     await dialog.getByLabel(/Thông tin liên hệ/i).fill('0909 000 111');
+    await dialog.getByLabel(/Mô tả/i).fill('Nước uống đóng chai cho đoàn');
     await dialog.getByLabel(/^Đơn giá$/i).fill('25000');
     await dialog.getByLabel(/Công thức tính số lần/i).selectOption('Giá trị mặc định');
     await dialog.getByLabel(/Công thức tính số lượng/i).selectOption('Giá trị mặc định');
@@ -100,7 +109,8 @@ test.describe('Coordinator remaining feedback', () => {
     await dialog.getByLabel(/Số lượng mặc định/i).fill('10');
     await dialog.getByRole('button', { name: /Lưu dịch vụ/i }).click();
 
-    await page.getByRole('row', { name: /Phí nước uống đoàn/i }).getByRole('button', { name: /Xem/i }).click();
+    await searchCurrentList(page, serviceName);
+    await page.getByRole('row', { name: new RegExp(serviceName, 'i') }).getByRole('button', { name: /Xem/i }).click();
     const detail = page.getByRole('dialog');
     await expect(detail.getByText('Công ty Nước Suối', { exact: true })).toBeVisible();
     await expect(detail.getByText(/0909 000 111/i)).toBeVisible();
@@ -117,27 +127,30 @@ test.describe('Coordinator remaining feedback', () => {
     let dialog = page.getByRole('dialog');
     await dialog.getByLabel(/Phân loại/i).selectOption('Vận chuyển');
     await dialog.getByLabel(/Loại phương tiện/i).selectOption('Máy bay');
-    await expect(dialog.getByText(/không có bảng dịch vụ riêng/i)).toBeVisible();
-    await expect(dialog.getByRole('button', { name: /Thêm bảng giá/i })).toHaveCount(0);
+    await expect(dialog.getByText(/Dịch vụ vận chuyển/i)).toBeVisible();
+    await expect(dialog.getByRole('columnheader', { name: /Tên dịch vụ/i })).toBeVisible();
+    await expect(dialog.getByRole('columnheader', { name: /Đơn giá/i }).first()).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /Thêm dòng/i })).toHaveCount(0);
 
     await dialog.getByLabel(/Phân loại/i).selectOption('Khách sạn');
-    await expect(dialog.getByRole('button', { name: /Thêm dịch vụ/i }).first()).toBeVisible();
-    await expect(dialog.getByRole('columnheader', { name: /Đơn giá/i })).toBeVisible();
+    await expect(dialog.getByText(/Dịch vụ lưu trú cố định/i)).toBeVisible();
+    await expect(dialog.getByRole('columnheader', { name: /Đơn giá/i }).first()).toBeVisible();
     await dialog.getByRole('checkbox').check();
-    await expect(dialog.getByRole('columnheader', { name: /Đơn giá/i }).nth(1)).toBeVisible();
+    await expect(dialog.getByText('Dịch vụ ăn kèm', { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /Thêm dòng/i })).toBeVisible();
     await dialog.getByLabel(/Phân loại/i).selectOption('Nhà hàng');
-    await expect(dialog.getByRole('columnheader', { name: /Đơn giá/i })).toBeVisible();
-    await dialog.getByRole('button', { name: /Hủy bỏ/i }).click();
+    await expect(dialog.getByText(/Dịch vụ ăn uống/i)).toBeVisible();
+    await expect(dialog.getByRole('columnheader', { name: /Đơn giá/i }).first()).toBeVisible();
+    await dialog.getByRole('button', { name: /^Hủy$/i }).click();
 
     await page.getByRole('row', { name: /Khách sạn Di Sản Việt/i }).getByRole('button', { name: /Xem/i }).click();
     dialog = page.getByRole('dialog');
     await dialog.getByRole('button', { name: /^Sửa$/i }).click();
 
     dialog = page.getByRole('dialog');
-    await expect(dialog.getByRole('button', { name: /^Thêm bảng giá$/i })).toBeVisible();
-    await expect(dialog.getByRole('button', { name: /Mở rộng bảng giá/i }).first()).toBeVisible();
-    await dialog.getByRole('button', { name: /Mở rộng bảng giá/i }).first().click();
-    await expect(dialog.getByRole('columnheader', { name: /Đơn giá/i })).toBeVisible();
-    await expect(dialog.getByRole('button', { name: /Thêm bảng giá/i })).toHaveCount(1);
+    await expect(dialog.getByText(/Dịch vụ lưu trú cố định/i)).toBeVisible();
+    await expect(dialog.getByRole('columnheader', { name: /Đơn giá/i }).first()).toBeVisible();
+    await expect(dialog.locator('input[type="number"]').first()).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /^Lưu$/i })).toBeVisible();
   });
 });

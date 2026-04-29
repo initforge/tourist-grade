@@ -16,6 +16,13 @@ const envSchema = z.object({
   PAYOS_RETURN_URL: z.string().default('http://localhost:8080/booking/success'),
   PAYOS_CANCEL_URL: z.string().default('http://localhost:8080/booking/lookup'),
   PAYOS_WEBHOOK_URL: z.string().optional(),
+  EMAILJS_ENABLED: z.preprocess((value) => value === true || value === 'true' || value === '1', z.boolean()).default(false),
+  EMAILJS_SERVICE_ID: z.string().optional(),
+  EMAILJS_TEMPLATE_ID: z.string().optional(),
+  EMAILJS_PUBLIC_KEY: z.string().optional(),
+  EMAILJS_PRIVATE_KEY: z.string().optional(),
+  EMAILJS_FROM_NAME: z.string().default('Travela'),
+  EMAILJS_REPLY_TO: z.string().email().default('booking@travela.vn'),
 });
 
 const parsedEnv = envSchema.parse(process.env);

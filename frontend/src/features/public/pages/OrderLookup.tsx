@@ -1,16 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Booking } from '@entities/booking/data/bookings';
 import { ApiError } from '@shared/lib/api/client';
 import { createBookingPaymentLink, lookupBooking } from '@shared/lib/api/bookings';
 import { BOOKING_STATUS_LABEL, PAYMENT_STATUS_LABEL, canCustomerPay, formatCurrency } from '@shared/lib/booking';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
-import { useAuthStore } from '@shared/store/useAuthStore';
 import { CancelBookingModal } from '@shared/ui/CancelBookingModal';
 
 export default function OrderLookup() {
   const navigate = useNavigate();
-  const user = useAuthStore((state) => state.user);
   const publicTours = useAppDataStore((state) => state.publicTours);
   const upsertBooking = useAppDataStore((state) => state.upsertBooking);
   const [bookingCode, setBookingCode] = useState('');
@@ -28,12 +26,6 @@ export default function OrderLookup() {
   const paymentAmount = foundBooking
     ? foundBooking.remainingAmount > 0 ? foundBooking.remainingAmount : foundBooking.totalAmount
     : 0;
-
-  useEffect(() => {
-    if (user?.role === 'customer') {
-      navigate('/customer/bookings', { replace: true });
-    }
-  }, [navigate, user?.role]);
 
   const handleSearch = async (event: React.FormEvent) => {
     event.preventDefault();
