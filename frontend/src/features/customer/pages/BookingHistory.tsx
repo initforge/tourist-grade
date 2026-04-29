@@ -170,7 +170,7 @@ export default function BookingHistory() {
                       {activeTab === 'completed' && (
                         booking.review ? (
                           <button
-                            onClick={() => navigate(`/customer/bookings/${booking.id}`)}
+                            onClick={() => setReviewBooking(booking)}
                             className="px-6 py-2 border border-sky-300 text-sky-700 font-sans uppercase tracking-[0.1em] text-[10px] hover:bg-sky-50 transition-colors flex items-center gap-1.5"
                           >
                             <span className="material-symbols-outlined text-[14px]">visibility</span>
@@ -213,6 +213,7 @@ export default function BookingHistory() {
         <TourReviewModal
           bookingId={reviewBooking.id}
           tourId={reviewBooking.tourId}
+          review={reviewBooking.review}
           onClose={() => setReviewBooking(null)}
         />
       )}

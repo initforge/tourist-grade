@@ -3,8 +3,13 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = {
+  $transaction: vi.fn(),
   user: {
     findUnique: vi.fn(),
+  },
+  booking: {
+    findMany: vi.fn(),
+    update: vi.fn(),
   },
   tourProgram: {
     findFirst: vi.fn(),
@@ -23,11 +28,21 @@ vi.mock('../lib/prisma.js', () => ({
 }));
 
 vi.mock('../lib/jwt.js', () => ({
-  verifyAccessToken: () => ({
-    sub: 'coordinator-1',
-    role: 'coordinator',
-    email: 'coordinator@travela.vn',
-  }),
+  verifyAccessToken: (token: string) => (
+    token === 'manager-token'
+      ? {
+          sub: 'manager-1',
+          role: 'manager',
+          email: 'manager@travela.vn',
+          name: 'Quản lý kinh doanh',
+        }
+      : {
+          sub: 'coordinator-1',
+          role: 'coordinator',
+          email: 'coordinator@travela.vn',
+          name: 'Điều phối viên',
+        }
+  ),
 }));
 
 const { createTourInstancesRouter } = await import('./tour-instances.js');
@@ -97,6 +112,7 @@ describe('tour-instance routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.user.findUnique.mockResolvedValue({ id: 'coordinator-1', status: 'ACTIVE' });
+    prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => Promise<unknown>) => callback(prismaMock));
   });
 
   it('creates a persisted sale request from coordinator tour rules', async () => {
@@ -218,5 +234,117 @@ describe('tour-instance routes', () => {
       }),
     }));
     expect(response.body.tourInstance.status).toBe('hoan_thanh');
+  });
+
+  it('manager cancellation cascades to related bookings with a full refund amount and normalized insufficient-reason label', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'manager-1', status: 'ACTIVE' });
+    prismaMock.tourInstance.findFirst.mockResolvedValue(createInstanceFixture({ status: 'DANG_MO_BAN' }));
+    prismaMock.booking.findMany.mockResolvedValue([
+      {
+        id: 'booking-1',
+        status: 'CONFIRMED',
+        paidAmount: 4500000,
+        cancelledConfirmedById: null,
+        payloadJson: null,
+      },
+      {
+        id: 'booking-2',
+        status: 'PENDING',
+        paidAmount: 0,
+        cancelledConfirmedById: null,
+        payloadJson: { paymentRatio: 'deposit' },
+      },
+    ]);
+    prismaMock.booking.update.mockResolvedValue({});
+    prismaMock.tourInstance.update.mockResolvedValue(createInstanceFixture({
+      status: 'DA_HUY',
+      cancelReason: 'Không đủ điều kiện khởi hành',
+      cancelledAt: new Date('2026-04-29T02:00:00.000Z'),
+      refundTotal: 4500000,
+    }));
+
+    const response = await request(createTestApp())
+      .post('/REQ-TP001-2026-08-01/cancel')
+      .set('Authorization', 'Bearer manager-token')
+      .send({
+        reason: 'Quản lý hủy tour do không đủ điều kiện khởi hành',
+      });
+
+    expect(response.status).toBe(200);
+    expect(prismaMock.booking.findMany).toHaveBeenCalledWith({
+      where: {
+        tourInstanceId: 'instance-db-1',
+        status: { in: ['PENDING', 'PENDING_CANCEL', 'CONFIRMED'] },
+      },
+    });
+    expect(prismaMock.booking.update).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      where: { id: 'booking-1' },
+      data: expect.objectContaining({
+        status: 'CANCELLED',
+        refundStatus: 'NOT_REQUIRED',
+        cancellationReason: 'Không đủ điều kiện khởi hành',
+        refundAmount: 4500000,
+      }),
+    }));
+    expect(prismaMock.booking.update).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      where: { id: 'booking-2' },
+      data: expect.objectContaining({
+        status: 'CANCELLED',
+        refundStatus: 'NOT_REQUIRED',
+        cancellationReason: 'Không đủ điều kiện khởi hành',
+        refundAmount: 0,
+      }),
+    }));
+    expect(prismaMock.tourInstance.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        status: 'DA_HUY',
+        cancelReason: 'Không đủ điều kiện khởi hành',
+        refundTotal: 4500000,
+      }),
+    }));
+    expect(response.body.tourInstance.status).toBe('da_huy');
+  });
+
+  it('manager cancellation normalizes force-majeure reasons for related bookings', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'manager-1', status: 'ACTIVE' });
+    prismaMock.tourInstance.findFirst.mockResolvedValue(createInstanceFixture({ status: 'DANG_MO_BAN' }));
+    prismaMock.booking.findMany.mockResolvedValue([
+      {
+        id: 'booking-3',
+        status: 'CONFIRMED',
+        paidAmount: 32000000,
+        cancelledConfirmedById: null,
+        payloadJson: null,
+      },
+    ]);
+    prismaMock.booking.update.mockResolvedValue({});
+    prismaMock.tourInstance.update.mockResolvedValue(createInstanceFixture({
+      status: 'DA_HUY',
+      cancelReason: 'Bất khả kháng',
+      cancelledAt: new Date('2026-04-29T02:00:00.000Z'),
+      refundTotal: 32000000,
+    }));
+
+    const response = await request(createTestApp())
+      .post('/REQ-TP001-2026-08-01/cancel')
+      .set('Authorization', 'Bearer manager-token')
+      .send({
+        reason: 'Hủy tour do thiên tai bất khả kháng',
+      });
+
+    expect(response.status).toBe(200);
+    expect(prismaMock.booking.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'booking-3' },
+      data: expect.objectContaining({
+        cancellationReason: 'Bất khả kháng',
+        refundAmount: 32000000,
+      }),
+    }));
+    expect(prismaMock.tourInstance.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        cancelReason: 'Bất khả kháng',
+        refundTotal: 32000000,
+      }),
+    }));
   });
 });

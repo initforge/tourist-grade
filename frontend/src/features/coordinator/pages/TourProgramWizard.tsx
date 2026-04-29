@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useRef } from 'react';
 import { message } from 'antd';
 import {
   VIETNAM_PROVINCES,
@@ -196,6 +197,11 @@ function formatDate(value?: string) {
   return parseLocalDate(value)?.toLocaleDateString('vi-VN');
 }
 
+function formatMonthLabel(value: string) {
+  const date = parseLocalDate(value);
+  return `Tháng ${date?.getMonth() + 1}/${date?.getFullYear()}`;
+}
+
 function formatMoney(value: number) {
   return Math.round(value)?.toLocaleString('vi-VN');
 }
@@ -245,6 +251,11 @@ function getDayType(tourType: TourType, holidayName: string, dateKey: string) {
   }
   const day = parseLocalDate(dateKey)?.getDay();
   return day === 0 || day === 6 ? 'Cuối tuần' : 'Ngày thường';
+}
+
+function areDateListsEqual(left: string[], right: string[]) {
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
 }
 
 function formFromProgram(program: TourProgram): FormState {
@@ -398,6 +409,8 @@ export default function AdminTourProgramWizard({
   const [manualPricing, setManualPricing] = useState<Record<EditablePriceKey, boolean>>(() => initialProgram ? manualPricingFromProgram(initialProgram) : EMPTY_MANUAL_PRICING);
   const [pricingOverrides, setPricingOverrides] = useState<Record<EditablePriceKey, number>>(() => initialProgram ? pricingOverridesFromProgram(initialProgram) : EMPTY_PRICING_OVERRIDES);
   const [previewEdits, setPreviewEdits] = useState<Record<string, Partial<PreviewRow>>>(() => initialProgram ? previewEditMapFromProgram(initialProgram) : {});
+  const yearRoundGeneratedDatesRef = useRef<string[]>([]);
+  const [validationToast, setValidationToast] = useState<string | null>(null);
   const dayCount = typeof form?.days === 'number' ? form.days : 0;
   const nightCount = typeof form?.nights === 'number' ? form.nights : 0;
   const provinceNames = useMemo(
@@ -432,6 +445,14 @@ export default function AdminTourProgramWizard({
     && form?.weekdays?.length > 0;
   const shouldShowYearRoundDeparturePreview = form?.tourType === 'quanh_nam'
     && Boolean(form?.yearRoundStartDate && form?.yearRoundEndDate && form?.weekdays?.length > 0);
+  const availableDeparturePoints = useMemo(
+    () => provinceNames.filter((province) => province === form?.departurePoint || !form?.sightseeingSpots?.includes(province)),
+    [form?.departurePoint, form?.sightseeingSpots, provinceNames],
+  );
+  const availableSightseeingOptions = useMemo(
+    () => provinceNames.filter((province) => province !== form?.departurePoint && !form?.sightseeingSpots?.includes(province)),
+    [form?.departurePoint, form?.sightseeingSpots, provinceNames],
+  );
 
   useEffect(() => {
     if (!singleSightseeingSpot || nightCount <= 0 || readOnly) {
@@ -460,6 +481,15 @@ export default function AdminTourProgramWizard({
           });
         } else {
           next.itinerary = [];
+        }
+      }
+      if (key === 'nights' && (value === '' || value === 0)) {
+        next.lodgingStandard = '';
+      }
+      if (key === 'departurePoint') {
+        const nextDeparturePoint = typeof value === 'string' ? value : '';
+        if (nextDeparturePoint) {
+          next.sightseeingSpots = next.sightseeingSpots.filter(spot => spot !== nextDeparturePoint);
         }
       }
       if (key === 'tourType') {
@@ -540,6 +570,13 @@ export default function AdminTourProgramWizard({
     }
   }, [availableHolidays, enforceCreateRules, form?.holiday, readOnly]);
 
+  useEffect(() => {
+    if (!validationToast) return;
+
+    const timeout = window.setTimeout(() => setValidationToast(null), 3200);
+    return () => window.clearTimeout(timeout);
+  }, [validationToast]);
+
   const validateStepOne = (nextForm: FormState): ValidationErrors => {
     const nextErrors: ValidationErrors = {};
     const nextDayCount = typeof nextForm?.days === 'number' ? nextForm.days : 0;
@@ -555,9 +592,13 @@ export default function AdminTourProgramWizard({
     if (!nextForm?.name?.trim()) nextErrors.name = 'Vui lòng nhập tên chương trình tour';
     if (!nextForm?.departurePoint) nextErrors.departurePoint = 'Vui lòng chọn điểm khởi hành';
     if (nextForm?.sightseeingSpots?.length === 0) nextErrors.sightseeingSpots = 'Vui lòng chọn ít nhất một điểm tham quan';
-    if (!nextForm?.lodgingStandard) nextErrors.lodgingStandard = 'Vui lòng chọn tiêu chuẩn lưu trú';
+    if (nextNightCount > 0 && !nextForm?.lodgingStandard) nextErrors.lodgingStandard = 'Vui lòng chọn tiêu chuẩn lưu trú';
     if (!nextForm?.routeDescription?.trim()) nextErrors.routeDescription = 'Vui lòng nhập mô tả chương trình tour';
     if (!nextForm?.tourType) nextErrors.tourType = 'Vui lòng chọn loại tour';
+    if (nextForm?.departurePoint && nextForm?.sightseeingSpots?.includes(nextForm.departurePoint)) {
+      nextErrors.departurePoint = 'Điểm khởi hành không được trùng với điểm tham quan';
+      nextErrors.sightseeingSpots = 'Điểm tham quan không được trùng với điểm khởi hành';
+    }
 
     if (nextShouldShowTransportSelector && nextForm?.transport === 'maybay' && !nextForm?.arrivalPoint) {
       nextErrors.arrivalPoint = 'Vui lòng chọn điểm đến';
@@ -592,6 +633,13 @@ export default function AdminTourProgramWizard({
 
       if (nextForm?.weekdays?.length === 0) {
         nextErrors.weekdays = 'Vui lòng chọn ít nhất một ngày khởi hành trong tuần';
+      }
+
+      const generatedDates = buildDateRange(nextForm?.yearRoundStartDate, nextForm?.yearRoundEndDate, nextForm?.weekdays ?? []);
+      if (generatedDates.length === 0) {
+        nextErrors.selectedDates = 'Khoảng ngày và lịch khởi hành hiện chưa sinh ra ngày dự kiến nào';
+      } else if (nextForm?.selectedDates?.length === 0) {
+        nextErrors.selectedDates = 'Vui lòng giữ lại ít nhất một ngày khởi hành dự kiến';
       }
     }
 
@@ -638,6 +686,11 @@ export default function AdminTourProgramWizard({
     setStepAttempted(prev => prev[targetStep] ? prev : { ...prev, [targetStep]: true });
   };
 
+  const showValidationToast = (errors: ValidationErrors, fallback: string) => {
+    const messages = Array.from(new Set(Object.values(errors).filter((value): value is string => Boolean(value))));
+    setValidationToast(messages[0] ?? fallback);
+  };
+
   const getStepErrors = (targetStep: WizardStep) => {
     if (targetStep === 1) return stepOneErrors;
     if (targetStep === 2) return stepTwoErrors;
@@ -657,6 +710,7 @@ export default function AdminTourProgramWizard({
       if (Object.keys(currentErrors)?.length > 0) {
         if (currentStep <= 3) markStepAttempted(currentStep as 1 | 2 | 3);
         setStep(currentStep);
+        showValidationToast(currentErrors, 'Cần bổ sung thông tin trước khi chuyển bước');
         return;
       }
       currentStep = (currentStep + 1) as WizardStep;
@@ -710,13 +764,13 @@ export default function AdminTourProgramWizard({
       departurePoint: form.departurePoint,
       sightseeingSpots: form.sightseeingSpots,
       duration: { days: Math.max(1, dayCount), nights: Math.max(0, nightCount) },
-      lodgingStandard: form.lodgingStandard || undefined,
+      lodgingStandard: nightCount > 0 ? form.lodgingStandard || undefined : undefined,
       transport: form.transport,
       arrivalPoint: form.transport === 'maybay' ? form.arrivalPoint || undefined : undefined,
       tourType: form.tourType || 'quanh_nam',
       routeDescription: form.routeDescription.trim(),
       holiday: form.tourType === 'mua_le' ? form.holiday || undefined : undefined,
-      selectedDates: form.tourType === 'mua_le' ? form.selectedDates : [],
+      selectedDates: form.selectedDates,
       weekdays: form.tourType === 'quanh_nam' ? form.weekdays : [],
       yearRoundStartDate: form.tourType === 'quanh_nam' ? form.yearRoundStartDate || undefined : undefined,
       yearRoundEndDate: form.tourType === 'quanh_nam' ? form.yearRoundEndDate || undefined : undefined,
@@ -785,6 +839,16 @@ export default function AdminTourProgramWizard({
   };
 
   const handleSubmitForApproval = () => {
+    for (const targetStep of [1, 2, 3] as const) {
+      const errors = getStepErrors(targetStep);
+      if (Object.keys(errors).length > 0) {
+        markStepAttempted(targetStep);
+        setStep(targetStep);
+        showValidationToast(errors, 'Cần bổ sung thông tin trước khi gửi phê duyệt');
+        return;
+      }
+    }
+
     void persistProgram('submit');
   };
 
@@ -814,12 +878,71 @@ export default function AdminTourProgramWizard({
       : [],
     [canGenerateYearRoundDepartureDates, form?.weekdays, form?.yearRoundEndDate, form?.yearRoundStartDate],
   );
+  const expectedYearRoundSelectedDates = useMemo(
+    () => form?.tourType === 'quanh_nam'
+      ? [...form.selectedDates].sort((left, right) => parseLocalDate(left)?.getTime() - parseLocalDate(right)?.getTime())
+      : [],
+    [form?.selectedDates, form?.tourType],
+  );
+  const yearRoundDepartureDateGroups = useMemo(() => {
+    const groups = new Map<string, string[]>();
+
+    expectedYearRoundSelectedDates.forEach((dateKey) => {
+      const monthKey = dateKey.slice(0, 7);
+      const currentDates = groups.get(monthKey) ?? [];
+      currentDates.push(dateKey);
+      groups.set(monthKey, currentDates);
+    });
+
+    return Array.from(groups.entries()).map(([monthKey, dates]) => ({
+      monthKey,
+      label: formatMonthLabel(`${monthKey}-01`),
+      dates,
+    }));
+  }, [expectedYearRoundSelectedDates]);
   const expectedDepartureDates = useMemo(
     () => form?.tourType === 'mua_le'
       ? [...form.selectedDates].sort((left, right) => parseLocalDate(left)?.getTime() - parseLocalDate(right)?.getTime())
-      : yearRoundDepartureDates,
-    [form?.tourType, form.selectedDates, yearRoundDepartureDates],
+      : ((readOnly && expectedYearRoundSelectedDates.length === 0) ? yearRoundDepartureDates : expectedYearRoundSelectedDates),
+    [expectedYearRoundSelectedDates, form?.tourType, form.selectedDates, readOnly, yearRoundDepartureDates],
   );
+
+  useEffect(() => {
+    if (form?.tourType !== 'quanh_nam') {
+      yearRoundGeneratedDatesRef.current = [];
+      return;
+    }
+
+    if (readOnly) {
+      yearRoundGeneratedDatesRef.current = yearRoundDepartureDates;
+      return;
+    }
+
+    setForm((current) => {
+      if (current.tourType !== 'quanh_nam') {
+        yearRoundGeneratedDatesRef.current = [];
+        return current;
+      }
+
+      const previousGeneratedDates = yearRoundGeneratedDatesRef.current;
+      let nextSelectedDates: string[];
+
+      if (previousGeneratedDates.length === 0) {
+        nextSelectedDates = current.selectedDates.length > 0
+          ? yearRoundDepartureDates.filter((dateKey) => current.selectedDates.includes(dateKey))
+          : yearRoundDepartureDates;
+      } else {
+        const manuallyRemovedDates = previousGeneratedDates.filter((dateKey) => !current.selectedDates.includes(dateKey));
+        nextSelectedDates = yearRoundDepartureDates.filter((dateKey) => !manuallyRemovedDates.includes(dateKey));
+      }
+
+      yearRoundGeneratedDatesRef.current = yearRoundDepartureDates;
+      return areDateListsEqual(current.selectedDates, nextSelectedDates)
+        ? current
+        : { ...current, selectedDates: nextSelectedDates };
+    });
+  }, [form?.tourType, readOnly, yearRoundDepartureDates]);
+
   const suggestedAdultPrice = roundToThousand(
     pricingSummary.currentNetPrice
       * (1 + pricingConfig.profitMargin / 100),
@@ -922,6 +1045,11 @@ export default function AdminTourProgramWizard({
 
   return (
     <div className="w-full bg-[var(--color-background)] min-h-screen pb-40">
+      {validationToast && (
+        <div className="fixed top-6 right-6 z-50 max-w-sm rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 shadow-lg">
+          {validationToast}
+        </div>
+      )}
       <main className="pt-6 px-8 max-w-7xl mx-auto">
 
         <div className="flex items-center justify-between mb-8">
@@ -1075,7 +1203,7 @@ export default function AdminTourProgramWizard({
                       className="w-full border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none"
                     >
                       <option value="">Chọn tỉnh/thành</option>
-                      {provinceNames.map(p => (
+                      {availableDeparturePoints.map(p => (
                         <option key={p} value={p}>{p}</option>
                       ))}
                     </select>
@@ -1106,7 +1234,7 @@ export default function AdminTourProgramWizard({
                           className="text-xs border-none outline-none bg-transparent text-primary/40 min-w-[80px]"
                         >
                           <option value="">+ Thêm</option>
-                          {provinceNames.filter(p => !form?.sightseeingSpots?.includes(p)).map(p => (
+                          {availableSightseeingOptions.map(p => (
                             <option key={p} value={p}>{p}</option>
                           ))}
                         </select>
@@ -1118,6 +1246,7 @@ export default function AdminTourProgramWizard({
                   </div>
                 </div>
 
+                {nightCount > 0 && (
                 <div>
                   <label className="text-[10px] uppercase tracking-widest text-primary/60 font-label block mb-1">
                     Tiêu chuẩn lưu trú <span className="text-red-500">*</span>
@@ -1137,6 +1266,7 @@ export default function AdminTourProgramWizard({
                     <p className="text-xs text-red-500 mt-2">{stepOneErrors.lodgingStandard}</p>
                   )}
                 </div>
+                )}
 
                 <div>
                   <label className="text-[10px] uppercase tracking-widest text-primary/60 font-label block mb-1">
@@ -1487,7 +1617,7 @@ export default function AdminTourProgramWizard({
                     </div>
                   </div>
                   {shouldShowYearRoundDeparturePreview && (
-                    <div className="border border-outline-variant/20 bg-[var(--color-surface)] p-4 max-w-3xl">
+                    <div className="border border-outline-variant/20 bg-[var(--color-surface)] p-4 max-w-4xl">
                       <div className="flex items-center justify-between gap-4 mb-3">
                         <p className="text-[10px] uppercase tracking-widest text-primary/50 font-bold">Danh sách ngày khởi hành dự kiến</p>
                         <span className="text-xs text-primary/45">{expectedDepartureDates?.length} ngày dự kiến</span>
@@ -1495,13 +1625,36 @@ export default function AdminTourProgramWizard({
                       {expectedDepartureDates.length === 0 ? (
                         <p className="text-sm text-primary/45">Không có ngày khởi hành phù hợp trong khoảng thời gian đã chọn.</p>
                       ) : (
-                        <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
-                          {expectedDepartureDates?.map(dateKey => (
-                            <span key={dateKey} className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-outline-variant/25 text-sm text-primary">
-                              {formatDate(dateKey)}
-                            </span>
+                        <div className="max-h-72 overflow-y-auto scroll-smooth rounded-sm border border-outline-variant/15 bg-white">
+                          {yearRoundDepartureDateGroups.map((group) => (
+                            <section key={group.monthKey}>
+                              <div className="sticky top-0 z-10 border-b border-outline-variant/15 bg-[var(--color-surface)]/95 px-4 py-3">
+                                <p className="text-sm font-semibold text-primary">{group.label}</p>
+                              </div>
+                              <div className="divide-y divide-outline-variant/10">
+                                {group.dates.map((dateKey) => (
+                                  <div key={dateKey} className="flex items-center justify-between gap-4 px-4 py-3">
+                                    <div>
+                                      <p className="text-sm font-medium text-primary">{formatDate(dateKey)}</p>
+                                      <p className="text-xs text-primary/45">{getDayType('quanh_nam', '', dateKey)}</p>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => updateForm('selectedDates', form?.selectedDates?.filter((item) => item !== dateKey))}
+                                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-outline-variant/35 text-primary/55 transition-colors hover:border-red-300 hover:text-red-500"
+                                      aria-label={`Xóa ngày ${dateKey}`}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </section>
                           ))}
                         </div>
+                      )}
+                      {stepAttempted[1] && stepOneErrors.selectedDates && (
+                        <p className="text-xs text-red-500 mt-3">{stepOneErrors.selectedDates}</p>
                       )}
                     </div>
                   )}

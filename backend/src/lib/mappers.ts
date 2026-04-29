@@ -374,7 +374,6 @@ export function mapBooking(
     confirmedBy?: Pick<User, 'fullName'> | null;
     cancelledConfirmedBy?: Pick<User, 'fullName'> | null;
     refundedBy?: Pick<User, 'fullName'> | null;
-    refundBillEditedBy?: Pick<User, 'fullName'> | null;
   },
   options: {
     tourId: string;
@@ -463,14 +462,6 @@ export function mapBooking(
       ?? booking.refundedById
       ?? undefined,
     refundedAt: booking.refundedAt?.toISOString(),
-    refundBillEditedBy:
-      booking.refundBillEditedBy?.fullName
-      ?? (booking.payloadJson as { refundBillEditedBy?: string } | null)?.refundBillEditedBy
-      ?? booking.refundBillEditedById
-      ?? undefined,
-    refundBillEditedAt:
-      booking.refundBillEditedAt?.toISOString()
-      ?? (booking.payloadJson as { refundBillEditedAt?: string } | null)?.refundBillEditedAt,
     refundAmount: toOptionalNumber(booking.refundAmount),
     review: booking.review ? {
       id: booking.review.id,

@@ -2,8 +2,7 @@ import { BookingStatus, PaymentStatus, Prisma, RefundStatus } from '@prisma/clie
 import { Router } from 'express';
 import { z } from 'zod';
 import {
-  expireOverdueDepositBookings,
-  expireUnpaidBookings,
+  runBookingLifecycleJobs,
   UNPAID_BOOKING_CANCEL_REASON,
 } from '../lib/booking-lifecycle.js';
 import {
@@ -80,6 +79,13 @@ const promoValidationSchema = z.object({
   passengers: z.array(passengerSchema).min(1),
 });
 
+const refundBillUrlSchema = z.string()
+  .max(5_000_000, 'Ảnh bill hoàn tiền quá lớn.')
+  .refine((value) => (
+    /^data:image\/(?:png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/i.test(value)
+    || /^data:image\/svg\+xml(?:;charset=[^,]+)?(?:;base64)?,.+$/i.test(value)
+  ), 'Định dạng ảnh bill hoàn tiền không hợp lệ.');
+
 const updateBookingSchema = z.object({
   status: z.enum(['pending', 'pending_cancel', 'confirmed', 'completed', 'cancelled']).optional(),
   refundStatus: z.enum(['none', 'pending', 'refunded', 'not_required']).optional(),
@@ -93,7 +99,7 @@ const updateBookingSchema = z.object({
   roomCounts: roomCountsSchema.optional(),
   contact: bookingContactSchema.optional(),
   passengers: z.array(passengerSchema).optional(),
-  refundBillUrl: z.string().optional().nullable(),
+  refundBillUrl: refundBillUrlSchema.optional().nullable(),
   refundAmount: z.number().optional().nullable(),
   paidAmount: z.number().optional(),
   remainingAmount: z.number().optional(),
@@ -108,8 +114,6 @@ const updateBookingSchema = z.object({
   cancelledConfirmedAt: z.string().optional().nullable(),
   refundedBy: z.string().optional().nullable(),
   refundedAt: z.string().optional().nullable(),
-  refundBillEditedBy: z.string().optional().nullable(),
-  refundBillEditedAt: z.string().optional().nullable(),
 });
 
 const cancelRequestSchema = z.object({
@@ -129,7 +133,6 @@ const bookingInclude = {
   confirmedBy: { select: { fullName: true } },
   cancelledConfirmedBy: { select: { fullName: true } },
   refundedBy: { select: { fullName: true } },
-  refundBillEditedBy: { select: { fullName: true } },
   tourInstance: {
     include: {
       program: true,
@@ -171,8 +174,7 @@ function toNullableJsonInput(value: Prisma.JsonValue | null | undefined) {
 }
 
 async function runBookingExpiryJobs() {
-  await expireUnpaidBookings(prisma);
-  await expireOverdueDepositBookings(prisma);
+  await runBookingLifecycleJobs(prisma);
 }
 
 function bookingMapOptions(booking: BookingWithInclude) {
@@ -904,13 +906,11 @@ export function createBookingsRouter() {
     let cancelledConfirmedAt = booking.cancelledConfirmedAt;
     let refundedById = booking.refundedById;
     let refundedAt = booking.refundedAt;
-    let refundBillEditedById = booking.refundBillEditedById;
-    let refundBillEditedAt = booking.refundBillEditedAt;
 
     const isConfirmTransition = actorCanAudit && nextStatus === 'CONFIRMED' && booking.status !== 'CONFIRMED';
     const isCancelConfirmTransition = actorCanAudit && nextStatus === 'CANCELLED' && booking.status !== 'CANCELLED';
     const refundBillChanged = input.data.refundBillUrl !== undefined && input.data.refundBillUrl !== booking.refundBillUrl;
-    const isRefundCompletion = actorCanAudit && refundBillChanged && Boolean(input.data.refundBillUrl);
+    const isRefundAuditUpdate = actorCanAudit && refundBillChanged && Boolean(input.data.refundBillUrl);
 
     if (input.data.paymentRatio !== undefined) {
       nextPayload.paymentRatio = input.data.paymentRatio;
@@ -944,36 +944,31 @@ export function createBookingsRouter() {
       }
     }
 
-    if (isRefundCompletion) {
+    if (isRefundAuditUpdate) {
       refundedById = actorId ?? booking.refundedById;
       refundedAt = now;
-      refundBillEditedById = actorId ?? booking.refundBillEditedById;
-      refundBillEditedAt = now;
       nextPaymentStatus = 'REFUNDED';
       nextPayload.refundedBy = actorName;
-      nextPayload.refundBillEditedBy = actorName;
-      nextPayload.refundBillEditedAt = now.toISOString();
+      nextPayload.refundedAt = now.toISOString();
     } else {
       if (input.data.refundedBy !== undefined) {
         nextPayload.refundedBy = input.data.refundedBy ?? null;
       }
-      if (input.data.refundBillEditedBy !== undefined) {
-        nextPayload.refundBillEditedBy = input.data.refundBillEditedBy ?? null;
-      }
-      if (input.data.refundBillEditedAt !== undefined) {
-        nextPayload.refundBillEditedAt = input.data.refundBillEditedAt ?? null;
-      }
       if (input.data.refundedAt !== undefined) {
         refundedAt = input.data.refundedAt ? new Date(input.data.refundedAt) : null;
+        nextPayload.refundedAt = input.data.refundedAt ?? null;
       }
     }
+
+    delete nextPayload.refundBillEditedBy;
+    delete nextPayload.refundBillEditedAt;
 
     const updated = await prisma.$transaction(async (tx): Promise<BookingWithInclude> => {
       const next: BookingWithInclude = await tx.booking.update({
         where: { id: booking.id },
         data: {
           status: nextStatus,
-          refundStatus: isRefundCompletion ? 'REFUNDED' : nextRefundStatus,
+          refundStatus: isRefundAuditUpdate ? 'REFUNDED' : nextRefundStatus,
           cancellationReason: input.data.cancellationReason === undefined ? booking.cancellationReason : input.data.cancellationReason,
           cancelledAt: input.data.cancelledAt === undefined
             ? (isCancelConfirmTransition && !booking.cancelledAt ? now : booking.cancelledAt)
@@ -1000,8 +995,6 @@ export function createBookingsRouter() {
           cancelledConfirmedAt,
           refundedById,
           refundedAt,
-          refundBillEditedById,
-          refundBillEditedAt,
           payloadJson: nextPayload as Prisma.InputJsonObject,
           passengers: input.data.passengers
             ? {
@@ -1047,7 +1040,7 @@ export function createBookingsRouter() {
         });
       }
 
-      if (isRefundCompletion) {
+      if (isRefundAuditUpdate) {
         await queueEmail(tx, {
           template: booking.refundBillUrl ? 'booking_refund_bill_updated' : 'booking_refund_completed',
           recipient: next.contactEmail,

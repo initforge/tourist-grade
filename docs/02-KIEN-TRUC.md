@@ -140,9 +140,9 @@ backend/.env
 Khi backend container chạy, nó tự đảm bảo schema và dữ liệu local:
 
 ```text
-npm run prisma:push
-npm run prisma:seed
-npm run dev
+docker compose exec backend npm run prisma:push -- --accept-data-loss
+docker compose exec backend npm run prisma:seed  # manual only when sample data is needed
+backend start does not auto-seed existing data
 ```
 
 Vì vậy máy mới chỉ cần Docker + `.env`, không cần tự tạo database bằng tay.

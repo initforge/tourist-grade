@@ -199,7 +199,7 @@ export default function OrderLookup() {
               <div className="border-t border-[#D0C5AF]/30 pt-5 space-y-3">
                 <div className="flex flex-wrap gap-3">
                   <button
-                    onClick={() => navigate(`/customer/bookings/${foundBooking.id}`)}
+                    onClick={() => navigate(`/booking/lookup/${foundBooking.bookingCode}?contact=${encodeURIComponent(contact.trim())}`)}
                     className="px-6 py-2.5 border border-[var(--color-primary)] text-[var(--color-primary)] font-sans uppercase tracking-wider text-[10px] hover:bg-[var(--color-primary)] hover:text-white transition-colors flex items-center gap-2"
                   >
                     <span className="material-symbols-outlined text-base">info</span>

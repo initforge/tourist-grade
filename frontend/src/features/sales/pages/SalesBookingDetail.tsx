@@ -8,20 +8,20 @@ import { useAppDataStore } from '@shared/store/useAppDataStore';
 import { updateBooking } from '@shared/lib/api/bookings';
 import { NationalitySelect } from '@shared/ui/NationalitySelect';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const PASSENGER_TYPE: Record<string, string> = {
-  adult: 'Người lớn',
-  child: 'Trẻ em',
-  infant: 'Em bé',
+  adult: 'NgÆ°á»i lá»›n',
+  child: 'Tráº» em',
+  infant: 'Em bÃ©',
 };
 
 const ORDER_STATUS_LABEL: Record<string, string> = {
-  pending: 'Cần xác nhận đơn đặt',
-  pending_cancel: 'Cần xác nhận hủy',
-  confirmed: 'Đã xác nhận',
-  completed: 'Hoàn thành',
-  cancelled: 'Đã hủy',
+  pending: 'Cáº§n xÃ¡c nháº­n Ä‘Æ¡n Ä‘áº·t',
+  pending_cancel: 'Cáº§n xÃ¡c nháº­n há»§y',
+  confirmed: 'ÄÃ£ xÃ¡c nháº­n',
+  completed: 'HoÃ n thÃ nh',
+  cancelled: 'ÄÃ£ há»§y',
 };
 const ORDER_STATUS_STYLE: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-700 border-amber-300',
@@ -31,13 +31,13 @@ const ORDER_STATUS_STYLE: Record<string, string> = {
   cancelled: 'bg-red-100 text-red-700 border-red-300',
 };
 const REFUND_STATUS_LABEL: Record<string, string> = {
-  none: '—',
-  pending: 'Chờ hoàn tiền',
-  refunded: 'Đã hoàn tiền',
-  not_required: 'Không cần hoàn',
+  none: 'â€”',
+  pending: 'Chá» hoÃ n tiá»n',
+  refunded: 'ÄÃ£ hoÃ n tiá»n',
+  not_required: 'KhÃ´ng cáº§n hoÃ n',
 };
 const PAYMENT_LABEL: Record<string, string> = {
-  unpaid: 'Chưa thanh toán',
+  unpaid: 'ChÆ°a thanh toÃ¡n',
   partial: '50%',
   paid: '100%',
   refunded: '100%',
@@ -50,7 +50,7 @@ const PAYMENT_STYLE: Record<string, string> = {
 };
 const PAYMENT_METHOD_LABEL: Record<Booking['paymentMethod'], string> = {
   vnpay: 'VNPAY / VietQR',
-  stripe: 'Thẻ / Stripe',
+  stripe: 'Tháº» / Stripe',
   payos: 'PayOS',
 };
 
@@ -62,6 +62,85 @@ function formatCurrency(amount: number) {
 }
 function formatDate(dateStr: string) {
   return new Date(dateStr)?.toLocaleDateString('vi-VN', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+const MAX_REFUND_BILL_FILE_BYTES = 12 * 1024 * 1024;
+const MAX_REFUND_BILL_DATA_URL_LENGTH = 5_000_000;
+const MAX_REFUND_BILL_DIMENSION = 2200;
+const ACCEPTED_REFUND_BILL_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml']);
+
+function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(reader.error ?? new Error('KhÃ´ng thá»ƒ Ä‘á»c file bill.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageFromObjectUrl(objectUrl: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('KhÃ´ng thá»ƒ Ä‘á»c ná»™i dung áº£nh bill.'));
+    image.src = objectUrl;
+  });
+}
+
+function canvasToJpegDataUrl(canvas: HTMLCanvasElement, quality: number) {
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
+async function optimizeRefundBillFile(file: File) {
+  if (!ACCEPTED_REFUND_BILL_TYPES.has(file.type)) {
+    throw new Error('Chá»‰ há»— trá»£ áº£nh JPG, PNG, WEBP hoáº·c SVG cho bill hoÃ n tiá»n.');
+  }
+
+  if (file.size > MAX_REFUND_BILL_FILE_BYTES) {
+    throw new Error('áº¢nh bill quÃ¡ lá»›n. Vui lÃ²ng chá»n file nhá» hÆ¡n 12MB.');
+  }
+
+  if (file.type === 'image/svg+xml') {
+    const dataUrl = await fileToDataUrl(file);
+    if (dataUrl.length > MAX_REFUND_BILL_DATA_URL_LENGTH) {
+      throw new Error('áº¢nh SVG quÃ¡ lá»›n sau khi xá»­ lÃ½. Vui lÃ²ng dÃ¹ng áº£nh nháº¹ hÆ¡n.');
+    }
+    return dataUrl;
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await loadImageFromObjectUrl(objectUrl);
+    const longestEdge = Math.max(image.naturalWidth, image.naturalHeight, 1);
+    const scale = Math.min(1, MAX_REFUND_BILL_DIMENSION / longestEdge);
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('KhÃ´ng thá»ƒ xá»­ lÃ½ áº£nh bill trÃªn trÃ¬nh duyá»‡t hiá»‡n táº¡i.');
+    }
+
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+
+    const qualitySteps = [0.9, 0.84, 0.76, 0.68];
+    for (const quality of qualitySteps) {
+      const dataUrl = canvasToJpegDataUrl(canvas, quality);
+      if (dataUrl.length <= MAX_REFUND_BILL_DATA_URL_LENGTH) {
+        return dataUrl;
+      }
+    }
+
+    throw new Error('áº¢nh bill váº«n quÃ¡ lá»›n sau khi tá»‘i Æ°u. Vui lÃ²ng cáº¯t bá»›t hoáº·c giáº£m Ä‘á»™ phÃ¢n giáº£i áº£nh.');
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 function toRoomCountsDraft(roomCounts?: Booking['roomCounts']): RoomCountsDraft {
@@ -86,8 +165,8 @@ function getPassengerDocumentError(passenger: Passenger) {
 
   if (!documentValue) {
     return passenger.type === 'adult'
-      ? 'Vui lòng nhập số CCCD/Căn cước.'
-      : 'Vui lòng nhập số giấy khai sinh.';
+      ? 'Vui lÃ²ng nháº­p sá»‘ CCCD/CÄƒn cÆ°á»›c.'
+      : 'Vui lÃ²ng nháº­p sá»‘ giáº¥y khai sinh.';
   }
 
   if (!requiresVietnameseDocumentValidation) {
@@ -97,12 +176,12 @@ function getPassengerDocumentError(passenger: Passenger) {
   if (passenger.type === 'adult') {
     return /^\d{12}$/.test(documentValue)
       ? null
-      : 'CCCD/Căn cước phải gồm đúng 12 chữ số.';
+      : 'CCCD/CÄƒn cÆ°á»›c pháº£i gá»“m Ä‘Ãºng 12 chá»¯ sá»‘.';
   }
 
   return /^\d{12}$/.test(documentValue)
     ? null
-    : 'Giấy khai sinh phải gồm đúng 12 chữ số.';
+    : 'Giáº¥y khai sinh pháº£i gá»“m Ä‘Ãºng 12 chá»¯ sá»‘.';
 }
 
 function isValidPassengerDocument(passenger: Passenger) {
@@ -119,7 +198,7 @@ function hasCompletePassengerData(passenger: Passenger) {
   );
 }
 
-// ── Passenger Edit Popup ───────────────────────────────────────────────────────
+// â”€â”€ Passenger Edit Popup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface PassengerEditModalProps {
   passengers: Passenger[];
@@ -128,7 +207,7 @@ interface PassengerEditModalProps {
 }
 
 function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalProps) {
-  const [drafts, setDrafts] = useState<Passenger[]>(passengers?.map(p => ({ nationality: 'Việt Nam', ...p })));
+  const [drafts, setDrafts] = useState<Passenger[]>(passengers?.map(p => ({ nationality: 'Viá»‡t Nam', ...p })));
 
   const handleChange = (idx: number, field: keyof Passenger, value: string) => {
     setDrafts(prev => prev?.map((p, i) => i === idx ? { ...p, [field]: value } : p));
@@ -141,8 +220,8 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
         {/* Header */}
         <div className="p-6 border-b border-[#D0C5AF]/20 flex items-center justify-between shrink-0">
           <div>
-            <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold">Cập nhật hành khách</p>
-            <h3 id="passenger-edit-title" className="font-['Noto_Serif'] text-xl text-[#2A2421]">Danh sách Hành khách</h3>
+            <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold">Cáº­p nháº­t hÃ nh khÃ¡ch</p>
+            <h3 id="passenger-edit-title" className="font-['Noto_Serif'] text-xl text-[#2A2421]">Danh sÃ¡ch HÃ nh khÃ¡ch</h3>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors">
             <span className="material-symbols-outlined text-[#2A2421]/60">close</span>
@@ -152,21 +231,21 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
         {/* Body */}
         <div className="overflow-y-auto p-6 flex-1">
           <p className="text-xs text-[#2A2421]/50 mb-4">
-            Có thể lưu tạm danh sách hành khách khi thông tin còn thiếu. Hệ thống sẽ chỉ kiểm tra đủ thông tin, CCCD/Căn cước và GKS khi xác nhận đơn đặt.
+            CÃ³ thá»ƒ lÆ°u táº¡m danh sÃ¡ch hÃ nh khÃ¡ch khi thÃ´ng tin cÃ²n thiáº¿u. Há»‡ thá»‘ng sáº½ chá»‰ kiá»ƒm tra Ä‘á»§ thÃ´ng tin, CCCD/CÄƒn cÆ°á»›c vÃ  GKS khi xÃ¡c nháº­n Ä‘Æ¡n Ä‘áº·t.
           </p>
           <div className="overflow-x-auto">
           <table className="w-full min-w-[1060px] text-left table-fixed">
             <thead>
               <tr className="border-b border-[#D0C5AF]/20">
                 <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-10">STT</th>
-                <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-44">Họ và tên</th>
-                <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-24">Loại</th>
-                <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-28">Giới tính</th>
-                <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-40">Ngày sinh</th>
+                <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-44">Há» vÃ  tÃªn</th>
+                <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-24">Loáº¡i</th>
+                <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-28">Giá»›i tÃ­nh</th>
+                <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-40">NgÃ y sinh</th>
                 <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-44">CCCD / GKS *</th>
-                <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-52">Quốc tịch</th>
+                <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-52">Quá»‘c tá»‹ch</th>
                 {drafts?.some(p => p.type === 'adult') && (
-                  <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold text-right w-24">Phụ thu đơn</th>
+                  <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold text-right w-24">Phá»¥ thu Ä‘Æ¡n</th>
                 )}
               </tr>
             </thead>
@@ -194,7 +273,7 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
                       className="w-full border border-[#D0C5AF]/40 px-2 py-1 text-xs focus:border-[#D4AF37] outline-none bg-white"
                     >
                       <option value="male">Nam</option>
-                      <option value="female">Nữ</option>
+                      <option value="female">Ná»¯</option>
                     </select>
                   </td>
                   <td className="py-3 pr-3">
@@ -209,24 +288,24 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
                     <input
                       value={p?.cccd ?? ''}
                       onChange={e => handleChange(idx, 'cccd', e?.target?.value)}
-                      placeholder={p.type === 'adult' ? '012345678901' : 'Số GKS'}
+                      placeholder={p.type === 'adult' ? '012345678901' : 'Sá»‘ GKS'}
                       inputMode={p.type === 'adult' ? 'numeric' : 'text'}
                       className="w-full border border-[#D0C5AF]/40 px-2 py-1 text-sm outline-none font-mono focus:border-[#D4AF37]"
                     />
                   </td>
                   <td className="py-3 pr-3">
                     <NationalitySelect
-                      value={p?.nationality ?? 'Việt Nam'}
+                      value={p?.nationality ?? 'Viá»‡t Nam'}
                       onChange={value => handleChange(idx, 'nationality', value)}
-                      ariaLabel={`Quốc tịch hành khách ${idx + 1}`}
+                      ariaLabel={`Quá»‘c tá»‹ch hÃ nh khÃ¡ch ${idx + 1}`}
                     />
                   </td>
                   {p.type === 'adult' ? (
                     <td className="py-3 text-xs text-right text-[#2A2421]/60 font-mono">
-                      {p?.singleRoomSupplement ? `+${p?.singleRoomSupplement?.toLocaleString('vi-VN')}đ` : '—'}
+                      {p?.singleRoomSupplement ? `+${p?.singleRoomSupplement?.toLocaleString('vi-VN')}Ä‘` : 'â€”'}
                     </td>
                   ) : (
-                    <td className="py-3 text-sm text-[#2A2421]/30 text-right">—</td>
+                    <td className="py-3 text-sm text-[#2A2421]/30 text-right">â€”</td>
                   )}
                 </tr>
                 );
@@ -242,14 +321,14 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
             onClick={onClose}
             className="flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest border border-[#2A2421]/20 hover:bg-gray-50 transition-colors"
           >
-            Hủy bỏ
+            Há»§y bá»
           </button>
           <button
             onClick={() => onSave(drafts)}
             className="flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold flex items-center justify-center gap-2 transition-colors bg-[#D4AF37] text-white hover:bg-[#C49B2F]"
           >
             <span className="material-symbols-outlined text-[16px]">save</span>
-            Lưu
+            LÆ°u
           </button>
         </div>
       </div>
@@ -257,7 +336,7 @@ function PassengerEditModal({ passengers, onSave, onClose }: PassengerEditModalP
   );
 }
 
-// ── Confirm Popup ─────────────────────────────────────────────────────────────
+// â”€â”€ Confirm Popup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface ConfirmPopupProps {
   title: string;
@@ -282,7 +361,7 @@ function ConfirmPopup({ title, message, confirmLabel, onConfirm, onCancel }: Con
             onClick={onCancel}
             className="flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest border border-[#2A2421]/20 hover:bg-gray-50 transition-colors"
           >
-            Không
+            KhÃ´ng
           </button>
           <button
             onClick={onConfirm}
@@ -296,7 +375,7 @@ function ConfirmPopup({ title, message, confirmLabel, onConfirm, onCancel }: Con
   );
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
+// â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function SalesBookingDetail() {
   const { id } = useParams<{ id: string }>();
@@ -318,6 +397,8 @@ export default function SalesBookingDetail() {
   // Bill edit state (for refunded bookings)
   const [billPreview, setBillPreview] = useState<string | null>(null);
   const [billFile, setBillFile] = useState<File | null>(null);
+  const [billPersistedValue, setBillPersistedValue] = useState<string | null>(null);
+  const [isProcessingBill, setIsProcessingBill] = useState(false);
   const [isEditingBill, setIsEditingBill] = useState(false);
   const [roomCountsDraft, setRoomCountsDraft] = useState<RoomCountsDraft>(
     toRoomCountsDraft(foundBooking?.roomCounts)
@@ -332,6 +413,7 @@ export default function SalesBookingDetail() {
     setBooking(foundBooking);
     setRoomCountsDraft(toRoomCountsDraft(foundBooking.roomCounts));
     setBillPreview(foundBooking.refundBillUrl ?? null);
+    setBillPersistedValue(foundBooking.refundBillUrl ?? null);
     setBillFile(null);
   }, [foundBooking]);
 
@@ -350,6 +432,8 @@ export default function SalesBookingDetail() {
       return savedBillUrl ?? null;
     });
     setBillFile(null);
+    setBillPersistedValue(savedBillUrl ?? null);
+    setIsProcessingBill(false);
   };
 
   if (!booking) {
@@ -357,17 +441,17 @@ export default function SalesBookingDetail() {
       <div className="w-full min-h-full bg-[#F3F3F3] flex items-center justify-center p-6">
         <div className="bg-white border border-[#D0C5AF]/30 p-8 text-center shadow-sm">
           <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold mb-2">
-            {protectedLoading ? 'Đang tải dữ liệu' : 'Không tìm thấy booking'}
+            {protectedLoading ? 'Äang táº£i dá»¯ liá»‡u' : 'KhÃ´ng tÃ¬m tháº¥y booking'}
           </p>
           <h1 className="font-['Noto_Serif'] text-2xl text-[#2A2421] mb-4">
-            {protectedLoading ? 'Đang đồng bộ dữ liệu đơn hàng' : `Booking ${id ?? ''} không tồn tại`}
+            {protectedLoading ? 'Äang Ä‘á»“ng bá»™ dá»¯ liá»‡u Ä‘Æ¡n hÃ ng' : `Booking ${id ?? ''} khÃ´ng tá»“n táº¡i`}
           </h1>
           {!protectedLoading && (
             <Link
               to={`/sales/bookings?tab=${tab}`}
               className="inline-flex items-center justify-center px-5 py-3 bg-[#2A2421] text-white text-xs font-['Inter'] uppercase tracking-widest hover:bg-[#D4AF37] transition-colors"
             >
-              Danh sách đơn booking
+              Danh sÃ¡ch Ä‘Æ¡n booking
             </Link>
           )}
         </div>
@@ -388,7 +472,7 @@ export default function SalesBookingDetail() {
 
     const next = updater(booking);
     if (!accessToken) {
-      message.error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để lưu thay đổi.');
+      message.error('PhiÃªn Ä‘Äƒng nháº­p Ä‘Ã£ háº¿t háº¡n. Vui lÃ²ng Ä‘Äƒng nháº­p láº¡i Ä‘á»ƒ lÆ°u thay Ä‘á»•i.');
       return null;
     }
 
@@ -396,14 +480,14 @@ export default function SalesBookingDetail() {
     setPersistCount(count => count + 1);
     const job = persistQueueRef.current
       .catch(() => undefined)
-      .then(() => updateBooking(next.id, payload, accessToken, { keepalive: true }))
+      .then(() => updateBooking(next.id, payload, accessToken))
       .then((result) => {
         setBooking(result.booking);
         upsertBooking(result.booking);
         return result.booking;
       })
       .catch(() => {
-        message.error('Không thể lưu thay đổi đơn booking. Vui lòng thử lại.');
+        message.error('KhÃ´ng thá»ƒ lÆ°u thay Ä‘á»•i Ä‘Æ¡n booking. Vui lÃ²ng thá»­ láº¡i.');
         return null;
       })
       .finally(() => setPersistCount(count => Math.max(0, count - 1)));
@@ -411,7 +495,7 @@ export default function SalesBookingDetail() {
     return job;
   };
 
-  // refundStatus === 'pending' = yêu cầu hủy đang chờ xử lý
+  // refundStatus === 'pending' = yÃªu cáº§u há»§y Ä‘ang chá» xá»­ lÃ½
   const isPendingCancel = booking.status === 'pending_cancel';
   const isPendingBook = booking.status === 'pending';
 
@@ -421,45 +505,61 @@ export default function SalesBookingDetail() {
   const canConfirm = booking.status === 'pending' && hasValidPassengerData && hasAssignedRooms && persistCount === 0;
   const canRefund = booking.status === 'cancelled' && booking.refundStatus === 'pending';
 
-  // ── Actions ──────────────────────────────────────────────────────────────
+  // â”€â”€ Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  const handleBillUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const prepareBillDraft = async (file: File) => {
+    if (billPreview?.startsWith('blob:')) {
+      URL?.revokeObjectURL(billPreview);
+    }
+
+    const nextPreview = URL?.createObjectURL(file);
+    setBillFile(file);
+    setBillPreview(nextPreview);
+    setBillPersistedValue(null);
+    setIsProcessingBill(true);
+
+    try {
+      const optimizedValue = await optimizeRefundBillFile(file);
+      setBillPersistedValue(optimizedValue);
+    } catch (error) {
+      URL?.revokeObjectURL(nextPreview);
+      setBillFile(null);
+      setBillPreview(null);
+      setBillPersistedValue(null);
+      throw error;
+    } finally {
+      setIsProcessingBill(false);
+    }
+  };
+
+  const handleBillUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e?.target?.files?.[0];
-    if (file) {
-      if (billPreview?.startsWith('blob:')) URL?.revokeObjectURL(billPreview);
-      setBillFile(file);
-      setBillPreview(URL?.createObjectURL(file));
+    if (!file) return;
+
+    try {
+      await prepareBillDraft(file);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : 'KhÃ´ng thá»ƒ xá»­ lÃ½ áº£nh bill.');
+    } finally {
+      e.target.value = '';
     }
   };
   const handleClearBill = () => {
     if (billPreview?.startsWith('blob:')) URL?.revokeObjectURL(billPreview);
     setBillFile(null);
     setBillPreview(null);
+    setBillPersistedValue(null);
+    setIsProcessingBill(false);
   };
   const handleCancelBillEdit = () => {
     resetBillDraft(booking?.refundBillUrl ?? null);
     setIsEditingBill(false);
   };
-  const readFileAsDataUrl = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result ?? ''));
-      reader.onerror = () => reject(reader.error ?? new Error('Không thể đọc file bill.'));
-      reader.readAsDataURL(file);
-    });
 
-  const resolveBillValueForPersistence = async () => {
-    if (billFile) {
-      return readFileAsDataUrl(billFile);
-    }
-
-    return billPreview;
-  };
 
   const handleConfirmRefund = async () => {
-    if (!billPreview) return;
-    const persistedBillUrl = await resolveBillValueForPersistence();
-    if (!persistedBillUrl) return;
+    if (!billPersistedValue || isProcessingBill) return;
+    const persistedBillUrl = billPersistedValue;
 
     const now = new Date()?.toISOString();
     const userName = currentUser?.name ?? 'NV Kinh doanh';
@@ -474,7 +574,7 @@ export default function SalesBookingDetail() {
     resetBillDraft(persistedBillUrl);
     setShowRefundPopup(false);
     setShowEmailToast(true);
-    message.success('Đã lưu bill hoàn tiền thành công.');
+    message.success('ÄÃ£ lÆ°u bill hoÃ n tiá»n thÃ nh cÃ´ng.');
     setTimeout(() => setShowEmailToast(false), 4000);
   };
 
@@ -484,7 +584,7 @@ export default function SalesBookingDetail() {
       next => ({ roomCounts: next.roomCounts }),
     );
     if (saved) {
-      message.success('Đã cập nhật thông tin phòng.');
+      message.success('ÄÃ£ cáº­p nháº­t thÃ´ng tin phÃ²ng.');
     }
   };
 
@@ -495,10 +595,10 @@ export default function SalesBookingDetail() {
     );
     if (!saved) return;
     setShowPassengerModal(false);
-    message.success('Đã cập nhật danh sách hành khách.');
+    message.success('ÄÃ£ cáº­p nháº­t danh sÃ¡ch hÃ nh khÃ¡ch.');
   };
 
-  // Xác nhận đơn đặt → chuyển sang Đã xác nhận
+  // XÃ¡c nháº­n Ä‘Æ¡n Ä‘áº·t â†’ chuyá»ƒn sang ÄÃ£ xÃ¡c nháº­n
   const handleConfirmBooking = async () => {
     const now = new Date()?.toISOString();
     const userName = currentUser?.name ?? 'NV Kinh doanh';
@@ -511,10 +611,10 @@ export default function SalesBookingDetail() {
     }));
     if (!saved) return;
     setShowConfirmPopup(false);
-    message.success('Xác nhận đơn đặt tour thành công.');
+    message.success('XÃ¡c nháº­n Ä‘Æ¡n Ä‘áº·t tour thÃ nh cÃ´ng.');
   };
 
-  // Xác nhận hủy → chuyển sang Đã hủy + pending refund
+  // XÃ¡c nháº­n há»§y â†’ chuyá»ƒn sang ÄÃ£ há»§y + pending refund
   const handleConfirmCancel = async () => {
     const now = new Date()?.toISOString();
     const userName = currentUser?.name ?? 'NV Kinh doanh';
@@ -527,20 +627,20 @@ export default function SalesBookingDetail() {
     }));
     if (!saved) return;
     setShowConfirmCancelPopup(false);
-    message.success('Xác nhận yêu cầu hủy tour thành công.');
+    message.success('XÃ¡c nháº­n yÃªu cáº§u há»§y tour thÃ nh cÃ´ng.');
   };
 
   const handleDownloadPassengers = () => {
     let content = '\uFEFF';
-    content += 'THÔNG TIN TOUR\n';
-    content += `Tên tour,${booking?.tourName}\n`;
-    content += `Ngày khởi hành,${formatDate(booking?.tourDate)}\n`;
-    content += `Thời gian,${booking?.tourDuration}\n`;
-    content += `Mã đơn,${booking?.bookingCode}\n\n`;
-    content += 'DANH SÁCH HÀNH KHÁCH\n';
-    content += 'STT,Họ và Tên,Loại,Ngày sinh,Giới tính,Quốc tịch,CCCD/GKS,Phụ thu đơn\n';
+    content += 'THÃ”NG TIN TOUR\n';
+    content += `TÃªn tour,${booking?.tourName}\n`;
+    content += `NgÃ y khá»Ÿi hÃ nh,${formatDate(booking?.tourDate)}\n`;
+    content += `Thá»i gian,${booking?.tourDuration}\n`;
+    content += `MÃ£ Ä‘Æ¡n,${booking?.bookingCode}\n\n`;
+    content += 'DANH SÃCH HÃ€NH KHÃCH\n';
+    content += 'STT,Há» vÃ  TÃªn,Loáº¡i,NgÃ y sinh,Giá»›i tÃ­nh,Quá»‘c tá»‹ch,CCCD/GKS,Phá»¥ thu Ä‘Æ¡n\n';
     booking?.passengers?.forEach((p, i) => {
-      content += `${i + 1},${p?.name},${PASSENGER_TYPE[p?.type]},${p?.dob},${p.gender === 'male' ? 'Nam' : 'Nữ'},${p?.nationality || 'Việt Nam'},${p?.cccd || ''},${p?.singleRoomSupplement ? formatCurrency(p?.singleRoomSupplement) : ''}\n`;
+      content += `${i + 1},${p?.name},${PASSENGER_TYPE[p?.type]},${p?.dob},${p.gender === 'male' ? 'Nam' : 'Ná»¯'},${p?.nationality || 'Viá»‡t Nam'},${p?.cccd || ''},${p?.singleRoomSupplement ? formatCurrency(p?.singleRoomSupplement) : ''}\n`;
     });
     const blob = new Blob([content], { type: 'application/vnd.ms-excel;charset=utf-8' });
     const url = URL?.createObjectURL(blob);
@@ -556,7 +656,7 @@ export default function SalesBookingDetail() {
   return (
     <div className="w-full min-h-full bg-[#F3F3F3]">
 
-      {/* ── POPUP: Passenger Edit ── */}
+      {/* â”€â”€ POPUP: Passenger Edit â”€â”€ */}
       {showPassengerModal && (
         <PassengerEditModal
           passengers={booking?.passengers}
@@ -565,29 +665,29 @@ export default function SalesBookingDetail() {
         />
       )}
 
-      {/* ── POPUP: Confirm Xác nhận đơn ── */}
+      {/* â”€â”€ POPUP: Confirm XÃ¡c nháº­n Ä‘Æ¡n â”€â”€ */}
       {showConfirmPopup && (
         <ConfirmPopup
-          title="Xác nhận đơn đặt"
-          message={`Bạn có chắc muốn xác nhận đơn #${booking?.bookingCode}?`}
-          confirmLabel="Có, xác nhận"
+          title="XÃ¡c nháº­n Ä‘Æ¡n Ä‘áº·t"
+          message={`Báº¡n cÃ³ cháº¯c muá»‘n xÃ¡c nháº­n Ä‘Æ¡n #${booking?.bookingCode}?`}
+          confirmLabel="CÃ³, xÃ¡c nháº­n"
           onConfirm={handleConfirmBooking}
           onCancel={() => setShowConfirmPopup(false)}
         />
       )}
 
-      {/* ── POPUP: Xác nhận hủy đơn ── */}
+      {/* â”€â”€ POPUP: XÃ¡c nháº­n há»§y Ä‘Æ¡n â”€â”€ */}
       {showConfirmCancelPopup && (
         <ConfirmPopup
-          title="Xác nhận hủy đơn"
-          message={`Xác nhận hủy đơn #${booking?.bookingCode} và tiến hành hoàn tiền cho khách?`}
-          confirmLabel="Có, hủy đơn"
+          title="XÃ¡c nháº­n há»§y Ä‘Æ¡n"
+          message={`XÃ¡c nháº­n há»§y Ä‘Æ¡n #${booking?.bookingCode} vÃ  tiáº¿n hÃ nh hoÃ n tiá»n cho khÃ¡ch?`}
+          confirmLabel="CÃ³, há»§y Ä‘Æ¡n"
           onConfirm={handleConfirmCancel}
           onCancel={() => setShowConfirmCancelPopup(false)}
         />
       )}
 
-      {/* ── POPUP: Hoàn tiền ── */}
+      {/* â”€â”€ POPUP: HoÃ n tiá»n â”€â”€ */}
       {showRefundPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="refund-payment-title">
           <div className="absolute inset-0 bg-[#2A2421]/50 backdrop-blur-sm" onClick={closeRefundPopup}></div>
@@ -595,8 +695,8 @@ export default function SalesBookingDetail() {
             <div className="p-6 border-b border-[#D0C5AF]/20">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold">Hoàn tiền</p>
-                  <h3 id="refund-payment-title" className="font-['Noto_Serif'] text-xl text-[#2A2421]">Hoàn tiền đơn hàng</h3>
+                  <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold">HoÃ n tiá»n</p>
+                  <h3 id="refund-payment-title" className="font-['Noto_Serif'] text-xl text-[#2A2421]">HoÃ n tiá»n Ä‘Æ¡n hÃ ng</h3>
                 </div>
                 <button onClick={closeRefundPopup} className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full">
                   <span className="material-symbols-outlined text-[#2A2421]/60">close</span>
@@ -606,28 +706,28 @@ export default function SalesBookingDetail() {
             <div className="p-6 space-y-5">
               <div className="bg-[#FAFAF5] p-4 border border-[#D0C5AF]/20 space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#2A2421]/50">Mã đơn</span>
+                  <span className="text-[#2A2421]/50">MÃ£ Ä‘Æ¡n</span>
                   <span className="font-semibold font-['Noto_Serif']">#{booking?.bookingCode}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#2A2421]/50">Số tiền cần hoàn</span>
+                  <span className="text-[#2A2421]/50">Sá»‘ tiá»n cáº§n hoÃ n</span>
                   <span className="font-bold text-[#D4AF37] font-['Noto_Serif']">{formatCurrency(booking?.refundAmount ?? 0)}</span>
                 </div>
                 {booking?.bankInfo && (
                   <>
                     <div className="flex justify-between text-sm">
-                      <span className="text-[#2A2421]/50">Số tài khoản</span>
+                      <span className="text-[#2A2421]/50">Sá»‘ tÃ i khoáº£n</span>
                       <span className="font-mono">{booking?.bankInfo?.accountNumber}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-[#2A2421]/50">Ngân hàng</span>
+                      <span className="text-[#2A2421]/50">NgÃ¢n hÃ ng</span>
                       <span>{booking?.bankInfo?.bankName}</span>
                     </div>
                   </>
                 )}
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-[#2A2421]/60 font-bold mb-2">Ảnh bill chuyển khoản *</p>
+                <p className="text-[10px] uppercase tracking-widest text-[#2A2421]/60 font-bold mb-2">áº¢nh bill chuyá»ƒn khoáº£n *</p>
                 {billPreview ? (
                   <div className="relative">
                     <img src={billPreview} alt="Bill" className="w-full max-h-48 object-contain border border-[#D0C5AF]/30 bg-gray-50" />
@@ -638,7 +738,7 @@ export default function SalesBookingDetail() {
                 ) : (
                   <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-[#D0C5AF]/50 bg-[#FAFAF5] cursor-pointer hover:border-[#D4AF37] transition-colors">
                     <span className="material-symbols-outlined text-3xl text-[#D0C5AF] mb-2">cloud_upload</span>
-                    <span className="text-xs text-[#2A2421]/40">Click để tải ảnh bill lên</span>
+                    <span className="text-xs text-[#2A2421]/40">Click Ä‘á»ƒ táº£i áº£nh bill lÃªn</span>
                     <input type="file" accept="image/*" onChange={handleBillUpload} className="hidden" />
                   </label>
                 )}
@@ -646,52 +746,52 @@ export default function SalesBookingDetail() {
             </div>
             <div className="p-6 border-t border-[#D0C5AF]/20 flex gap-3">
               <button onClick={closeRefundPopup} className="flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest border border-[#2A2421]/20 hover:bg-gray-50 transition-colors">
-                Hủy bỏ
+                Há»§y bá»
               </button>
               <button
                 onClick={handleConfirmRefund}
-                disabled={!billPreview}
+                  disabled={!billPersistedValue || isProcessingBill}
                 className={`flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold flex items-center justify-center gap-2 transition-colors ${
-                  billPreview ? 'bg-[#D4AF37] text-white hover:bg-[#C49B2F]' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    billPersistedValue && !isProcessingBill ? 'bg-[#D4AF37] text-white hover:bg-[#C49B2F]' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 }`}
               >
                 <span className="material-symbols-outlined text-[16px]">check</span>
-                Xác nhận hoàn tiền
+                  {isProcessingBill ? 'Äang tá»‘i Æ°u bill' : 'XÃ¡c nháº­n hoÃ n tiá»n'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Email notification toast ── */}
+      {/* â”€â”€ Email notification toast â”€â”€ */}
       {showEmailToast && (
         <div className="fixed bottom-8 right-8 z-50 bg-emerald-600 text-white px-6 py-4 shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom">
           <span className="material-symbols-outlined text-xl">mail</span>
           <div>
-            <p className="text-sm font-semibold">Đã gửi email thông báo cho khách</p>
-            <p className="text-xs text-emerald-200">Khách hàng đã được thông báo về việc cập nhật thông tin hoàn tiền.</p>
+            <p className="text-sm font-semibold">ÄÃ£ gá»­i email thÃ´ng bÃ¡o cho khÃ¡ch</p>
+            <p className="text-xs text-emerald-200">KhÃ¡ch hÃ ng Ä‘Ã£ Ä‘Æ°á»£c thÃ´ng bÃ¡o vá» viá»‡c cáº­p nháº­t thÃ´ng tin hoÃ n tiá»n.</p>
           </div>
         </div>
       )}
 
-      {/* ── MAIN CONTENT ── */}
+      {/* â”€â”€ MAIN CONTENT â”€â”€ */}
       <div className="w-full p-6 md:p-10">
 
         {/* Breadcrumb */}
         <nav className="flex items-center gap-2 mb-8 text-sm">
           <Link to={`/sales/bookings?tab=${tab}`} className="text-[#D4AF37] hover:underline flex items-center gap-1">
             <span className="material-symbols-outlined text-[16px]">receipt_long</span>
-            Danh sách đơn booking
+            Danh sÃ¡ch Ä‘Æ¡n booking
           </Link>
           <span className="text-[#2A2421]/30">/</span>
-          <span className="text-[#2A2421]/60">Chi tiết đơn booking</span>
+          <span className="text-[#2A2421]/60">Chi tiáº¿t Ä‘Æ¡n booking</span>
         </nav>
 
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div className="space-y-1">
-            <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold">Chi tiết đặt chỗ</p>
-            <h1 className="font-['Noto_Serif'] text-3xl text-[#2A2421]">Đơn hàng #{booking?.bookingCode}</h1>
+            <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold">Chi tiáº¿t Ä‘áº·t chá»—</p>
+            <h1 className="font-['Noto_Serif'] text-3xl text-[#2A2421]">ÄÆ¡n hÃ ng #{booking?.bookingCode}</h1>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <span className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider border ${ORDER_STATUS_STYLE[displayStatus]}`}>
@@ -718,23 +818,23 @@ export default function SalesBookingDetail() {
             <section className="bg-white border border-[#D0C5AF]/20 p-6">
               <div className="flex items-center gap-2 mb-5">
                 <div className="w-1 h-4 bg-[#D4AF37]"></div>
-                <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">Thông tin Hành trình</h2>
+                <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">ThÃ´ng tin HÃ nh trÃ¬nh</h2>
               </div>
               <div className="grid grid-cols-2 gap-6">
                 <div className="col-span-2">
-                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Tên tour</p>
+                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">TÃªn tour</p>
                   <p className="text-sm font-medium">{booking?.tourName}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Ngày khởi hành</p>
+                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">NgÃ y khá»Ÿi hÃ nh</p>
                   <p className="text-sm font-medium font-['Noto_Serif'] text-[#D4AF37]">{formatDate(booking?.tourDate)}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Thời gian</p>
+                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Thá»i gian</p>
                   <p className="text-sm font-medium">{booking?.tourDuration}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Số hành khách</p>
+                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Sá»‘ hÃ nh khÃ¡ch</p>
                   <p className="text-sm font-medium">
                     {booking?.passengers?.filter(p => p.type === 'adult')?.length} NL /{' '}
                     {booking?.passengers?.filter(p => p.type === 'child')?.length} TE /{' '}
@@ -742,18 +842,18 @@ export default function SalesBookingDetail() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Phương thức thanh toán</p>
+                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">PhÆ°Æ¡ng thá»©c thanh toÃ¡n</p>
                   <p className="text-sm font-medium">{PAYMENT_METHOD_LABEL[booking?.paymentMethod]}</p>
                 </div>
-                {/* Số phòng */}
+                {/* Sá»‘ phÃ²ng */}
                 <div>
-                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Số phòng</p>
+                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Sá»‘ phÃ²ng</p>
                   {isPendingBook ? (
                     <div className="space-y-2">
                       <div className="grid grid-cols-3 gap-2">
                         {([
-                          ['single', 'Đơn'],
-                          ['double', 'Đôi'],
+                          ['single', 'ÄÆ¡n'],
+                          ['double', 'ÄÃ´i'],
                           ['triple', 'Ba'],
                         ] as const)?.map(([key, label]) => (
                           <label key={key} className="text-[10px] text-[#2A2421]/60">
@@ -775,28 +875,28 @@ export default function SalesBookingDetail() {
                         onClick={handleSaveRoomCounts}
                         className="px-3 py-1.5 bg-[#2A2421] text-white text-[10px] font-bold uppercase tracking-widest hover:bg-[#D4AF37] transition-colors"
                       >
-                        Lưu số phòng
+                        LÆ°u sá»‘ phÃ²ng
                       </button>
                     </div>
                   ) : (
                     <div className="flex gap-3 text-xs">
-                      <span className="px-2 py-1 bg-blue-50 text-blue-600 font-medium">Đơn: {booking?.roomCounts?.single ?? 0}</span>
-                      <span className="px-2 py-1 bg-green-50 text-green-600 font-medium">Đôi: {booking?.roomCounts?.double ?? 0}</span>
+                      <span className="px-2 py-1 bg-blue-50 text-blue-600 font-medium">ÄÆ¡n: {booking?.roomCounts?.single ?? 0}</span>
+                      <span className="px-2 py-1 bg-green-50 text-green-600 font-medium">ÄÃ´i: {booking?.roomCounts?.double ?? 0}</span>
                       <span className="px-2 py-1 bg-purple-50 text-purple-600 font-medium">Ba: {booking?.roomCounts?.triple ?? 0}</span>
                     </div>
                   )}
                 </div>
-                {/* Ghi chú từ contactInfo?.note */}
+                {/* Ghi chÃº tá»« contactInfo?.note */}
                 {booking?.contactInfo?.note && (
                   <div className="col-span-2">
-                    <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Ghi chú</p>
+                    <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Ghi chÃº</p>
                     <p className="text-xs text-[#2A2421]/70 bg-amber-50 p-3 border border-amber-200">{booking?.contactInfo?.note}</p>
                   </div>
                 )}
-                {/* Lý do hủy */}
+                {/* LÃ½ do há»§y */}
                 {(booking.status === 'cancelled' || booking.status === 'pending_cancel') && booking?.cancellationReason && (
                   <div className="col-span-2">
-                    <p className="text-[9px] uppercase tracking-widest text-red-400 mb-1">Lý do hủy</p>
+                    <p className="text-[9px] uppercase tracking-widest text-red-400 mb-1">LÃ½ do há»§y</p>
                     <p className="text-xs text-red-600 bg-red-50 p-3 border border-red-200">{booking?.cancellationReason}</p>
                   </div>
                 )}
@@ -808,7 +908,7 @@ export default function SalesBookingDetail() {
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2">
                   <div className="w-1 h-4 bg-[#D4AF37]"></div>
-                  <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">Danh sách Hành khách</h2>
+                  <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">Danh sÃ¡ch HÃ nh khÃ¡ch</h2>
                   <span className="ml-2 px-2 py-0.5 bg-[#D4AF37]/10 text-[#D4AF37] text-[10px] font-bold">{booking?.passengers?.length}</span>
                 </div>
                 <div className="flex gap-2">
@@ -817,16 +917,16 @@ export default function SalesBookingDetail() {
                     className="flex items-center gap-1.5 bg-[#2A2421] text-white px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest hover:bg-[#D4AF37] transition-colors"
                   >
                     <span className="material-symbols-outlined text-[14px]">download</span>
-                    Tải về DSHK
+                    Táº£i vá» DSHK
                   </button>
-                  {/* Chỉ tab Cần xác nhận đơn đặt mới cho chỉnh sửa */}
+                  {/* Chá»‰ tab Cáº§n xÃ¡c nháº­n Ä‘Æ¡n Ä‘áº·t má»›i cho chá»‰nh sá»­a */}
                   {isPendingBook && (
                     <button
                       onClick={() => setShowPassengerModal(true)}
                       className="flex items-center gap-1.5 border border-[#D4AF37] text-[#D4AF37] px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest hover:bg-[#D4AF37]/5 transition-colors"
                     >
                       <span className="material-symbols-outlined text-[14px]">edit</span>
-                      Chỉnh sửa
+                      Chá»‰nh sá»­a
                     </button>
                   )}
                 </div>
@@ -836,7 +936,7 @@ export default function SalesBookingDetail() {
                 <div className="mb-4 p-3 bg-amber-50 border border-amber-200 flex items-start gap-2">
                   <span className="material-symbols-outlined text-amber-600 text-[16px] shrink-0">info</span>
                   <p className="text-xs text-amber-800">
-                    Vui lòng điền đầy đủ thông tin hành khách và phân phòng hợp lệ trước khi xác nhận.
+                    Vui lÃ²ng Ä‘iá»n Ä‘áº§y Ä‘á»§ thÃ´ng tin hÃ nh khÃ¡ch vÃ  phÃ¢n phÃ²ng há»£p lá»‡ trÆ°á»›c khi xÃ¡c nháº­n.
                   </p>
                 </div>
               )}
@@ -846,14 +946,14 @@ export default function SalesBookingDetail() {
                 <thead>
                   <tr className="border-b border-[#D0C5AF]/20">
                     <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-10">STT</th>
-                    <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-48">Họ và tên</th>
-                    <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-24">Loại</th>
-                    <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-24">Giới tính</th>
-                    <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-32">Ngày sinh</th>
+                    <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-48">Há» vÃ  tÃªn</th>
+                    <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-24">Loáº¡i</th>
+                    <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-24">Giá»›i tÃ­nh</th>
+                    <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-32">NgÃ y sinh</th>
                     <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-44">CCCD / GKS</th>
-                    <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-40">Quốc tịch</th>
+                    <th className="pb-3 pr-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold w-40">Quá»‘c tá»‹ch</th>
                     {booking?.passengers?.some(p => p.type === 'adult') && (
-                      <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold text-right w-28">Phụ thu đơn</th>
+                      <th className="pb-3 text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold text-right w-28">Phá»¥ thu Ä‘Æ¡n</th>
                     )}
                   </tr>
                 </thead>
@@ -867,16 +967,16 @@ export default function SalesBookingDetail() {
                           {PASSENGER_TYPE[p?.type]}
                         </span>
                       </td>
-                      <td className="py-3 pr-3 text-xs text-[#2A2421]/70">{p.gender === 'male' ? 'Nam' : 'Nữ'}</td>
+                      <td className="py-3 pr-3 text-xs text-[#2A2421]/70">{p.gender === 'male' ? 'Nam' : 'Ná»¯'}</td>
                       <td className="py-3 pr-3 text-sm text-[#2A2421]/60">{p?.dob}</td>
-                      <td className="py-3 pr-3 text-sm font-mono text-[#2A2421]/70">{p?.cccd || '—'}</td>
-                      <td className="py-3 pr-3 text-xs text-[#2A2421]/60">{p?.nationality || 'Việt Nam'}</td>
+                      <td className="py-3 pr-3 text-sm font-mono text-[#2A2421]/70">{p?.cccd || 'â€”'}</td>
+                      <td className="py-3 pr-3 text-xs text-[#2A2421]/60">{p?.nationality || 'Viá»‡t Nam'}</td>
                       {p.type === 'adult' ? (
                         <td className="py-3 text-sm text-right font-medium text-amber-600">
-                          {p?.singleRoomSupplement ? `+${p?.singleRoomSupplement?.toLocaleString('vi-VN')}đ` : '—'}
+                          {p?.singleRoomSupplement ? `+${p?.singleRoomSupplement?.toLocaleString('vi-VN')}Ä‘` : 'â€”'}
                         </td>
                       ) : (
-                        <td className="py-3 text-sm text-[#2A2421]/30 text-right">—</td>
+                        <td className="py-3 text-sm text-[#2A2421]/30 text-right">â€”</td>
                       )}
                     </tr>
                   ))}
@@ -885,12 +985,12 @@ export default function SalesBookingDetail() {
               </div>
             </section>
 
-            {/* Refund Bill — editable after refund completed */}
+            {/* Refund Bill â€” editable after refund completed */}
             {booking.refundStatus === 'refunded' && (
               <section className="bg-white border border-emerald-200 p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-1 h-4 bg-emerald-500"></div>
-                  <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-emerald-700">Ảnh bill chuyển khoản hoàn tiền</h2>
+                  <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-emerald-700">áº¢nh bill chuyá»ƒn khoáº£n hoÃ n tiá»n</h2>
                   {!isEditingBill && (
                     <button
                       onClick={() => {
@@ -901,7 +1001,7 @@ export default function SalesBookingDetail() {
                       className="ml-auto px-3 py-1 text-[10px] font-bold uppercase tracking-widest border border-emerald-400 text-emerald-600 hover:bg-emerald-50 transition-colors"
                     >
                       <span className="material-symbols-outlined text-[14px] mr-1">edit</span>
-                      Chỉnh sửa bill
+                      Chá»‰nh sá»­a bill
                     </button>
                   )}
                 </div>
@@ -913,7 +1013,7 @@ export default function SalesBookingDetail() {
                       <div className="relative">
                         <img
                           src={billPreview}
-                          alt={billFile ? 'Bill mới' : 'Bill hiện tại'}
+                          alt={billFile ? 'Bill má»›i' : 'Bill hiá»‡n táº¡i'}
                           className="w-full max-w-sm border border-[#D0C5AF]/30 bg-gray-50"
                         />
                         <button
@@ -930,17 +1030,17 @@ export default function SalesBookingDetail() {
                     ) : (
                       <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-emerald-300 bg-emerald-50 cursor-pointer hover:border-emerald-500 transition-colors">
                         <span className="material-symbols-outlined text-3xl text-emerald-300 mb-2">cloud_upload</span>
-                        <span className="text-xs text-emerald-600">Click để tải ảnh bill mới</span>
-                        <input type="file" accept="image/*" onChange={e => {
+                        <span className="text-xs text-emerald-600">Click Ä‘á»ƒ táº£i áº£nh bill má»›i</span>
+                        <input type="file" accept="image/*" onChange={async e => {
                           const file = e?.target?.files?.[0];
-                          if (file) {
-                            setBillPreview(currentPreview => {
-                              if (currentPreview?.startsWith('blob:')) {
-                                URL?.revokeObjectURL(currentPreview);
-                              }
-                              return URL?.createObjectURL(file);
-                            });
-                            setBillFile(file);
+                          if (!file) return;
+
+                          try {
+                            await prepareBillDraft(file);
+                          } catch (error) {
+                            message.error(error instanceof Error ? error.message : 'KhÃ´ng thá»ƒ xá»­ lÃ½ áº£nh bill.');
+                          } finally {
+                            e.target.value = '';
                           }
                         }} className="hidden" />
                       </label>
@@ -950,36 +1050,35 @@ export default function SalesBookingDetail() {
                         onClick={handleCancelBillEdit}
                         className="flex-1 py-2.5 text-xs font-['Inter'] uppercase tracking-widest border border-[#2A2421]/20 hover:bg-gray-50 transition-colors"
                       >
-                        Hủy bỏ
+                        Há»§y bá»
                       </button>
                       <button
                         onClick={async () => {
-                          if (!billPreview || !billFile) return;
-                          const persistedBillUrl = await resolveBillValueForPersistence();
-                          if (!persistedBillUrl) return;
+                          if (!billFile || !billPersistedValue || isProcessingBill) return;
+                          const persistedBillUrl = billPersistedValue;
                           const now = new Date()?.toISOString();
                           const saved = await persistBooking(prev => ({
                             ...prev,
                             refundBillUrl: persistedBillUrl,
-                            refundBillEditedBy: currentUser?.name ?? 'NV Kinh doanh',
-                            refundBillEditedAt: now,
+                            refundedBy: currentUser?.name ?? 'NV Kinh doanh',
+                            refundedAt: now,
                           }));
                           if (!saved) return;
                           resetBillDraft(persistedBillUrl);
                           setIsEditingBill(false);
                           setShowEmailToast(true);
-                          message.success('Đã cập nhật bill hoàn tiền.');
+                          message.success('ÄÃ£ cáº­p nháº­t bill hoÃ n tiá»n.');
                           setTimeout(() => setShowEmailToast(false), 4000);
                         }}
-                        disabled={!billFile}
+                        disabled={!billFile || !billPersistedValue || isProcessingBill}
                         className={`flex-1 py-2.5 text-xs font-['Inter'] uppercase tracking-widest font-bold flex items-center justify-center gap-2 transition-colors ${
-                          billFile
+                          billFile && billPersistedValue && !isProcessingBill
                             ? 'bg-emerald-600 text-white hover:bg-emerald-700'
                             : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                         }`}
                       >
                         <span className="material-symbols-outlined text-[16px]">save</span>
-                        Lưu
+                        LÆ°u
                       </button>
                     </div>
                   </div>
@@ -987,13 +1086,7 @@ export default function SalesBookingDetail() {
                   /* Display mode */
                   <div>
                     {booking?.refundBillUrl && (
-                      <img src={booking?.refundBillUrl} alt="Bill hoàn tiền" className="max-w-sm border border-[#D0C5AF]/30 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => window?.open(booking?.refundBillUrl, '_blank')} />
-                    )}
-                    {/* Log người chỉnh sửa */}
-                    {booking?.refundBillEditedBy && (
-                      <p className="text-[10px] text-emerald-600 mt-2 italic">
-                        Đã chỉnh sửa bởi {booking?.refundBillEditedBy} · {new Date(booking?.refundBillEditedAt!)?.toLocaleString('vi-VN')}
-                      </p>
+                      <img src={booking?.refundBillUrl} alt="Bill hoÃ n tiá»n" className="max-w-sm border border-[#D0C5AF]/30 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => window?.open(booking?.refundBillUrl, '_blank')} />
                     )}
                   </div>
                 )}
@@ -1004,23 +1097,23 @@ export default function SalesBookingDetail() {
           {/* Right Column */}
           <div className="space-y-6">
 
-            {/* Action Buttons — chỉ hiện khi Cần xác nhận */}
+            {/* Action Buttons â€” chá»‰ hiá»‡n khi Cáº§n xÃ¡c nháº­n */}
             {(booking.status === 'pending' || booking.status === 'pending_cancel') && (
               <div className="bg-white border border-[#D0C5AF]/20 p-6 space-y-3">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-1 h-4 bg-[#D4AF37]"></div>
-                  <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">Hành động</h2>
+                  <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">HÃ nh Ä‘á»™ng</h2>
                 </div>
 
                 {isPendingBook && (
                   <>
-                    {/* Cần xác nhận đơn đặt */}
+                    {/* Cáº§n xÃ¡c nháº­n Ä‘Æ¡n Ä‘áº·t */}
                     <button
                       onClick={() => setShowPassengerModal(true)}
                       className="w-full flex items-center justify-center gap-2 border border-[#D4AF37] text-[#D4AF37] py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold hover:bg-[#D4AF37]/5 transition-colors"
                     >
                       <span className="material-symbols-outlined text-[16px]">edit_note</span>
-                      Chỉnh sửa danh sách HK
+                      Chá»‰nh sá»­a danh sÃ¡ch HK
                     </button>
                     <button
                       onClick={() => setShowConfirmPopup(true)}
@@ -1032,32 +1125,32 @@ export default function SalesBookingDetail() {
                       }`}
                     >
                       <span className="material-symbols-outlined text-[16px]">check</span>
-                      Xác nhận đơn đặt
+                      XÃ¡c nháº­n Ä‘Æ¡n Ä‘áº·t
                     </button>
                   </>
                 )}
 
                 {isPendingCancel && (
                   <>
-                    {/* Cần xác nhận hủy */}
+                    {/* Cáº§n xÃ¡c nháº­n há»§y */}
                     <button
                       onClick={() => setShowConfirmCancelPopup(true)}
                       className="w-full flex items-center justify-center gap-2 bg-red-600 text-white py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold hover:bg-red-700 transition-colors"
                     >
                       <span className="material-symbols-outlined text-[16px]">cancel</span>
-                      Xác nhận hủy đơn
+                      XÃ¡c nháº­n há»§y Ä‘Æ¡n
                     </button>
                   </>
                 )}
               </div>
             )}
 
-            {/* Người xác nhận đơn — hiện khi confirmed và có confirmedBy */}
+            {/* NgÆ°á»i xÃ¡c nháº­n Ä‘Æ¡n â€” hiá»‡n khi confirmed vÃ  cÃ³ confirmedBy */}
             {booking.status === 'confirmed' && booking?.confirmedBy && (
               <section className="bg-white border border-[#D0C5AF]/20 p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-1 h-4 bg-blue-500"></div>
-                  <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-blue-700">Người xác nhận đơn đặt</h2>
+                  <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-blue-700">NgÆ°á»i xÃ¡c nháº­n Ä‘Æ¡n Ä‘áº·t</h2>
                 </div>
                 <div className="space-y-1">
                   <p className="text-sm font-semibold">{booking?.confirmedBy}</p>
@@ -1072,11 +1165,11 @@ export default function SalesBookingDetail() {
             <section className="bg-white border border-[#D0C5AF]/20 p-6">
               <div className="flex items-center gap-2 mb-5">
                 <div className="w-1 h-4 bg-[#D4AF37]"></div>
-                <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">Khách hàng</h2>
+                <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">KhÃ¡ch hÃ ng</h2>
               </div>
               <div className="space-y-4">
                 <div>
-                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Họ và tên</p>
+                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Há» vÃ  tÃªn</p>
                   <p className="text-sm font-semibold">{booking?.contactInfo?.name}</p>
                 </div>
                 <div>
@@ -1084,7 +1177,7 @@ export default function SalesBookingDetail() {
                   <p className="text-sm">{booking?.contactInfo?.email}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Số điện thoại</p>
+                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Sá»‘ Ä‘iá»‡n thoáº¡i</p>
                   <p className="text-sm font-medium text-[#D4AF37]">{booking?.contactInfo?.phone}</p>
                 </div>
               </div>
@@ -1094,55 +1187,55 @@ export default function SalesBookingDetail() {
             <section className="bg-white border border-[#D0C5AF]/20 p-6">
               <div className="flex items-center gap-2 mb-5">
                 <div className="w-1 h-4 bg-[#D4AF37]"></div>
-                <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">Thanh toán</h2>
+                <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">Thanh toÃ¡n</h2>
               </div>
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#2A2421]/60">Tổng tiền</span>
+                  <span className="text-[#2A2421]/60">Tá»•ng tiá»n</span>
                   <span className="font-['Noto_Serif'] font-bold text-lg">{formatCurrency(booking?.totalAmount)}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-[#2A2421]/50">Phương thức</span>
+                  <span className="text-[#2A2421]/50">PhÆ°Æ¡ng thá»©c</span>
                   <span className="font-semibold text-[#2A2421]">{PAYMENT_METHOD_LABEL[booking?.paymentMethod]}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-[#2A2421]/50">Trạng thái thanh toán</span>
+                  <span className="text-[#2A2421]/50">Tráº¡ng thÃ¡i thanh toÃ¡n</span>
                   <span className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded ${PAYMENT_STYLE[booking?.paymentStatus] ?? ''}`}>
-                    {PAYMENT_LABEL[booking?.paymentStatus] ?? '—'}
+                    {PAYMENT_LABEL[booking?.paymentStatus] ?? 'â€”'}
                   </span>
                 </div>
                 {booking.status === 'cancelled' && booking?.refundAmount && (
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-red-500">Số tiền hoàn</span>
+                    <span className="text-red-500">Sá»‘ tiá»n hoÃ n</span>
                     <span className="font-bold text-red-600">{formatCurrency(booking?.refundAmount)}</span>
                   </div>
                 )}
               </div>
 
-              {/* Hoàn tiền */}
+              {/* HoÃ n tiá»n */}
               {canRefund && (
                 <button
                   onClick={() => setShowRefundPopup(true)}
                   className="w-full flex items-center justify-center gap-2 bg-[#D4AF37] text-white py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold hover:bg-[#C49B2F] transition-colors"
                 >
                   <span className="material-symbols-outlined text-[16px]">payments</span>
-                  Hoàn tiền
+                  HoÃ n tiá»n
                 </button>
               )}
               {booking.refundStatus === 'refunded' && (
                 <div className="w-full flex items-center justify-center gap-2 bg-emerald-100 text-emerald-700 py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold border border-emerald-300">
                   <span className="material-symbols-outlined text-[16px]">check_circle</span>
-                  Đã hoàn tiền
+                  ÄÃ£ hoÃ n tiá»n
                 </div>
               )}
             </section>
 
-            {/* Thông tin xác nhận hủy — cancelled only */}
+            {/* ThÃ´ng tin xÃ¡c nháº­n há»§y â€” cancelled only */}
             {booking.status === 'cancelled' && booking?.cancelledConfirmedBy && (
               <section className="bg-white border border-red-200 p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-1 h-4 bg-red-500"></div>
-                  <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-red-600">Người xác nhận hủy</h2>
+                  <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-red-600">NgÆ°á»i xÃ¡c nháº­n há»§y</h2>
                 </div>
                 <div className="space-y-1">
                   <p className="text-sm font-semibold">{booking?.cancelledConfirmedBy}</p>
@@ -1153,17 +1246,17 @@ export default function SalesBookingDetail() {
               </section>
             )}
 
-            {/* Thông tin hoàn tiền — refunded only */}
+            {/* ThÃ´ng tin hoÃ n tiá»n â€” refunded only */}
             {booking.refundStatus === 'refunded' && (
               <section className="bg-white border border-emerald-200 p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-1 h-4 bg-emerald-500"></div>
-                  <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-emerald-700">Người hoàn tiền</h2>
+                  <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-emerald-700">NgÆ°á»i hoÃ n tiá»n</h2>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm font-semibold">{booking?.refundedBy ?? '—'}</p>
+                  <p className="text-sm font-semibold">{booking?.refundedBy ?? 'â€”'}</p>
                   {booking?.refundedAt && (
-                    <p className="text-xs text-[#2A2421]/50">Lúc {new Date(booking?.refundedAt)?.toLocaleString('vi-VN')}</p>
+                    <p className="text-xs text-[#2A2421]/50">LÃºc {new Date(booking?.refundedAt)?.toLocaleString('vi-VN')}</p>
                   )}
                 </div>
               </section>
@@ -1174,19 +1267,19 @@ export default function SalesBookingDetail() {
               <section className="bg-white border border-[#D0C5AF]/20 p-6">
                 <div className="flex items-center gap-2 mb-5">
                   <div className="w-1 h-4 bg-[#D4AF37]"></div>
-                  <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">Thông tin Ngân hàng</h2>
+                  <h2 className="font-['Inter'] text-[10px] uppercase tracking-widest font-bold text-[#2A2421]">ThÃ´ng tin NgÃ¢n hÃ ng</h2>
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Chủ tài khoản</p>
+                    <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Chá»§ tÃ i khoáº£n</p>
                     <p className="text-sm font-medium">{booking?.bankInfo?.accountHolder}</p>
                   </div>
                   <div>
-                    <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Số tài khoản</p>
+                    <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Sá»‘ tÃ i khoáº£n</p>
                     <p className="text-sm font-mono">{booking?.bankInfo?.accountNumber}</p>
                   </div>
                   <div>
-                    <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">Ngân hàng</p>
+                    <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 mb-1">NgÃ¢n hÃ ng</p>
                     <p className="text-sm font-medium">{booking?.bankInfo?.bankName}</p>
                   </div>
                 </div>

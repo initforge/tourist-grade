@@ -173,7 +173,6 @@ model User {
   confirmedBookings  Booking[]      @relation("BookingConfirmedBy")
   cancelledConfirmedBookings Booking[] @relation("BookingCancelledConfirmedBy")
   refundedBookings   Booking[]      @relation("BookingRefundedBy")
-  refundBillEditedBookings Booking[] @relation("BookingRefundBillEditedBy")
   createdVouchers    Voucher[]      @relation("VoucherCreatedBy")
   approvedVouchers   Voucher[]      @relation("VoucherApprovedBy")
   rejectedVouchers   Voucher[]      @relation("VoucherRejectedBy")
@@ -312,8 +311,6 @@ model Booking {
   cancelledConfirmedAt   DateTime?
   refundedById           String?
   refundedAt             DateTime?
-  refundBillEditedById   String?
-  refundBillEditedAt     DateTime?
   createdAt              DateTime       @default(now())
   updatedAt              DateTime       @updatedAt
 
@@ -322,7 +319,6 @@ model Booking {
   confirmedBy            User?          @relation("BookingConfirmedBy", fields: [confirmedById], references: [id])
   cancelledConfirmedBy   User?          @relation("BookingCancelledConfirmedBy", fields: [cancelledConfirmedById], references: [id])
   refundedBy             User?          @relation("BookingRefundedBy", fields: [refundedById], references: [id])
-  refundBillEditedBy     User?          @relation("BookingRefundBillEditedBy", fields: [refundBillEditedById], references: [id])
   passengers             BookingPassenger[]
   paymentTransactions    PaymentTransaction[]
   review                 TourReview?

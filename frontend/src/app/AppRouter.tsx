@@ -92,6 +92,7 @@ export default function AppRouter() {
           <Route path="tours/:slug/book" element={<BookingCheckout />} />
           <Route path="booking/success" element={<BookingSuccess />} />
           <Route path="booking/lookup" element={<OrderLookup />} />
+          <Route path="booking/lookup/:id" element={<BookingDetail />} />
           <Route path="blog" element={<BlogList />} />
           <Route path="blog/:slug" element={<BlogDetail />} />
           <Route path="about" element={<AboutUs />} />

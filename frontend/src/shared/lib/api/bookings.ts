@@ -1,4 +1,5 @@
 import type { Booking, Passenger } from '@entities/booking/data/bookings';
+import type { Tour } from '@entities/tour/data/tours';
 import { apiRequest } from './client';
 
 export interface BookingContactPayload {
@@ -89,6 +90,10 @@ export async function getBookingDetail(bookingId: string, token: string) {
   return apiRequest<{ success: boolean; booking: Booking }>(`/bookings/${bookingId}`, {
     token,
   });
+}
+
+export async function getPublicTourDetail(tourSlug: string) {
+  return apiRequest<{ success: boolean; tour: Tour }>(`/public/tours/${tourSlug}`);
 }
 
 export async function updateBooking(

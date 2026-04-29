@@ -76,8 +76,6 @@ export interface Booking {
   cancelledConfirmedAt?: string;
   refundedBy?: string;
   refundedAt?: string;
-  refundBillEditedBy?: string;
-  refundBillEditedAt?: string;
   refundAmount?: number;
   review?: BookingReview;
 }

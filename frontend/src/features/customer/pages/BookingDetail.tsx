@@ -1,6 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { useRequireAuth } from '@shared/hooks/useAuthGuard';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
 import { CancelBookingModal } from '@shared/ui/CancelBookingModal';
 import { TourReviewModal } from '@shared/ui/TourReviewModal';
@@ -12,37 +11,121 @@ import {
   formatCurrency,
   REFUND_STATUS_LABEL,
 } from '@shared/lib/booking';
-import { createBookingPaymentLink } from '@shared/lib/api/bookings';
+import { createBookingPaymentLink, getBookingDetail, lookupBooking } from '@shared/lib/api/bookings';
 import { useAuthStore } from '@shared/store/useAuthStore';
 
 export default function BookingDetail() {
-  useRequireAuth('/login?redirect=/customer/bookings');
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const lookupContact = searchParams.get('contact')?.trim() ?? '';
+  const user = useAuthStore((state) => state.user);
   const accessToken = useAuthStore((state) => state.accessToken);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isBootstrapping = useAuthStore((state) => state.isBootstrapping);
   const bookings = useAppDataStore((state) => state.bookings);
   const publicTours = useAppDataStore((state) => state.publicTours);
-  const booking = bookings.find((item) => item.id === id);
-  const tour = publicTours.find((item) => item.id === booking?.tourId);
+  const upsertBooking = useAppDataStore((state) => state.upsertBooking);
+  const [publicBooking, setPublicBooking] = useState<(typeof bookings)[number] | null>(null);
+  const [isLoadingBooking, setIsLoadingBooking] = useState(false);
+  const [bookingError, setBookingError] = useState('');
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
 
-  if (!booking) {
-    return (
-      <div className="w-full bg-[var(--color-background)] min-h-screen pt-16 pb-32 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <span className="material-symbols-outlined text-5xl text-[#D0C5AF]">search_off</span>
-          <p className="text-lg text-[#2A2421]/60">Không tìm thấy đơn booking</p>
-          <button onClick={() => navigate('/customer/bookings')} className="text-[#D4AF37] hover:underline text-sm">
-            Quay lại danh sách
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const isPublicLookupView = !user && lookupContact.length > 0;
+  const isCustomerRoute = location.pathname.startsWith('/customer/');
+  const booking = bookings.find((item) => item.id === id || item.bookingCode === id) ?? publicBooking;
+  const tour = publicTours.find((item) => item.id === booking?.tourId);
+  const backTarget = isPublicLookupView ? '/booking/lookup' : '/customer/bookings';
+
+  useEffect(() => {
+    if (isPublicLookupView || !isCustomerRoute || isBootstrapping) {
+      return;
+    }
+
+    if (!isAuthenticated || !user) {
+      navigate(`/login?redirect=${encodeURIComponent(`${location.pathname}${location.search}`)}`, { replace: true });
+    }
+  }, [isAuthenticated, isBootstrapping, isCustomerRoute, isPublicLookupView, location.pathname, location.search, navigate, user]);
+
+  useEffect(() => {
+    if (booking) {
+      setIsLoadingBooking(false);
+    }
+  }, [booking]);
+
+  useEffect(() => {
+    if (!id || !accessToken || !user || booking) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingBooking(true);
+    setBookingError('');
+
+    void getBookingDetail(id, accessToken)
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+        upsertBooking(response.booking);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBookingError('Không tìm thấy đơn booking');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingBooking(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, booking, id, upsertBooking, user]);
+
+  useEffect(() => {
+    if (!id || !isPublicLookupView || booking) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingBooking(true);
+    setBookingError('');
+
+    void lookupBooking(id, lookupContact)
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+        setPublicBooking(response.booking);
+        upsertBooking(response.booking);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBookingError('Không tìm thấy đơn booking');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingBooking(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [booking, id, isPublicLookupView, lookupContact, upsertBooking]);
 
   const handlePay = async () => {
+    if (!booking) {
+      return;
+    }
+
     setIsPaying(true);
 
     try {
@@ -57,15 +140,51 @@ export default function BookingDetail() {
     }
   };
 
+  if (isCustomerRoute && isBootstrapping) {
+    return (
+      <div className="w-full bg-[var(--color-background)] min-h-screen pt-16 pb-32 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <span className="material-symbols-outlined text-5xl text-[#D0C5AF]">progress_activity</span>
+          <p className="text-lg text-[#2A2421]/60">Đang xác thực phiên đăng nhập</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoadingBooking) {
+    return (
+      <div className="w-full bg-[var(--color-background)] min-h-screen pt-16 pb-32 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <span className="material-symbols-outlined text-5xl text-[#D0C5AF]">progress_activity</span>
+          <p className="text-lg text-[#2A2421]/60">Đang tải chi tiết đơn đặt chỗ</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!booking) {
+    return (
+      <div className="w-full bg-[var(--color-background)] min-h-screen pt-16 pb-32 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <span className="material-symbols-outlined text-5xl text-[#D0C5AF]">search_off</span>
+          <p className="text-lg text-[#2A2421]/60">{bookingError || 'Không tìm thấy đơn booking'}</p>
+          <button onClick={() => navigate(backTarget)} className="text-[#D4AF37] hover:underline text-sm">
+            {isPublicLookupView ? 'Quay lại tra cứu' : 'Quay lại danh sách'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full bg-[var(--color-background)]">
       <main className="max-w-4xl mx-auto px-6 pt-16 pb-32">
         <button
-          onClick={() => navigate('/customer/bookings')}
+          onClick={() => navigate(backTarget)}
           className="flex items-center gap-2 text-sm text-[var(--color-primary)] opacity-70 hover:opacity-100 transition-opacity mb-8 font-sans"
         >
           <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-          Lịch sử đặt tour
+          {isPublicLookupView ? 'Tra cứu đơn đặt chỗ' : 'Lịch sử đặt tour'}
         </button>
 
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
@@ -256,7 +375,7 @@ export default function BookingDetail() {
             </section>
 
             <section className="space-y-3">
-              {canCustomerPay(booking) && (
+              {!isPublicLookupView && canCustomerPay(booking) && (
                 <button
                   onClick={() => void handlePay()}
                   disabled={isPaying}
@@ -266,12 +385,15 @@ export default function BookingDetail() {
                   {isPaying ? 'Đang tạo link thanh toán' : `Thanh toán ${formatCurrency(booking.remainingAmount)}`}
                 </button>
               )}
-              {booking.status === 'completed' && (
+              {!isPublicLookupView && booking.status === 'completed' && (
                 booking.review ? (
-                  <div className="w-full border border-sky-300 bg-sky-50 text-sky-700 font-sans uppercase tracking-[0.1em] text-xs py-4 flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => setShowReviewModal(true)}
+                    className="w-full border border-sky-300 bg-sky-50 text-sky-700 font-sans uppercase tracking-[0.1em] text-xs py-4 hover:bg-sky-100 transition-colors flex items-center justify-center gap-2"
+                  >
                     <span className="material-symbols-outlined text-base">visibility</span>
-                    Đã có đánh giá
-                  </div>
+                    Xem đánh giá
+                  </button>
                 ) : (
                   <button
                     onClick={() => setShowReviewModal(true)}
@@ -282,7 +404,7 @@ export default function BookingDetail() {
                   </button>
                 )
               )}
-              {['pending', 'confirmed'].includes(booking.status) && (
+              {!isPublicLookupView && ['pending', 'confirmed'].includes(booking.status) && (
                 <button
                   onClick={() => setShowCancelModal(true)}
                   className="w-full border border-red-400 text-red-600 font-sans uppercase tracking-[0.1em] text-xs py-4 hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
@@ -292,22 +414,27 @@ export default function BookingDetail() {
                 </button>
               )}
               <button
-                onClick={() => navigate('/customer/bookings')}
+                onClick={() => navigate(backTarget)}
                 className="w-full border border-outline-variant/50 text-primary/60 font-sans uppercase tracking-[0.1em] text-xs py-3 hover:bg-surface transition-colors"
               >
-                Quay lại danh sách
+                {isPublicLookupView ? 'Quay lại tra cứu' : 'Quay lại danh sách'}
               </button>
             </section>
           </div>
         </div>
       </main>
 
-      {showCancelModal && (
+      {!isPublicLookupView && showCancelModal && (
         <CancelBookingModal booking={booking} onClose={() => setShowCancelModal(false)} />
       )}
 
-      {showReviewModal && (
-        <TourReviewModal bookingId={booking.id} tourId={booking.tourId} onClose={() => setShowReviewModal(false)} />
+      {!isPublicLookupView && showReviewModal && (
+        <TourReviewModal
+          bookingId={booking.id}
+          tourId={booking.tourId}
+          review={booking.review}
+          onClose={() => setShowReviewModal(false)}
+        />
       )}
     </div>
   );

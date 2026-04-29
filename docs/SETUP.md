@@ -1,11 +1,11 @@
 # Setup Nhanh
 
-## 1. Chạy app
+## 1. Chay app
 
-Cần có:
+Can co:
 
-- Docker Desktop đang mở.
-- File `.env` được gửi riêng.
+- Docker Desktop dang mo
+- file `backend/.env`
 
 Clone repo:
 
@@ -14,29 +14,41 @@ git clone https://github.com/initforge/tourist-grade.git
 cd tourist-grade
 ```
 
-Copy file `.env` vào đúng vị trí:
+Copy file `.env` vao dung vi tri:
 
 ```text
 tourist-grade/backend/.env
 ```
 
-Chạy một lệnh:
+Chay setup:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/setup-local.ps1
 ```
 
-Script tự build Docker, chạy database/backend/frontend, mở Cloudflare tunnel, cập nhật `PAYOS_WEBHOOK_URL`, restart backend và confirm webhook PayOS.
+Script se build Docker, chay database/backend/frontend, mo Cloudflare tunnel, cap nhat `PAYOS_WEBHOOK_URL`, restart backend va confirm webhook PayOS.
 
-Mở web:
+Script khong tu dong seed du lieu. Neu can du lieu mau, chay mot trong hai cach sau:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup-local.ps1 -RunSeed
+```
+
+hoac:
+
+```powershell
+docker compose exec backend npm run prisma:seed
+```
+
+Mo web:
 
 ```text
 http://localhost:8080
 ```
 
-## 2. Tài khoản
+## 2. Tai khoan seed
 
-Mật khẩu tất cả tài khoản:
+Mat khau cho cac tai khoan seed:
 
 ```text
 123456
@@ -48,43 +60,15 @@ Mật khẩu tất cả tài khoản:
 - `sales@travela.vn`
 - `customer@travela.vn`
 
-## 3. Mở lại lần sau
-
-Chạy lại lệnh này:
+## 3. Chay lai lan sau
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/setup-local.ps1
 ```
 
-Cloudflare quick tunnel có thể đổi link mỗi lần chạy. Script tự cập nhật webhook PayOS, không cần sửa tay.
+Chay lai script se khong tu seed lai, nen se khong xoa du lieu hien co trong database.
 
-## 4. Test nhanh
-
-Backend:
-
-```powershell
-cd backend
-npm run build
-npm test
-```
-
-Frontend:
-
-```powershell
-cd frontend
-npm run build
-```
-
-E2E khi Docker đang chạy:
-
-```powershell
-cd frontend
-$env:PLAYWRIGHT_BASE_URL='http://localhost:8080'
-$env:PLAYWRIGHT_API_BASE_URL='http://localhost:4000/api/v1'
-npx playwright test tests/customer-flow.spec.ts tests/ui-surface-audit.spec.ts --workers=1
-```
-
-## 5. Lệnh hữu ích
+## 4. Lenh huu ich
 
 Xem backend log:
 
@@ -92,14 +76,8 @@ Xem backend log:
 docker compose logs -f backend
 ```
 
-Reset dữ liệu booking test:
+Reset booking test fixtures:
 
 ```powershell
 Invoke-RestMethod -Method Post -Uri "http://localhost:4000/api/v1/dev/reset-booking-fixtures"
 ```
-
-## 6. Tunnel cố định
-
-Quick tunnel không giữ URL cố định. Muốn link cố định thì cần Cloudflare named tunnel + domain thật.
-
-Nếu chỉ chạy local cho khách xem/test thì dùng script là đủ.

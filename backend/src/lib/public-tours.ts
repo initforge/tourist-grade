@@ -17,10 +17,6 @@ type ReviewWithUser = TourReview & {
 
 const PUBLICLY_VISIBLE_INSTANCE_STATUSES = new Set([
   'DANG_MO_BAN',
-  'CHO_NHAN_DIEU_HANH',
-  'CHO_DU_TOAN',
-  'CHO_DUYET_DU_TOAN',
-  'SAN_SANG_TRIEN_KHAI',
 ]);
 
 function toPlainObject(value: unknown) {

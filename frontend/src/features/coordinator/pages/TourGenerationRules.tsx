@@ -145,7 +145,7 @@ function getNextDepartureAfter(program: TourProgram, afterDate?: string) {
   const anchor = parseDateKey(afterDate);
   if (!anchor) return '';
 
-  if (program.tourType === 'mua_le') {
+  if ((program.selectedDates?.length ?? 0) > 0) {
     const futureHolidayDate = [...(program.selectedDates ?? [])]
       .sort((left, right) => left.localeCompare(right))
       .find(date => date > (afterDate ?? ''));
@@ -172,7 +172,7 @@ function buildDepartureDates(program: TourProgram, startDate: string, endDate: s
   const end = parseDateKey(endDate);
   if (!start || !end || end < start) return [];
 
-  if (program.tourType === 'mua_le') {
+  if ((program.selectedDates?.length ?? 0) > 0) {
     return [...(program.selectedDates ?? [])]
       .filter(date => date >= startDate && date <= endDate)
       .sort((left, right) => left.localeCompare(right));

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { expireOverdueDepositBookings, expireUnpaidBookings } from '../lib/booking-lifecycle.js';
+import { runBookingLifecycleJobs } from '../lib/booking-lifecycle.js';
 import { asyncHandler } from '../lib/http.js';
 import {
   mapBooking,
@@ -22,8 +22,7 @@ export function createBootstrapRouter() {
   const router = Router();
 
   router.get('/', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
-    await expireUnpaidBookings(prisma);
-    await expireOverdueDepositBookings(prisma);
+    await runBookingLifecycleJobs(prisma);
 
     const [
       users,
@@ -78,7 +77,6 @@ export function createBootstrapRouter() {
           confirmedBy: { select: { fullName: true } },
           cancelledConfirmedBy: { select: { fullName: true } },
           refundedBy: { select: { fullName: true } },
-          refundBillEditedBy: { select: { fullName: true } },
           tourInstance: {
             include: {
               program: true,

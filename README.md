@@ -1,19 +1,30 @@
 # Travela
 
-Travela là hệ thống đặt tour và vận hành tour cho khách hàng, sales, coordinator, manager và admin.
+Travela la he thong dat tour va van hanh tour cho customer, sales, coordinator, manager va admin.
 
-## Chạy nhanh
+## Chay nhanh
 
-Cần Docker Desktop và file `backend/.env` được gửi riêng.
+Can:
+
+- Docker Desktop
+- file `backend/.env`
 
 ```powershell
 git clone https://github.com/initforge/tourist-grade.git
 cd tourist-grade
-# copy file .env vào đúng: tourist-grade/backend/.env
+# copy file .env vao: tourist-grade/backend/.env
 powershell -ExecutionPolicy Bypass -File scripts/setup-local.ps1
 ```
 
-Mở web:
+Setup script khong tu dong seed du lieu.
+
+Khi can du lieu mau, chay thu cong:
+
+```powershell
+docker compose exec backend npm run prisma:seed
+```
+
+Mo web:
 
 ```text
 http://localhost:8080
@@ -21,8 +32,8 @@ http://localhost:8080
 
 ## Docs
 
-- `docs/SETUP.md`: hướng dẫn chạy local nhanh nhất.
-- `docs/00-MUC-LUC.md`: mục lục tài liệu.
-- `docs/01-TONG-QUAN.md`: tổng quan dự án.
-- `docs/02-KIEN-TRUC.md`: kiến trúc hệ thống và cách các phần nối với nhau.
-- `docs/03-LUONG-NGHIEP-VU.md`: các luồng nghiệp vụ chính và trạng thái dữ liệu.
+- `docs/SETUP.md`: huong dan chay local nhanh nhat.
+- `docs/00-MUC-LUC.md`: muc luc tai lieu.
+- `docs/01-TONG-QUAN.md`: tong quan du an.
+- `docs/02-KIEN-TRUC.md`: kien truc he thong.
+- `docs/03-LUONG-NGHIEP-VU.md`: cac luong nghiep vu chinh.

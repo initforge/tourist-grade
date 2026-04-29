@@ -84,6 +84,78 @@ test.describe('Coordinator live E2E against docker stack', () => {
     await expect(page.getByText(name)).toBeVisible();
   });
 
+  test('keeps zero-night create flow free of lodging fields, blocks duplicate departure spots, and shows a validation toast', async ({ page }) => {
+    await loginAs(page, 'coordinator', '/coordinator/tour-programs/create', { clearBookings: true });
+
+    const duration = page.locator('section').filter({ hasText: /Thời lượng tour/i }).first();
+    await duration.locator('input[type="number"]').nth(0).fill('1');
+    await duration.locator('input[type="number"]').nth(1).fill('0');
+
+    const route = page.locator('section').filter({ hasText: /Tên chương trình tour/i }).first();
+    await route.locator('input').first().fill(`Zero-night validation ${uniqueSuffix()}`);
+    await route.locator('select').nth(0).selectOption({ label: 'Hà Nội' });
+    await expect(route.getByLabel(/Tiêu chuẩn lưu trú/i)).toHaveCount(0);
+
+    const sightseeingOptions = await route.locator('select').nth(1).locator('option').allTextContents();
+    expect(sightseeingOptions.join(' | ')).not.toContain('Hà Nội');
+
+    await route.locator('select').nth(1).selectOption({ label: 'Đà Nẵng' });
+    const departureOptions = await route.locator('select').nth(0).locator('option').allTextContents();
+    expect(departureOptions.join(' | ')).not.toContain('Đà Nẵng');
+
+    await page.getByRole('button', { name: /Tiếp theo: Lịch trình/i }).click();
+    await expect(page.getByText(/Cần bổ sung thông tin trước khi chuyển bước/i)).toBeVisible();
+
+    await route.locator('textarea').fill('Kiểm tra toast validation và loại bỏ lưu trú cho tour 0 đêm.');
+    const startInput = page.getByLabel(/Ngày bắt đầu/i);
+    const endInput = page.getByLabel(/Ngày kết thúc/i);
+    const startDate = (await startInput.getAttribute('min')) ?? await startInput.inputValue();
+    const endDate = new Date(`${startDate}T00:00:00`);
+    endDate.setDate(endDate.getDate() + 7);
+    await startInput.fill(startDate);
+    await endInput.fill(endDate.toISOString().slice(0, 10));
+    await page.getByRole('button', { name: /T2|T3|T4|T5|T6|T7|CN/ }).nth(0).click();
+
+    await page.getByRole('button', { name: /Tiếp theo: Lịch trình/i }).click();
+    await expect(page.getByLabel(/Địa điểm lưu trú/i)).toHaveCount(0);
+  });
+
+  test('shows sticky month headers for year-round departures and lets coordinators remove projected dates', async ({ page }) => {
+    await loginAs(page, 'coordinator', '/coordinator/tour-programs/create', { clearBookings: true });
+
+    const duration = page.locator('section').filter({ hasText: /Thời lượng tour/i }).first();
+    await duration.locator('input[type="number"]').nth(0).fill('3');
+    await duration.locator('input[type="number"]').nth(1).fill('2');
+
+    const route = page.locator('section').filter({ hasText: /Tên chương trình tour/i }).first();
+    await route.locator('input').first().fill(`Sticky month ${uniqueSuffix()}`);
+    await route.locator('select').nth(0).selectOption({ label: 'Hà Nội' });
+    await route.locator('select').nth(1).selectOption({ label: 'Đà Nẵng' });
+    await route.getByLabel(/Tiêu chuẩn lưu trú/i).selectOption({ label: '4 sao' });
+    await route.locator('textarea').fill('Kiểm tra sticky month header và xóa ngày dự kiến.');
+
+    const startInput = page.getByLabel(/Ngày bắt đầu/i);
+    const endInput = page.getByLabel(/Ngày kết thúc/i);
+    const startDate = (await startInput.getAttribute('min')) ?? await startInput.inputValue();
+    const endDate = new Date(`${startDate}T00:00:00`);
+    endDate.setDate(endDate.getDate() + 20);
+    await startInput.fill(startDate);
+    await endInput.fill(endDate.toISOString().slice(0, 10));
+    await page.getByRole('button', { name: 'T2' }).click();
+
+    const removeButtons = page.locator('button[aria-label^="Xóa ngày"]');
+    await expect.poll(async () => removeButtons.count()).toBeGreaterThan(0);
+    const countBefore = await removeButtons.count();
+
+    const stickyHeader = page.locator('.sticky').filter({ hasText: /Tháng \d+\/\d+/i }).first();
+    await expect(stickyHeader).toBeVisible();
+    const stickyPosition = await stickyHeader.evaluate((node) => getComputedStyle(node).position);
+    expect(stickyPosition).toBe('sticky');
+
+    await removeButtons.first().click();
+    await expect(removeButtons).toHaveCount(countBefore - 1);
+  });
+
   test('creates a pending tour-rule request through the real backend', async ({ page }) => {
     await loginAs(page, 'coordinator', '/coordinator/tour-rules', { clearBookings: true });
 

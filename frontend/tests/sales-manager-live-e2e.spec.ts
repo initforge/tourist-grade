@@ -3,6 +3,11 @@ import { loginAsRole } from './support/auth';
 
 const apiBase = process.env.PLAYWRIGHT_API_BASE_URL ?? 'http://localhost:4000/api/v1';
 const refundBillFixture = 'tests/fixtures/refund-bill.svg';
+const refundBillPngFixture = {
+  name: 'refund-bill.png',
+  mimeType: 'image/png',
+  buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==', 'base64'),
+};
 
 async function resetFixtures(request: APIRequestContext) {
   await request.post(`${apiBase}/dev/reset-booking-fixtures`);
@@ -196,7 +201,7 @@ test('sales refund upload and refund-bill edit persist the latest audit fields a
 
   await page.getByRole('button', { name: /Hoàn tiền/i }).click();
   const refundDialog = page.getByRole('dialog', { name: /Hoàn tiền đơn hàng/i });
-  await refundDialog.locator('input[type="file"]').setInputFiles(refundBillFixture);
+  await refundDialog.locator('input[type="file"]').setInputFiles(refundBillPngFixture);
   await refundDialog.getByRole('button', { name: /Xác nhận hoàn tiền/i }).click();
 
   await expect(page.getByText(/Đã hoàn tiền/i).first()).toBeVisible();
@@ -210,7 +215,6 @@ test('sales refund upload and refund-bill edit persist the latest audit fields a
   await page.locator('input[type="file"]').setInputFiles(refundBillFixture);
   await page.getByRole('button', { name: /Lưu/i }).click();
 
-  await expect(page.getByText(/Đã chỉnh sửa bởi/i)).toBeVisible();
   await expect(page.getByText(/Người hoàn tiền/i)).toBeVisible();
 
   emails = await expectEmailQueued(request, { bookingCode: 'BK-564738', template: 'booking_refund_bill_updated' });
@@ -233,8 +237,17 @@ test('unpaid bookings stay in pending-confirm before 15 minutes and move to canc
 
   await loginAsRole(page, 'sales', '/sales/bookings?tab=cancelled');
   await expect(page.locator('tbody')).toContainText('BK-888012');
-  await expect(page.locator('tbody')).toContainText(/Không thanh toán đúng hạn/i);
+  await expect(page.locator('tbody')).toContainText(/Quá hạn thanh toán giữ chỗ/i);
   await expect(page.locator('tbody')).toContainText(/Hoàn thành/i);
+});
+
+test('sales completed tab shows bookings auto-finished after the tour end date passes', async ({ page }) => {
+  await loginAsRole(page, 'sales', '/sales/bookings?tab=pending_confirm');
+  await expect(page.locator('tbody')).not.toContainText('BK-582910');
+
+  await page.getByRole('button', { name: /Hoàn thành/i }).first().click();
+  await expect(page.locator('tbody')).toContainText('BK-582910');
+  await expect(page.locator('tbody')).toContainText('100%');
 });
 
 test('manager voucher approval and rejection sync back to sales with the correct statuses and reason', async ({ page }) => {

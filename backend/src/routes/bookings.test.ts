@@ -40,10 +40,11 @@ vi.mock('../lib/prisma.js', () => ({
 
 vi.mock('../middleware/auth.js', () => ({
   authenticate: (req: express.Request & { auth?: unknown }, _res: express.Response, next: express.NextFunction) => {
+    const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
     req.auth = {
-      sub: 'customer-1',
-      role: 'customer',
-      name: 'Le Van C',
+      sub: token === 'sales-token' ? 'sales-1' : 'customer-1',
+      role: token === 'sales-token' ? 'sales' : 'customer',
+      name: token === 'sales-token' ? 'Nhân Viên Kinh Doanh' : 'Le Van C',
     };
     next();
   },
@@ -315,6 +316,133 @@ describe('bookings routes', () => {
 
     expect(response.status).toBe(401);
     expect(response.body.message).toBe('Contact verification failed');
+    expect(prismaMock.booking.update).not.toHaveBeenCalled();
+  });
+
+  it('stores the latest refund audit on the main refund fields and queues the refund-completed email', async () => {
+    const booking = {
+      ...createBookingFixture(),
+      status: 'CANCELLED',
+      refundStatus: 'PENDING',
+      paymentStatus: 'PAID',
+      refundAmount: 28000000,
+      refundBillUrl: null,
+      refundedById: null,
+      refundedAt: null,
+      payloadJson: {},
+    };
+
+    prismaMock.booking.findFirst.mockResolvedValue(booking);
+    prismaMock.booking.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+      ...booking,
+      ...Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)),
+      payloadJson: data.payloadJson ?? booking.payloadJson,
+    }));
+
+    const response = await request(createTestApp())
+      .patch('/B001')
+      .set('Authorization', 'Bearer sales-token')
+      .send({
+        refundStatus: 'refunded',
+        refundBillUrl: 'data:image/png;base64,Y29tcGxldGVkLWJpbGw=',
+      });
+
+    expect(response.status).toBe(200);
+    expect(prismaMock.booking.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'B001' },
+      data: expect.objectContaining({
+        refundStatus: 'REFUNDED',
+        paymentStatus: 'REFUNDED',
+        refundBillUrl: 'data:image/png;base64,Y29tcGxldGVkLWJpbGw=',
+        refundedById: 'sales-1',
+        refundedAt: expect.any(Date),
+      }),
+    }));
+    expect(prismaMock.emailOutbox.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        template: 'booking_refund_completed',
+        bookingId: 'B001',
+      }),
+    }));
+    expect(response.body.booking.refundStatus).toBe('refunded');
+  });
+
+  it('overwrites refund audit fields on bill replacement and queues the bill-updated email', async () => {
+    const booking = {
+      ...createBookingFixture(),
+      status: 'CANCELLED',
+      refundStatus: 'REFUNDED',
+      paymentStatus: 'REFUNDED',
+      refundAmount: 28000000,
+      refundBillUrl: 'data:image/png;base64,b2xkLWJpbGw=',
+      refundedById: 'sales-old',
+      refundedAt: new Date('2026-03-26T09:00:00.000Z'),
+      payloadJson: {
+        refundedBy: 'Nhân Viên Kinh Doanh',
+        refundedAt: '2026-03-26T09:00:00.000Z',
+        refundBillEditedBy: 'Nhân Viên Kinh Doanh',
+        refundBillEditedAt: '2026-03-26T10:30:00.000Z',
+      },
+    };
+
+    prismaMock.booking.findFirst.mockResolvedValue(booking);
+    prismaMock.booking.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+      ...booking,
+      ...Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)),
+      payloadJson: data.payloadJson ?? booking.payloadJson,
+    }));
+
+    const response = await request(createTestApp())
+      .patch('/B001')
+      .set('Authorization', 'Bearer sales-token')
+      .send({
+        refundBillUrl: 'data:image/png;base64,bmV3LWJpbGw=',
+      });
+
+    expect(response.status).toBe(200);
+    expect(prismaMock.booking.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'B001' },
+      data: expect.objectContaining({
+        refundBillUrl: 'data:image/png;base64,bmV3LWJpbGw=',
+        refundedById: 'sales-1',
+        refundedAt: expect.any(Date),
+      }),
+    }));
+    const updatePayload = prismaMock.booking.update.mock.calls[0]?.[0]?.data?.payloadJson as Record<string, unknown>;
+    expect(updatePayload.refundedBy).toBe('Nhân Viên Kinh Doanh');
+    expect(updatePayload.refundedAt).toEqual(expect.any(String));
+    expect(updatePayload).not.toHaveProperty('refundBillEditedBy');
+    expect(updatePayload).not.toHaveProperty('refundBillEditedAt');
+    expect(prismaMock.emailOutbox.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        template: 'booking_refund_bill_updated',
+        bookingId: 'B001',
+      }),
+    }));
+  });
+
+  it('rejects refund bills with unsupported data URLs before persisting', async () => {
+    prismaMock.booking.findFirst.mockResolvedValue({
+      ...createBookingFixture(),
+      status: 'CANCELLED',
+      refundStatus: 'PENDING',
+      paymentStatus: 'PAID',
+      refundAmount: 28000000,
+      refundBillUrl: null,
+      refundedById: null,
+      refundedAt: null,
+      payloadJson: {},
+    });
+
+    const response = await request(createTestApp())
+      .patch('/B001')
+      .set('Authorization', 'Bearer sales-token')
+      .send({
+        refundStatus: 'refunded',
+        refundBillUrl: 'data:text/plain;base64,ZmFrZQ==',
+      });
+
+    expect(response.status).toBe(400);
     expect(prismaMock.booking.update).not.toHaveBeenCalled();
   });
 

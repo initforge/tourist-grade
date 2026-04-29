@@ -249,6 +249,27 @@ test.describe('Coordinator create tour program wizard', () => {
     expect(arrivalOptions.join(' | ')).not.toContain('Quảng Trị');
   });
 
+  test('hides lodging standard for zero-night tours and prevents departure-sightseeing duplication in both selectors', async ({ page }) => {
+    await openCreateWizard(page);
+
+    const duration = durationSection(page);
+    await duration.locator('input[type="number"]').nth(0).fill('1');
+    await duration.locator('input[type="number"]').nth(1).fill('0');
+
+    const route = routeSection(page);
+    await expect(route.getByLabel('Tiêu chuẩn lưu trú')).toHaveCount(0);
+
+    await route.locator('input').first().fill('Tour không lưu trú');
+    await route.locator('select').nth(0).selectOption({ label: 'Hà Nội' });
+
+    const sightseeingOptions = await route.locator('select').nth(1).locator('option').allTextContents();
+    expect(sightseeingOptions.join(' | ')).not.toContain('Hà Nội');
+
+    await addSightseeingSpot(route, 'Đà Nẵng');
+    const departureOptions = await route.locator('select').nth(0).locator('option').allTextContents();
+    expect(departureOptions.join(' | ')).not.toContain('Đà Nẵng');
+  });
+
   test('enforces year-round date rules, disables end date until start is valid, and hides the preview list until enough data exists', async ({ page }) => {
     await openCreateWizard(page);
     await fillRequiredBaseInfo(page);
@@ -282,6 +303,32 @@ test.describe('Coordinator create tour program wizard', () => {
 
     await startInput.fill(rules.laterStart);
     await expect(endInput).toHaveValue('');
+  });
+
+  test('shows a sticky month header for year-round preview dates and lets coordinators delete individual projected dates', async ({ page }) => {
+    await openCreateWizard(page);
+    await fillRequiredBaseInfo(page);
+
+    const rules = await getDateRules(page);
+    const tourType = tourTypeSection(page);
+    const startInput = tourType.locator('input[type="date"]').nth(0);
+    const endInput = tourType.locator('input[type="date"]').nth(1);
+
+    await startInput.fill(rules.minimumStart);
+    await endInput.fill(rules.validEnd);
+    await page.getByRole('button', { name: 'T2' }).click();
+
+    const removeButtons = page.getByRole('button', { name: /Xóa ngày/i });
+    const countBefore = await removeButtons.count();
+    expect(countBefore).toBeGreaterThan(0);
+
+    const stickyHeader = tourType.locator('.sticky').first();
+    await expect(stickyHeader).toBeVisible();
+    const stickyPosition = await stickyHeader.evaluate((node) => getComputedStyle(node).position);
+    expect(stickyPosition).toBe('sticky');
+
+    await removeButtons.first().click();
+    await expect(removeButtons).toHaveCount(countBefore - 1);
   });
 
   test('limits holiday choices to dates at least half a month ahead', async ({ page }) => {

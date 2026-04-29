@@ -92,8 +92,6 @@ export function createDevRouter() {
         cancelledConfirmedAt: null,
         refundedById: null,
         refundedAt: null,
-        refundBillEditedById: null,
-        refundBillEditedAt: null,
         payloadJson: {
           paymentRatio: 'deposit',
           paymentMethod: 'bank',
@@ -155,7 +153,6 @@ export function createDevRouter() {
         confirmedBy: { select: { fullName: true } },
         cancelledConfirmedBy: { select: { fullName: true } },
         refundedBy: { select: { fullName: true } },
-        refundBillEditedBy: { select: { fullName: true } },
         tourInstance: {
           include: {
             program: true,

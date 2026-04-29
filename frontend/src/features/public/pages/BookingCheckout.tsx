@@ -6,6 +6,7 @@ import {
   createBookingPaymentLink,
   createPublicBooking,
   getBookingDetail,
+  getPublicTourDetail,
   lookupBooking,
   updateCheckoutBooking,
   validatePublicPromoCode,
@@ -122,6 +123,23 @@ function clearDraftFromStorage() {
   }
 }
 
+function isSuccessfulPaymentStatus(paymentStatus?: Booking['paymentStatus']) {
+  return paymentStatus === 'partial' || paymentStatus === 'paid' || paymentStatus === 'refunded';
+}
+
+function getPassengerDisplayNumber(passengers: Passenger[], index: number) {
+  const target = passengers[index];
+  if (!target) {
+    return index + 1;
+  }
+
+  return passengers.slice(0, index + 1).filter((passenger) => passenger.type === target.type).length;
+}
+
+function shouldResetAppliedPromo(promoCode: string, discountAmount: number) {
+  return promoCode.trim().length > 0 || discountAmount > 0;
+}
+
 export default function BookingCheckout() {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
@@ -158,6 +176,7 @@ export default function BookingCheckout() {
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isStartingPayment, setIsStartingPayment] = useState(false);
   const [createdBooking, setCreatedBooking] = useState<Booking | null>(null);
+  const [liveScheduleAvailableSeats, setLiveScheduleAvailableSeats] = useState<number | null>(null);
   const [paymentUrl, setPaymentUrl] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const [error, setError] = useState('');
@@ -173,7 +192,7 @@ export default function BookingCheckout() {
   const priceChild = schedule?.priceChild ?? tour?.price.child ?? 0;
   const priceInfant = schedule?.priceInfant ?? tour?.price.infant ?? 0;
   const singleRoomSurcharge = schedule?.singleRoomSurcharge ?? 0;
-  const availableSeats = schedule?.availableSeats ?? 0;
+  const availableSeats = liveScheduleAvailableSeats ?? schedule?.availableSeats ?? 0;
   const existingHeldSeats =
     effectiveBooking
     && (effectiveBooking.instanceCode === (schedule?.instanceCode ?? schedule?.id) || effectiveBooking.tourDate === schedule?.date)
@@ -201,6 +220,13 @@ export default function BookingCheckout() {
       return;
     }
 
+    const draftBooking = (draft.booking as Booking | null | undefined) ?? null;
+    const draftStep = (draft.activeStep as CheckoutStep | undefined) ?? 0;
+    if (draftStep === 2 || isSuccessfulPaymentStatus(draftBooking?.paymentStatus)) {
+      clearDraftFromStorage();
+      return;
+    }
+
     setContact((current) => ({
       ...current,
       ...(draft.contact as ContactState | undefined),
@@ -212,8 +238,8 @@ export default function BookingCheckout() {
     setDiscountAmount(Number(draft.discountAmount ?? 0));
     setPaymentMethod((draft.paymentMethod as 'bank' | 'card' | undefined) ?? 'bank');
     setPaymentRatio((draft.paymentRatio as 'deposit' | 'full' | undefined) ?? (isDepositDisabled ? 'full' : 'full'));
-    setCreatedBooking(draft.booking as Booking | null ?? null);
-    setActiveStep((draft.activeStep as CheckoutStep | undefined) ?? 0);
+    setCreatedBooking(draftBooking);
+    setActiveStep(draftStep);
   }, [isDepositDisabled, schedule, slug, tour]);
 
   useEffect(() => {
@@ -243,13 +269,60 @@ export default function BookingCheckout() {
   }, [accessToken, bookingIdParam, createdBooking, effectiveBooking, upsertBooking]);
 
   useEffect(() => {
+    if (!slug || !schedule) {
+      setLiveScheduleAvailableSeats(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    void getPublicTourDetail(slug)
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+
+        const latestSchedule = response.tour.departureSchedule.find((item) => item.id === schedule.id);
+        setLiveScheduleAvailableSeats(latestSchedule?.availableSeats ?? schedule.availableSeats ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLiveScheduleAvailableSeats(schedule.availableSeats ?? null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [createdBooking?.id, createdBooking?.passengers.length, schedule, slug]);
+
+  useEffect(() => {
     if (isDepositDisabled && paymentRatio === 'deposit') {
       setPaymentRatio('full');
     }
   }, [isDepositDisabled, paymentRatio]);
 
   useEffect(() => {
+    if (!bookingIdParam || !checkoutBooking) {
+      return;
+    }
+
+    if (isSuccessfulPaymentStatus(checkoutBooking.paymentStatus)) {
+      clearDraftFromStorage();
+      setActiveStep(2);
+      return;
+    }
+
+    setActiveStep((current) => (current === 2 ? current : 1));
+  }, [bookingIdParam, checkoutBooking]);
+
+  useEffect(() => {
     if (!tour || !schedule) {
+      return;
+    }
+
+    if (activeStep === 2 || isSuccessfulPaymentStatus(checkoutBooking?.paymentStatus)) {
+      clearDraftFromStorage();
       return;
     }
 
@@ -328,18 +401,29 @@ export default function BookingCheckout() {
     )));
   };
 
+  const resetAppliedPromo = () => {
+    if (!shouldResetAppliedPromo(promoCode, discountAmount)) {
+      return;
+    }
+
+    setDiscountAmount(0);
+    setPromoMessage('');
+  };
+
   const syncPassengerCounts = (next: Counts) => {
     if (next.adult + next.child + next.infant > selectableSeatLimit) {
       setCountError(`Số lượng hành khách không được vượt quá ${selectableSeatLimit} chỗ trống.`);
       return;
     }
 
+    resetAppliedPromo();
     setCountError('');
     setCounts(next);
     setPassengers((current) => buildPassengers(next, current));
   };
 
   const toggleSingleRoom = (index: number, checked: boolean) => {
+    resetAppliedPromo();
     updatePassenger(index, 'singleRoomSupplement', checked ? singleRoomSurcharge : 0);
   };
 
@@ -448,6 +532,8 @@ export default function BookingCheckout() {
 
       upsertBooking(response.booking);
       setCreatedBooking(response.booking);
+      setDiscountAmount(response.booking.discountAmount ?? 0);
+      setPromoMessage(response.booking.promoCode && (response.booking.discountAmount ?? 0) > 0 ? `Đã áp dụng ${response.booking.promoCode}` : '');
       setActiveStep(1);
       setStatusMessage(checkoutBookingId ? 'Đã cập nhật đơn đặt chỗ.' : 'Đã tạo đơn đặt chỗ. Vui lòng hoàn tất thanh toán trong 15 phút.');
       if (response.booking.review) {
@@ -570,7 +656,7 @@ export default function BookingCheckout() {
                 <section className="bg-white border border-outline-variant/30 p-6 space-y-5">
                   <div className="flex items-center justify-between gap-4 flex-wrap">
                     <h2 className="font-headline text-xl text-primary">Số lượng hành khách</h2>
-                    <p className="text-sm text-primary/60">Còn {selectableSeatLimit} chỗ trống</p>
+                    <p className="text-sm text-primary/60">Còn {availableSeats} chỗ trống</p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {([
@@ -616,7 +702,7 @@ export default function BookingCheckout() {
                         <div key={`${passenger.type}-${index}`} className="grid grid-cols-1 md:grid-cols-2 gap-4 border border-outline-variant/20 p-4">
                           <div className="md:col-span-2 flex items-center justify-between gap-3">
                             <div>
-                              <p className="font-medium text-primary">{getPassengerTypeLabel(passenger.type)} {index + 1}</p>
+                              <p className="font-medium text-primary">{getPassengerTypeLabel(passenger.type)} {getPassengerDisplayNumber(passengers, index)}</p>
                               <p className="text-xs text-primary/45">Đúng theo giấy tờ tùy thân</p>
                             </div>
                             {passenger.type === 'adult' && singleRoomSurcharge > 0 && (
@@ -772,8 +858,8 @@ export default function BookingCheckout() {
             )}
           </div>
 
-          <div className="w-full lg:w-[360px] shrink-0">
-            <div className="lg:sticky lg:top-24 bg-white border border-outline-variant/30 overflow-hidden shadow-sm">
+          <div className="w-full lg:w-[360px] shrink-0 lg:self-start lg:sticky lg:top-24">
+            <div className="bg-white border border-outline-variant/30 overflow-hidden shadow-sm">
               <div className="relative">
                 <img alt={tour.title} src={tour.image} className="w-full h-44 object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
@@ -802,7 +888,19 @@ export default function BookingCheckout() {
                 <div className="space-y-2">
                   <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Mã giảm giá</p>
                   <div className="flex gap-2">
-                    <input value={promoCode} onChange={(event) => setPromoCode(event.target.value.toUpperCase())} className="w-full border border-outline-variant/50 px-3 py-2 text-sm" placeholder="Nhập mã..." />
+                    <input
+                      value={promoCode}
+                      onChange={(event) => {
+                        const nextPromoCode = event.target.value.toUpperCase();
+                        if (nextPromoCode !== promoCode) {
+                          setPromoMessage('');
+                          setDiscountAmount(0);
+                        }
+                        setPromoCode(nextPromoCode);
+                      }}
+                      className="w-full border border-outline-variant/50 px-3 py-2 text-sm"
+                      placeholder="Nhập mã..."
+                    />
                     <button onClick={() => void applyPromoCode()} className="px-4 py-2 border border-outline-variant/50 text-xs font-semibold text-primary hover:border-primary">Áp dụng</button>
                   </div>
                   {promoMessage && <p className="text-sm text-emerald-700">{promoMessage}</p>}

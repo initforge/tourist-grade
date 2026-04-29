@@ -459,14 +459,12 @@ export async function resetBookingFixtures(prisma: PrismaClient) {
       cancellationReason: 'Sức khỏe không cho phép',
       cancelledAt: toDate('2026-03-25T14:00:00Z'),
       refundedById: sales.id,
-      refundedAt: toDate('2026-03-26T09:00:00Z'),
+      refundedAt: toDate('2026-03-26T10:30:00Z'),
       refundAmount: 25600000,
       payloadJson: {
         cancelledConfirmedBy: 'Nhân Viên Kinh Doanh',
         cancelledConfirmedAt: '2026-03-25T14:15:00Z',
         refundedBy: 'Nhân Viên Kinh Doanh',
-        refundBillEditedBy: 'Nhân Viên Kinh Doanh',
-        refundBillEditedAt: '2026-03-26T10:30:00Z',
       },
       createdAt: toDate('2026-03-18T11:00:00Z'),
       passengers: {

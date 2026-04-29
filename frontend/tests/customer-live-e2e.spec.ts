@@ -75,6 +75,10 @@ async function getBooking(request: APIRequestContext, accessToken: string, booki
   return payload.booking as Record<string, unknown>;
 }
 
+function formatMoney(value: number) {
+  return `${value.toLocaleString('vi-VN')}đ`;
+}
+
 function createPayOSWebhookSignature(data: Record<string, string | number>) {
   const query = Object.keys(data)
     .sort()
@@ -128,7 +132,7 @@ test('customer public surfaces hide lookup for logged-in users, persist wishlist
   expect(stickyMeta?.top).not.toBe('auto');
 
   const scheduleRows = page.locator('#tour-schedule-table tbody tr');
-  await expect(scheduleRows).toHaveCount(2);
+  await expect(scheduleRows).toHaveCount(1);
   const remainingSeatTexts = await scheduleRows.locator('td:nth-child(8)').allInnerTexts();
   for (const seatText of remainingSeatTexts) {
     const [available] = seatText.split('/');
@@ -152,6 +156,45 @@ test('customer public surfaces hide lookup for logged-in users, persist wishlist
     const items = await getWishlist(page.request, accessToken);
     return items.some((item) => item.tourId === 'T001');
   }).toBe(true);
+});
+
+test('public landing removes technical clutter and keeps only working search controls', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForLoadState('domcontentloaded');
+
+  await expect(page.locator('body')).not.toContainText('Dữ liệu từ hệ thống');
+  await expect(page.locator('body')).not.toContainText('backend local qua API');
+  await expect(page.getByText(/^Thời gian$/)).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: /Tour đang mở bán/i })).toBeVisible();
+
+  await page.getByPlaceholder('Hạ Long, Ninh Thuận, Kyoto...').fill('Hạ Long');
+  await page.getByRole('button', { name: /Tìm kiếm tour/i }).click();
+  await expect(page).toHaveURL(/\/tours\?q=/);
+});
+
+test('public booking lookup can open booking detail without requiring login', async ({ page }) => {
+  await page.goto('/booking/lookup');
+  await page.getByPlaceholder('VD: BK-582910').fill('BK-394821');
+  await page.getByPlaceholder('0988 123 456').fill('0912345678');
+  await page.getByRole('button', { name: /Tra cứu thông tin/i }).click();
+
+  await expect(page.getByText('BK-394821')).toBeVisible();
+  await page.getByRole('button', { name: /Xem chi tiết/i }).click();
+
+  await expect(page).toHaveURL(/\/booking\/lookup\/BK-394821\?contact=0912345678$/);
+  await expect(page).not.toHaveURL(/\/login/);
+  await expect(page.getByRole('heading', { name: /Chi tiết đơn đặt chỗ/i })).toBeVisible();
+  await expect(page.locator('body')).toContainText('BK-394821');
+
+  await page.reload();
+  await expect(page).not.toHaveURL(/\/login/);
+  await expect(page.getByRole('heading', { name: /Chi tiết đơn đặt chỗ/i })).toBeVisible();
+  await expect(page.locator('body')).toContainText('BK-394821');
+});
+
+test('customer booking detail still requires login outside the public lookup route', async ({ page }) => {
+  await page.goto('/customer/bookings/B003');
+  await expect(page).toHaveURL(/\/login\?redirect=/);
 });
 
 test('customer checkout validates age and phone, applies promo, creates and updates booking draft, disables 50% payment inside 7 days, and can create a PayOS payment request', async ({ page, request }) => {
@@ -363,6 +406,186 @@ test('customer history shows upcoming payment notes, auto-cancels unpaid and ove
 
   const reviewedBooking = await getBooking(request, accessToken, 'B013');
   expect((reviewedBooking.review as Record<string, unknown>)?.comment).toEqual(expect.stringContaining(reviewComment));
+});
+
+test('customer can open an existing review in read-only mode from history and booking detail without navigation', async ({ page }) => {
+  await loginAsRole(page, 'customer', '/customer/bookings');
+
+  await page.getByRole('button', { name: /Đã hoàn thành/i }).click();
+  const reviewedCard = page.locator('div.bg-white').filter({ hasText: 'BK-847291' }).first();
+  await reviewedCard.getByRole('button', { name: /Xem đánh giá/i }).click();
+
+  await expect(page).toHaveURL(/\/customer\/bookings$/);
+  await expect(page.getByRole('heading', { name: /Đánh giá của bạn/i })).toBeVisible();
+  await expect(page.locator('input[readonly]')).toHaveValue('Du thuyen sach, lich trinh gon');
+  await expect(page.locator('textarea[readonly]')).toHaveValue('Lich trinh ro rang, du thuyen sach va doi ngu cham soc doan rat ky.');
+  await expect(page.getByRole('button', { name: /Gửi đánh giá/i })).toHaveCount(0);
+  await page.getByRole('button', { name: /^Đóng$/i }).click();
+  await expect(page.getByRole('heading', { name: /Đánh giá của bạn/i })).toHaveCount(0);
+
+  await page.goto('/customer/bookings/B004');
+  await page.getByRole('button', { name: /Xem đánh giá/i }).click();
+
+  await expect(page).toHaveURL(/\/customer\/bookings\/B004$/);
+  await expect(page.getByRole('heading', { name: /Đánh giá của bạn/i })).toBeVisible();
+  await expect(page.locator('input[readonly]')).toHaveValue('Du thuyen sach, lich trinh gon');
+  await expect(page.locator('textarea[readonly]')).toHaveValue('Lich trinh ro rang, du thuyen sach va doi ngu cham soc doan rat ky.');
+  await expect(page.getByRole('button', { name: /Gửi đánh giá/i })).toHaveCount(0);
+});
+
+test('customer checkout clears successful draft for a new booking, resets passenger numbering by type, and queues payment email after success', async ({ page, request }) => {
+  await loginAsRole(page, 'customer', `${halongTourPath}/book?scheduleId=DS001-4`);
+  const accessToken = await getAccessToken(page);
+  const uniqueEmail = `checkout-success-${Date.now()}@test.vn`;
+
+  await page.getByPlaceholder('Nguyễn Văn A').fill('Khách Checkout Mới');
+  await page.getByPlaceholder('0901 234 567').fill('0901 234 567');
+  await page.getByPlaceholder('email@example.com').fill(uniqueEmail);
+  await page.getByRole('button', { name: /^add$/i }).nth(1).click();
+
+  await expect(page.getByText(/^Người lớn 1$/)).toBeVisible();
+  await expect(page.getByText(/^Trẻ em 1$/)).toBeVisible();
+
+  await page.getByPlaceholder('Đúng theo CCCD/Passport').nth(0).fill('Người Lớn Một');
+  await page.locator('input[type="date"]').nth(0).fill('1990-01-01');
+  await page.getByPlaceholder('Số giấy tờ').nth(0).fill('001090123456');
+
+  await page.getByPlaceholder('Đúng theo CCCD/Passport').nth(1).fill('Trẻ Em Một');
+  await page.locator('input[type="date"]').nth(1).fill('2018-05-01');
+  await page.getByPlaceholder('Số giấy tờ').nth(1).fill('001118123456');
+
+  const createResponsePromise = page.waitForResponse((response) => (
+    response.url() === `${apiBase}/bookings/public`
+    && response.request().method() === 'POST'
+  ));
+  await page.getByRole('button', { name: /Tiếp tục thanh toán/i }).click();
+  const createResponse = await createResponsePromise;
+  expect(createResponse.status()).toBe(201);
+  const createPayload = await createResponse.json();
+  const bookingId = createPayload.booking.id as string;
+  const bookingCode = createPayload.booking.bookingCode as string;
+
+  await expect(page.getByRole('heading', { name: /Thanh toán/i })).toBeVisible();
+
+  const payLinkResponse = await request.post(`${apiBase}/payments/bookings/${bookingId}/payos-link`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  expect(payLinkResponse.ok()).toBeTruthy();
+  const payLinkPayload = await payLinkResponse.json();
+
+  const webhookData = {
+    orderCode: payLinkPayload.paymentLink.orderCode as number,
+    amount: payLinkPayload.paymentLink.amount as number,
+    description: `Thanh toan ${bookingCode}`,
+    accountNumber: '1234567890',
+    reference: `PAY-${Date.now()}`,
+    transactionDateTime: new Date().toISOString(),
+    currency: 'VND',
+    paymentLinkId: payLinkPayload.paymentLink.paymentLinkId as string,
+    code: '00',
+    desc: 'success',
+    counterAccountBankId: 'VCB',
+    counterAccountBankName: 'Vietcombank',
+    counterAccountName: 'CHECKOUT SUCCESS',
+    counterAccountNumber: '1234567890',
+    virtualAccountName: 'TRAVELA',
+    virtualAccountNumber: '9999999999',
+  } satisfies Record<string, string | number>;
+
+  const webhookResponse = await request.post(`${apiBase}/payments/payos/webhook`, {
+    data: {
+      code: '00',
+      desc: 'success',
+      success: true,
+      data: webhookData,
+      signature: createPayOSWebhookSignature(webhookData),
+    },
+  });
+  expect(webhookResponse.ok()).toBeTruthy();
+
+  await page.goto(`${halongTourPath}/book?scheduleId=DS001-4&bookingId=${bookingId}&payos=return`);
+  await expect(page.getByRole('heading', { name: /Đặt tour thành công/i })).toBeVisible();
+  await expect.poll(async () => page.evaluate(() => localStorage.getItem('travela-public-booking-draft'))).toBeNull();
+
+  const emails = await expectEmailQueued(request, {
+    bookingCode,
+    template: 'booking_payment_received',
+  });
+  expect(emails[0]?.recipient).toBe(uniqueEmail);
+
+  await page.goto(`${halongTourPath}/book?scheduleId=DS001-4`);
+  await expect(page.getByRole('button', { name: /Tiếp tục thanh toán/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Đặt tour thành công/i })).toHaveCount(0);
+  await expect(page.locator('body')).not.toContainText(bookingCode);
+
+  const storedDraft = await page.evaluate(() => localStorage.getItem('travela-public-booking-draft'));
+  expect(storedDraft).toBeTruthy();
+  expect(JSON.parse(storedDraft ?? '{}').booking ?? null).toBeNull();
+});
+
+test('customer checkout keeps real remaining seats and correct promo totals after going back to edit the booking', async ({ page, request }) => {
+  const promoValidationResponse = await request.post(`${apiBase}/bookings/promo/validate`, {
+    data: {
+      tourSlug: 'kham-pha-vinh-ha-long-du-thuyen-5-sao',
+      scheduleId: 'DS001-4',
+      promoCode: 'TRAVELA10',
+      passengers: [
+        {
+          type: 'adult',
+          name: 'Người Lớn 1',
+          dob: '1990-01-01',
+          gender: 'male',
+          cccd: '001090123456',
+          nationality: 'Việt Nam',
+        },
+        {
+          type: 'adult',
+          name: 'Người Lớn 2',
+          dob: '1992-02-02',
+          gender: 'female',
+          cccd: '001092123456',
+          nationality: 'Việt Nam',
+        },
+      ],
+    },
+  });
+  expect(promoValidationResponse.ok()).toBeTruthy();
+  const promoPayload = await promoValidationResponse.json();
+  const expectedTotal = promoPayload.promo.totalAmount as number;
+
+  await loginAsRole(page, 'customer', `${halongTourPath}/book?scheduleId=DS001-4`);
+  const initialSeatText = await page.getByText(/Còn \d+ chỗ trống/).textContent();
+  const initialVisibleSeats = Number(initialSeatText?.match(/\d+/)?.[0] ?? '0');
+
+  await page.getByPlaceholder('Nguyễn Văn A').fill('Khách Sửa Đơn');
+  await page.getByPlaceholder('0901 234 567').fill('0901 234 567');
+  await page.getByPlaceholder('email@example.com').fill(`edit-checkout-${Date.now()}@test.vn`);
+  await page.getByRole('button', { name: /^add$/i }).nth(0).click();
+
+  await page.getByPlaceholder('Đúng theo CCCD/Passport').nth(0).fill('Người Lớn 1');
+  await page.locator('input[type="date"]').nth(0).fill('1990-01-01');
+  await page.getByPlaceholder('Số giấy tờ').nth(0).fill('001090123456');
+
+  await page.getByPlaceholder('Đúng theo CCCD/Passport').nth(1).fill('Người Lớn 2');
+  await page.locator('input[type="date"]').nth(1).fill('1992-02-02');
+  await page.getByPlaceholder('Số giấy tờ').nth(1).fill('001092123456');
+
+  await page.getByRole('button', { name: /Tiếp tục thanh toán/i }).click();
+  await expect(page.getByRole('heading', { name: /Thanh toán/i })).toBeVisible();
+
+  await page.getByRole('button', { name: /Quay lại sửa đơn/i }).click();
+  await expect(page.getByText(`Còn ${initialVisibleSeats - 2} chỗ trống`)).toBeVisible();
+  await expect(page.getByText(`Còn ${initialVisibleSeats} chỗ trống`)).toHaveCount(0);
+
+  await page.getByPlaceholder('Nguyễn Văn A').fill('Khách Sửa Đơn Lần 2');
+  await page.getByRole('button', { name: /Tiếp tục thanh toán/i }).click();
+  await expect(page.getByRole('heading', { name: /Thanh toán/i })).toBeVisible();
+
+  await page.getByPlaceholder('Nhập mã...').fill('TRAVELA10');
+  await page.getByRole('button', { name: /Áp dụng/i }).click();
+  await expect(page.getByText(/Đã áp dụng TRAVELA10/i)).toBeVisible();
+  await expect(page.locator('body')).toContainText(formatMoney(expectedTotal));
+  await expect(page.getByText(/Số lượng hành khách không được vượt quá/i)).toHaveCount(0);
 });
 
 test('customer can submit a cancel request, persist bank info, and queue cancellation email', async ({ page, request }) => {

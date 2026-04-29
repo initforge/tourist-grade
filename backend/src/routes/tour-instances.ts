@@ -373,7 +373,7 @@ export function createTourInstancesRouter() {
     res.json({ success: true, tourInstance: mapTourInstance(updated) });
   }));
 
-  router.post('/:id/cancel', requireRoles('manager', 'coordinator', 'admin'), asyncHandler(async (req, res) => {
+  router.post('/:id/cancel', requireRoles('manager', 'coordinator', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
     const input = reasonSchema.safeParse(req.body);
     if (!input.success) {
       throw badRequest('Cancellation reason is required');
@@ -384,14 +384,55 @@ export function createTourInstancesRouter() {
       throw notFound('Tour instance not found');
     }
 
-    const updated = await prisma.tourInstance.update({
-      include: tourInstanceInclude,
-      where: { id: existing.id },
-      data: {
-        status: 'DA_HUY',
-        cancelReason: input.data.reason,
-        cancelledAt: new Date(),
-      },
+    const now = new Date();
+    const normalizedReason = normalizeManagerCancellationReason(input.data.reason);
+    const actorName = req.auth?.name ?? 'Quản lý';
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const activeBookings = await tx.booking.findMany({
+        where: {
+          tourInstanceId: existing.id,
+          status: { in: ['PENDING', 'PENDING_CANCEL', 'CONFIRMED'] },
+        },
+      });
+
+      let refundTotal = 0;
+
+      for (const booking of activeBookings) {
+        const refundAmount = Number(booking.paidAmount);
+        refundTotal += refundAmount;
+        const existingPayload = ((booking.payloadJson as Record<string, unknown> | null) ?? {});
+
+        await tx.booking.update({
+          where: { id: booking.id },
+          data: {
+            status: 'CANCELLED',
+            refundStatus: 'NOT_REQUIRED',
+            cancellationReason: normalizedReason,
+            cancelledAt: now,
+            refundAmount,
+            cancelledConfirmedById: req.auth?.sub ?? booking.cancelledConfirmedById,
+            cancelledConfirmedAt: now,
+            payloadJson: {
+              ...existingPayload,
+              cancelledConfirmedBy: actorName,
+              cancelledConfirmedAt: now.toISOString(),
+              cancellationSource: 'manager_tour_cancel',
+            } satisfies Prisma.InputJsonObject,
+          },
+        });
+      }
+
+      return tx.tourInstance.update({
+        include: tourInstanceInclude,
+        where: { id: existing.id },
+        data: {
+          status: 'DA_HUY',
+          cancelReason: normalizedReason,
+          cancelledAt: now,
+          refundTotal,
+        },
+      });
     });
 
     res.json({ success: true, tourInstance: mapTourInstance(updated) });
@@ -531,4 +572,17 @@ function mapInstanceStatus(status: z.infer<typeof instanceUpsertSchema>['status'
     default:
       return 'CHO_DUYET_BAN';
   }
+}
+
+function normalizeManagerCancellationReason(reason: string) {
+  const normalized = reason
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  if (normalized.includes('bat kha')) {
+    return 'Bất khả kháng';
+  }
+
+  return 'Không đủ điều kiện khởi hành';
 }

@@ -1,5 +1,7 @@
 param(
   [switch]$SkipCloudflaredInstall,
+  [switch]$ResetState,
+  [switch]$RunSeed,
   [string]$TunnelName = 'travela-payos',
   [string]$TunnelHostname = 'payos.myproxypal.click'
 )
@@ -167,6 +169,17 @@ function Invoke-Docker($arguments, [switch]$AllowFailure) {
   return @{
     ExitCode = $exitCode
     Output = $output
+  }
+}
+
+function Stop-ExistingTunnelProcess {
+  $pidFile = Join-Path $repoRoot '.local\cloudflared.pid'
+  if (Test-Path $pidFile) {
+    $oldPid = Get-Content $pidFile -ErrorAction SilentlyContinue
+    if ($oldPid) {
+      Stop-Process -Id ([int]$oldPid) -ErrorAction SilentlyContinue
+    }
+    Remove-Item $pidFile -ErrorAction SilentlyContinue
   }
 }
 
@@ -442,6 +455,12 @@ $envSettings = Get-EnvMap $envPath
 Write-Step 'Check Docker'
 (Invoke-Docker @('version')).Output | Out-Null
 
+if ($ResetState) {
+  Write-Step 'Reset local Docker and tunnel state'
+  Stop-ExistingTunnelProcess
+  (Invoke-Docker @('compose', 'down', '-v', '--remove-orphans') -AllowFailure).Output | Out-Host
+}
+
 Write-Step 'Check cloudflared'
 $cloudflared = Find-Cloudflared
 if (!$cloudflared -and !$SkipCloudflaredInstall) {
@@ -459,6 +478,18 @@ Write-Step 'Build and start Docker stack'
 $backendHealthUrl = Wait-BackendReady 300
 Write-Host "Backend health URL: $backendHealthUrl" -ForegroundColor Green
 
+Write-Step 'Apply Prisma schema'
+(Invoke-Docker @('compose', 'exec', '-T', 'backend', 'npm', 'run', 'prisma:push', '--', '--accept-data-loss')).Output | Out-Host
+$backendHealthUrl = Wait-BackendReady 300
+Write-Host "Backend health URL after schema sync: $backendHealthUrl" -ForegroundColor Green
+
+if ($RunSeed) {
+  Write-Step 'Run Prisma seed manually'
+  (Invoke-Docker @('compose', 'exec', '-T', 'backend', 'npm', 'run', 'prisma:seed')).Output | Out-Host
+  $backendHealthUrl = Wait-BackendReady 300
+  Write-Host "Backend health URL after seed: $backendHealthUrl" -ForegroundColor Green
+}
+
 Write-Step 'Start frontend after backend is ready'
 (Invoke-Docker @('compose', 'up', '-d', '--build', 'frontend')).Output | Out-Host
 
@@ -470,12 +501,7 @@ $errLog = Join-Path $logDir 'cloudflared.err.log'
 $pidFile = Join-Path $logDir 'cloudflared.pid'
 $configPath = Join-Path $logDir 'cloudflared.config.yml'
 
-if (Test-Path $pidFile) {
-  $oldPid = Get-Content $pidFile -ErrorAction SilentlyContinue
-  if ($oldPid) {
-    Stop-Process -Id ([int]$oldPid) -ErrorAction SilentlyContinue
-  }
-}
+Stop-ExistingTunnelProcess
 Remove-Item $outLog, $errLog -ErrorAction SilentlyContinue
 
 $secretTunnel = Get-SecretTunnel $envSettings $TunnelName $TunnelHostname
@@ -532,5 +558,10 @@ Write-Step 'Done'
 Write-Host 'Frontend: http://localhost:8080' -ForegroundColor Green
 Write-Host 'Backend:  http://localhost:4000/health' -ForegroundColor Green
 Write-Host "Webhook:  $webhookUrl" -ForegroundColor Green
+if ($RunSeed) {
+  Write-Host 'Seed:     sample data was loaded into the current database' -ForegroundColor Yellow
+} else {
+  Write-Host 'Seed:     not run automatically. Use -RunSeed or docker compose exec backend npm run prisma:seed when needed.' -ForegroundColor Yellow
+}
 Write-Host 'To stop the tunnel:' -ForegroundColor Yellow
 Write-Host "Stop-Process -Id $($process.Id)" -ForegroundColor Yellow

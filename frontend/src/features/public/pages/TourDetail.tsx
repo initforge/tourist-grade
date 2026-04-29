@@ -111,7 +111,8 @@ export default function TourDetail() {
     .slice(0, 3);
   const displayRelatedTours = relatedTours.length > 0 ? relatedTours : fallbackRelatedTours;
   const activeAdultPrice = activeSchedule?.priceAdult ?? tour.price.adult;
-  const galleryImages = [tour.image, ...tour.gallery].filter(Boolean);
+  const galleryImages = Array.from(new Set([tour.image, ...tour.gallery].filter(Boolean)));
+  const secondaryImages = galleryImages.slice(1, 4);
   const reviewItems = tour.reviews ?? [];
 
   const toggleWishlist = async (event: React.MouseEvent) => {
@@ -186,7 +187,7 @@ export default function TourDetail() {
 
   return (
     <div className="public-page">
-      <main className="public-container public-hero pb-16 md:pb-20 overflow-x-hidden">
+      <main className="public-container public-hero pb-16 md:pb-20">
         <section className="mb-5 md:mb-6">
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.85fr)]">
             <button type="button" onClick={() => setActiveImageIndex(0)} className="public-media-frame relative aspect-[16/11] md:aspect-[16/10] lg:min-h-[420px] group text-left">
@@ -197,13 +198,13 @@ export default function TourDetail() {
               </div>
             </button>
 
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-1 lg:grid-rows-[minmax(0,1fr)_minmax(0,1fr)]">
-              {(galleryImages.slice(1, 4).length > 0 ? galleryImages.slice(1, 4) : [tour.image]).map((image, imageIndex) => (
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-2 auto-rows-fr">
+              {(secondaryImages.length > 0 ? secondaryImages : [tour.image]).map((image, imageIndex) => (
                 <button
                   key={`${image}-${imageIndex}`}
                   type="button"
                   onClick={() => setActiveImageIndex(imageIndex + 1)}
-                  className={`public-media-frame overflow-hidden ${imageIndex === 0 ? 'aspect-[16/10] md:aspect-[4/3] lg:min-h-[204px]' : 'aspect-square'}`}
+                  className={`public-media-frame overflow-hidden ${imageIndex === 0 ? 'aspect-[16/10] md:col-span-2' : 'aspect-[4/3]'}`}
                 >
                   <img alt={`${tour.title} ${imageIndex + 2}`} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" src={image} />
                 </button>
@@ -330,13 +331,13 @@ export default function TourDetail() {
                         <button
                           type="button"
                           onClick={() => toggleItineraryDay(day.day)}
-                          className="w-full flex items-start justify-between gap-4 text-left"
+                          className="w-full flex items-center justify-between gap-4 text-left"
                         >
                           <h4 className="font-headline text-base md:text-lg font-bold leading-snug text-primary tracking-wide">
                             Ngày {String(day.day).padStart(2, '0')}: {day.title.toUpperCase()}
                             {meals && <span className="font-sans text-sm font-semibold normal-case"> (Ăn {meals})</span>}
                           </h4>
-                          <span className={`material-symbols-outlined shrink-0 self-center h-9 w-9 rounded-full bg-sky-50 text-sky-600 flex items-center justify-center transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}>
+                          <span className={`material-symbols-outlined shrink-0 h-9 w-9 rounded-full bg-sky-50 text-sky-600 grid place-items-center leading-none transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}>
                             keyboard_arrow_down
                           </span>
                         </button>
@@ -410,7 +411,7 @@ export default function TourDetail() {
               </div>
             </div>
 
-            <div className="w-full lg:w-[340px] xl:w-[360px] shrink-0 lg:sticky lg:top-24">
+            <div className="w-full lg:w-[340px] xl:w-[360px] shrink-0 lg:self-start lg:sticky lg:top-24">
               <div className="public-floating-card overflow-hidden">
                 <div className="p-5 space-y-4">
                   <div>
