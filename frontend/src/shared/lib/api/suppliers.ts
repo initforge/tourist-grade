@@ -20,6 +20,7 @@ export interface SupplierPayload {
   type: 'HOTEL' | 'RESTAURANT' | 'TRANSPORT';
   serviceSummary?: string;
   operatingArea?: string;
+  standards?: string[];
   establishedYear?: number | null;
   description?: string;
   isActive: boolean;
@@ -100,6 +101,20 @@ export function addSupplierServicePrice(
 ) {
   return apiRequest<{ success: boolean; price: SupplierPriceRow }>(`/suppliers/${supplierId}/service-variants/${serviceId}/prices`, {
     method: 'POST',
+    token,
+    body: JSON.stringify(payload),
+  });
+}
+
+export function patchSupplierServicePrice(
+  token: string,
+  supplierId: string,
+  serviceId: string,
+  priceId: string,
+  payload: SupplierPriceRow,
+) {
+  return apiRequest<{ success: boolean; price: SupplierPriceRow }>(`/suppliers/${supplierId}/service-variants/${serviceId}/prices/${priceId}`, {
+    method: 'PATCH',
     token,
     body: JSON.stringify(payload),
   });

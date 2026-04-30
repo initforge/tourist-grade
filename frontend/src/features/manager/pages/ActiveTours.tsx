@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { message } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { TOUR_INSTANCE_STATUS_LABEL } from '@entities/tour-program/data/tourProgram';
 import type { TourInstance, TourProgram } from '@entities/tour-program/data/tourProgram';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
 import { useAuthStore } from '@shared/store/useAuthStore';
 import { updateTourInstanceCommand } from '@shared/lib/api/tourInstances';
+import { createSpecialDay } from '@shared/lib/api/specialDays';
+import type { Booking } from '@entities/booking/data/bookings';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -12,7 +15,7 @@ type TourTab = 'pending_sell' | 'insufficient' | 'pending_estimate' | 'deployed'
 
 const TAB_STATUS_MAP: Record<TourTab, string[]> = {
   pending_sell: ['cho_duyet_ban'],
-  insufficient: ['chua_du_kien', 'dang_mo_ban'],       // đang mở bán nhưng chưa đủ KH
+  insufficient: ['chua_du_kien', 'dang_mo_ban'],
   pending_estimate: ['cho_duyet_du_toan'],
   deployed: ['dang_trien_khai', 'san_sang_trien_khai', 'cho_nhan_dieu_hanh'],
   completed: ['hoan_thanh', 'cho_quyet_toan'],
@@ -23,6 +26,7 @@ const TABS: { key: TourTab; label: string; icon: string }[] = [
   { key: 'pending_sell', label: 'Chờ duyệt bán', icon: 'pending' },
   { key: 'insufficient', label: 'Không đủ ĐK KH', icon: 'group_remove' },
   { key: 'pending_estimate', label: 'Chờ duyệt dự toán', icon: 'request_quote' },
+  { key: 'deployed', label: 'Đang điều hành', icon: 'tour' },
   { key: 'completed', label: 'Hoàn thành', icon: 'task_alt' },
   { key: 'cancelled', label: 'Đã hủy', icon: 'cancel' },
 ];
@@ -37,6 +41,21 @@ function fmtCurrency(n: number) {
   if (n >= 1_000_000) return (n / 1_000_000)?.toFixed(1) + 'tr';
   if (n >= 1_000) return (n / 1_000)?.toFixed(0) + 'K';
   return n?.toString();
+}
+
+const MIN_CONFIRMED_DEPARTURE_GUESTS = 10;
+
+function countConfirmedGuestsForInstance(instance: TourInstance, bookings: Booking[]) {
+  return bookings
+    .filter(booking => (
+      (booking.instanceCode === instance.id || (!booking.instanceCode && booking.tourId === instance.id))
+      && (booking.status === 'confirmed' || booking.status === 'completed')
+    ))
+    .reduce((sum, booking) => sum + booking.passengers.length, 0);
+}
+
+function isPastBookingDeadline(instance: TourInstance) {
+  return new Date(instance.bookingDeadline).getTime() <= Date.now();
 }
 
 function getDefaultExtendDate() {
@@ -57,31 +76,23 @@ type ApprovalPreviewRow = {
   checked: boolean;
 };
 
-function buildApprovalPreviewRows(instance: TourInstance, programs: TourProgram[] = []): ApprovalPreviewRow[] {
-  const program = programs?.find(item => item.id === instance?.programId);
-
-  return Array.from({ length: 6 }, (_, index) => {
-    const departureDate = new Date(instance?.departureDate);
-    departureDate?.setDate(departureDate?.getDate() + index * 7);
-    const bookingDeadline = new Date(departureDate);
-    bookingDeadline?.setDate(bookingDeadline?.getDate() - Math.max(1, program?.bookingDeadline ?? 7));
-
-    const sellPrice = instance?.priceAdult + index * 100000;
-    const costPerAdult = Math.round(sellPrice * 0.68);
-    const profitPercent = Number((((sellPrice - costPerAdult) / sellPrice) * 100)?.toFixed(1));
+function buildApprovalPreviewRows(instances: TourInstance[], programs: TourProgram[] = []): ApprovalPreviewRow[] {
+  return instances.map((instance) => {
+    const program = programs?.find(item => item.id === instance?.programId);
+    const sellPrice = instance?.priceAdult ?? 0;
+  const costPerAdult = Math.round(sellPrice * 0.68);
+  const profitPercent = sellPrice > 0 ? Number((((sellPrice - costPerAdult) / sellPrice) * 100)?.toFixed(1)) : 0;
 
     return {
-      id: `T${String(index + 1)?.padStart(3, '0')}x`,
-      departureDate: departureDate?.toISOString(),
-      dayType: program?.tourType === 'mua_le'
-        ? index === 5 ? 'Lễ 30/04 - 1/5' : index === 2 ? 'Giỗ tổ' : 'Ngày thường'
-        : index === 2 ? 'Giỗ tổ' : 'Ngày thường',
-      expectedGuests: Math.max(instance?.expectedGuests || 0, instance?.minParticipants) + index,
-      costPerAdult,
-      sellPrice,
-      profitPercent,
-      bookingDeadline: bookingDeadline?.toISOString(),
-      checked: index !== 3 && index !== 4,
+    id: instance?.id,
+    departureDate: instance?.departureDate,
+    dayType: program?.tourType === 'mua_le' ? 'Mùa lễ' : 'Ngày thường',
+    expectedGuests: instance?.expectedGuests,
+    costPerAdult,
+    sellPrice,
+    profitPercent,
+    bookingDeadline: instance?.bookingDeadline,
+      checked: instance.status !== 'tu_choi_ban',
     };
   });
 }
@@ -111,22 +122,23 @@ function RejectPopup({ title, onConfirm, onCancel }: { title: string; onConfirm:
 }
 
 function ApprovePreviewPopup({
-  instance,
+  instances,
   programs,
   onApprove,
   onRequestEdit,
   onReject,
   onCancel,
 }: {
-  instance: TourInstance;
+  instances: TourInstance[];
   programs: TourProgram[];
   onApprove: () => void;
   onRequestEdit: () => void;
   onReject: () => void;
   onCancel: () => void;
 }) {
+  const instance = instances[0];
   const program = programs?.find(item => item.id === instance?.programId);
-  const rows = buildApprovalPreviewRows(instance, programs);
+  const rows = buildApprovalPreviewRows(instances, programs);
   const selectedCount = rows?.filter(row => row?.checked)?.length;
   const unselectedCount = rows?.length - selectedCount;
 
@@ -176,9 +188,9 @@ function ApprovePreviewPopup({
                     <td className="px-4 py-3 whitespace-nowrap">{formatDate(row?.departureDate)}</td>
                     <td className="px-4 py-3">{row?.dayType}</td>
                     <td className="px-4 py-3">{row?.expectedGuests}</td>
-                    <td className="px-4 py-3">{row?.costPerAdult?.toLocaleString('vi-VN')}Ä'</td>
+                    <td className="px-4 py-3">{row?.costPerAdult?.toLocaleString('vi-VN')}đ</td>
                     <td className="px-4 py-3">{row?.profitPercent}%</td>
-                    <td className="px-4 py-3">{row?.sellPrice?.toLocaleString('vi-VN')}Ä'</td>
+                    <td className="px-4 py-3">{row?.sellPrice?.toLocaleString('vi-VN')}đ</td>
                     <td className="px-4 py-3 whitespace-nowrap">{formatDate(row?.bookingDeadline)}</td>
                     <td className="px-4 py-3 text-center">
                       <input type="checkbox" checked={row?.checked} readOnly aria-label={`review ${row?.id}`} className="w-4 h-4 accent-[#D4AF37]" />
@@ -236,11 +248,97 @@ type BatchActionMode = 'cancel' | 'extend' | 'continue';
 
 void ExtendDeadlinePopup;
 
+type CancelScopePayload = {
+  startDate: string;
+  endDate: string;
+  reason: string;
+  provinces: string[];
+};
+
+type PendingSellGroup = {
+  id: string;
+  code: string;
+  createdAt: string;
+  primary: TourInstance;
+  instances: TourInstance[];
+};
+
+function CancelTourScopePopup({
+  provinceOptions,
+  onConfirm,
+  onCancel,
+}: {
+  provinceOptions: string[];
+  onConfirm: (payload: CancelScopePayload) => void;
+  onCancel: () => void;
+}) {
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10));
+  const [reason, setReason] = useState('Bất khả kháng');
+  const [provinces, setProvinces] = useState<string[]>([]);
+
+  const canSubmit = startDate && endDate && endDate >= startDate && reason.trim() && provinces.length > 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-[#2A2421]/50 backdrop-blur-sm" onClick={onCancel}></div>
+      <div role="dialog" aria-modal="true" aria-labelledby="manager-cancel-scope-title" className="relative bg-white w-full max-w-2xl shadow-2xl border border-[#D0C5AF]/30 p-8">
+        <h3 id="manager-cancel-scope-title" className="font-['Noto_Serif'] text-2xl text-[#2A2421] mb-2">Hủy tour</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+          <label className="space-y-2 text-sm text-[#2A2421]">
+            <span>Ngày bắt đầu hủy</span>
+            <input type="date" value={startDate} onChange={event => {
+              const next = event.target.value;
+              setStartDate(next);
+              if (endDate && next > endDate) setEndDate(next);
+            }} className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none focus:border-[#D4AF37]" />
+          </label>
+          <label className="space-y-2 text-sm text-[#2A2421]">
+            <span>Ngày kết thúc hủy</span>
+            <input type="date" value={endDate} min={startDate} onChange={event => setEndDate(event.target.value)} className="w-full border border-[#D0C5AF]/40 p-3 text-sm outline-none focus:border-[#D4AF37]" />
+          </label>
+        </div>
+        <label className="block space-y-2 text-sm text-[#2A2421] mt-4">
+          <span>Lý do hủy</span>
+          <textarea value={reason} onChange={event => setReason(event.target.value)} rows={3} className="w-full resize-none border border-[#D0C5AF]/40 p-3 text-sm outline-none focus:border-[#D4AF37]" />
+        </label>
+        <div className="mt-4 space-y-3">
+          <p className="text-sm font-medium text-[#2A2421]">Phạm vi hủy</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-52 overflow-y-auto border border-[#D0C5AF]/30 p-3">
+            {provinceOptions.map(province => (
+              <label key={province} className="flex items-center gap-2 text-sm text-[#2A2421]/75">
+                <input
+                  type="checkbox"
+                  checked={provinces.includes(province)}
+                  onChange={event => setProvinces(previous => event.target.checked ? [...previous, province] : previous.filter(item => item !== province))}
+                  className="accent-[#D4AF37]"
+                />
+                {province}
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="mt-6 flex gap-3">
+          <button onClick={onCancel} className="flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest border border-[#2A2421]/20 hover:bg-gray-50">Hủy bỏ</button>
+          <button
+            disabled={!canSubmit}
+            onClick={() => canSubmit && onConfirm({ startDate, endDate, reason, provinces })}
+            className={`flex-1 py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold ${canSubmit ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+          >
+            Xác nhận
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SelectedToursActionPopup({
   mode,
   instances,
   programs,
   extendDates,
+  guestCounts,
   onChangeExtendDate,
   onRemove,
   onConfirm,
@@ -250,6 +348,7 @@ function SelectedToursActionPopup({
   instances: TourInstance[];
   programs: TourProgram[];
   extendDates: Record<string, string>;
+  guestCounts: Record<string, number>;
   onChangeExtendDate: (id: string, value: string) => void;
   onRemove: (id: string) => void;
   onConfirm: () => void;
@@ -314,12 +413,12 @@ function SelectedToursActionPopup({
                     <td className="px-4 py-3 font-medium text-[#2A2421]">{instance?.programName}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{formatDate(instance?.departureDate)}</td>
                     <td className="px-4 py-3">
-                      <span className="text-red-600 font-bold">{instance?.expectedGuests}</span>
+                      <span className="text-red-600 font-bold">{guestCounts[instance?.id] ?? 0}</span>
                       <span className="text-[#2A2421]/30"> / </span>
-                      <span className="text-[#2A2421]/50">{instance?.minParticipants}</span>
+                      <span className="text-[#2A2421]/50">{MIN_CONFIRMED_DEPARTURE_GUESTS}</span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">{instance?.bookingDeadline}</td>
-                    <td className="px-4 py-3">{fmtCurrency(instance?.expectedGuests * instance?.priceAdult)}</td>
+                    <td className="px-4 py-3">{fmtCurrency((guestCounts[instance?.id] ?? 0) * instance?.priceAdult)}</td>
                     {mode === 'extend' && (
                       <td className="px-4 py-3">
                         <input
@@ -363,23 +462,72 @@ export default function AdminActiveTours() {
   const navigate = useNavigate();
   const token = useAuthStore(state => state.accessToken);
   const storeInstances = useAppDataStore(state => state.tourInstances);
+  const bookings = useAppDataStore(state => state.bookings);
   const programs = useAppDataStore(state => state.tourPrograms);
+  const provinces = useAppDataStore(state => state.provinces);
+  const specialDays = useAppDataStore(state => state.specialDays);
+  const setSpecialDays = useAppDataStore(state => state.setSpecialDays);
   const upsertTourInstance = useAppDataStore(state => state.upsertTourInstance);
   const [activeTab, setActiveTab] = useState<TourTab>('pending_sell');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showRejectPopup, setShowRejectPopup] = useState<{ id: string; name: string; mode: 'reject' | 'request_edit' } | null>(null);
   const [showApprovePopup, setShowApprovePopup] = useState<string | null>(null);
   const [batchActionMode, setBatchActionMode] = useState<BatchActionMode | null>(null);
+  const [showCancelScopePopup, setShowCancelScopePopup] = useState(false);
   const [extendDates, setExtendDates] = useState<Record<string, string>>({});
   const [instances, setInstances] = useState<TourInstance[]>(storeInstances);
+  const guestCounts = Object.fromEntries(instances.map(instance => [instance.id, countConfirmedGuestsForInstance(instance, bookings)])) as Record<string, number>;
+  const provinceOptions = provinces.length > 0 ? provinces.map(province => province.name) : ['Hà Nội', 'Quảng Ninh', 'Ninh Bình', 'Đà Nẵng', 'Hồ Chí Minh'];
+  const pendingSellGroups = useMemo<PendingSellGroup[]>(() => {
+    const byRequest = new Map<string, TourInstance[]>();
+    instances
+      .filter(instance => ['cho_duyet_ban', 'tu_choi_ban', 'yeu_cau_chinh_sua'].includes(instance.status))
+      .forEach((instance) => {
+        const key = instance.saleRequest?.id ?? instance.id;
+        byRequest.set(key, [...(byRequest.get(key) ?? []), instance]);
+      });
+
+    return [...byRequest.entries()]
+      .map(([id, groupInstances]) => {
+        const sorted = [...groupInstances].sort((left, right) => left.departureDate.localeCompare(right.departureDate));
+        const primary = sorted.find(instance => instance.status === 'cho_duyet_ban') ?? sorted[0];
+        return {
+          id,
+          code: primary.saleRequest?.code ?? primary.id,
+          createdAt: primary.saleRequest?.createdAt ?? primary.createdAt,
+          primary,
+          instances: sorted,
+        };
+      })
+      .filter(group => group.instances.some(instance => instance.status === 'cho_duyet_ban'))
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  }, [instances]);
 
   // Filter theo tab
-  const filtered = instances?.filter(i => TAB_STATUS_MAP[activeTab]?.includes(i?.status) ?? false);
+  const filtered = instances?.filter(i => {
+    if (activeTab === 'insufficient') {
+      return TAB_STATUS_MAP.insufficient.includes(i.status)
+        && isPastBookingDeadline(i)
+        && countConfirmedGuestsForInstance(i, bookings) < MIN_CONFIRMED_DEPARTURE_GUESTS;
+    }
+    return TAB_STATUS_MAP[activeTab]?.includes(i?.status) ?? false;
+  });
 
   // Tab counts
   const tabCounts = Object.fromEntries(
-    TABS?.map(tab => [tab?.key, instances?.filter(i => TAB_STATUS_MAP[tab?.key]?.includes(i?.status) ?? false)?.length])
+    TABS?.map(tab => [tab?.key, instances?.filter(i => {
+      if (tab.key === 'pending_sell') {
+        return false;
+      }
+      if (tab.key === 'insufficient') {
+        return TAB_STATUS_MAP.insufficient.includes(i.status)
+          && isPastBookingDeadline(i)
+          && countConfirmedGuestsForInstance(i, bookings) < MIN_CONFIRMED_DEPARTURE_GUESTS;
+      }
+      return TAB_STATUS_MAP[tab?.key]?.includes(i?.status) ?? false;
+    })?.length])
   ) as Record<TourTab, number>;
+  tabCounts.pending_sell = pendingSellGroups.length;
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
@@ -393,24 +541,28 @@ export default function AdminActiveTours() {
     setSelectedIds(prev => prev.size === ids?.length ? new Set() : new Set(ids));
   };
 
-  const handleApprove = async (id: string) => {
+  const handleApproveRequest = async (requestInstances: TourInstance[]) => {
     if (token) {
-      const response = await updateTourInstanceCommand(token, id, 'approve-sale');
-      upsertTourInstance(response.tourInstance);
-      setInstances(prev => prev?.map(instance => instance.id === id ? response.tourInstance : instance));
+      const updates = await Promise.all(requestInstances
+        .filter(instance => instance.status === 'cho_duyet_ban')
+        .map(instance => updateTourInstanceCommand(token, instance.id, 'approve-sale').then(response => response.tourInstance)));
+      updates.forEach(upsertTourInstance);
+      setInstances(prev => prev?.map(instance => updates.find(updated => updated.id === instance.id) ?? instance));
     }
     setShowApprovePopup(null);
   };
-  const handleReject = async (id: string, reason: string, mode: 'reject' | 'request_edit') => {
+  const handleRejectRequest = async (requestInstances: TourInstance[], reason: string, mode: 'reject' | 'request_edit') => {
     if (token) {
-      const response = await updateTourInstanceCommand(
-        token,
-        id,
-        mode === 'request_edit' ? 'request-edit-sale' : 'reject-sale',
-        { reason },
-      );
-      upsertTourInstance(response.tourInstance);
-      setInstances(prev => prev?.map(instance => instance.id === id ? response.tourInstance : instance));
+      const updates = await Promise.all(requestInstances
+        .filter(instance => instance.status === 'cho_duyet_ban')
+        .map(instance => updateTourInstanceCommand(
+          token,
+          instance.id,
+          mode === 'request_edit' ? 'request-edit-sale' : 'reject-sale',
+          { reason },
+        ).then(response => response.tourInstance)));
+      updates.forEach(upsertTourInstance);
+      setInstances(prev => prev?.map(instance => updates.find(updated => updated.id === instance.id) ?? instance));
     }
     setShowRejectPopup(null);
   };
@@ -511,15 +663,77 @@ export default function AdminActiveTours() {
 
   const selectedInsufficientInstances = filtered?.filter(instance => selectedIds?.has(instance?.id));
 
+  const handleScopedCancel = async (payload: CancelScopePayload) => {
+    if (token) {
+      try {
+        const response = await createSpecialDay(token, {
+          id: `CXL${Date.now().toString().slice(-6)}`,
+          name: `Đợt hủy tour ${payload.startDate} - ${payload.endDate}`,
+          occasion: 'TOUR_CANCELLATION_SCOPE',
+          startDate: payload.startDate,
+          endDate: payload.endDate,
+          note: JSON.stringify({
+            type: 'tour_cancellation_scope',
+            reason: payload.reason,
+            provinces: payload.provinces,
+          }),
+        });
+        setSpecialDays([...specialDays, response.specialDay].sort((left, right) => left.startDate.localeCompare(right.startDate)));
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : 'Không thể lưu đợt hủy tour');
+        return;
+      }
+    }
+
+    const start = new Date(payload.startDate).getTime();
+    const end = new Date(payload.endDate).getTime();
+    const inScope = (value: string) => payload.provinces.some(province => value.toLowerCase().includes(province.toLowerCase()));
+    const affected = instances.filter(instance => {
+      const program = programs.find(item => item.id === instance.programId);
+      const departure = new Date(instance.departureDate).getTime();
+      const durationDays = Math.max(1, program?.duration?.days ?? 1);
+      const tourEnd = departure + (durationDays - 1) * 86400000;
+      return departure <= end
+        && tourEnd >= start
+        && (inScope(instance.departurePoint) || instance.sightseeingSpots.some(inScope))
+        && instance.status !== 'da_huy';
+    });
+
+    if (affected.length === 0) {
+      setShowCancelScopePopup(false);
+      return;
+    }
+
+    if (token) {
+      const updates = await Promise.all(affected.map(instance => (
+        updateTourInstanceCommand(token, instance.id, 'cancel', { reason: payload.reason })
+          .then(response => response.tourInstance)
+      )));
+      updates.forEach(upsertTourInstance);
+      setInstances(previous => previous.map(instance => updates.find(updated => updated.id === instance.id) ?? instance));
+    } else {
+      setInstances(previous => previous.map(instance => affected.some(item => item.id === instance.id)
+        ? { ...instance, status: 'da_huy', cancelledAt: new Date().toISOString(), cancelReason: payload.reason, refundTotal: instance.refundTotal ?? 0 }
+        : instance));
+    }
+    setShowCancelScopePopup(false);
+    setSelectedIds(new Set());
+  };
+
   return (
     <div className="w-full bg-[#F3F3F3] min-h-full">
       <div className="p-6 md:p-10">
 
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="w-1 h-5 bg-[#D4AF37] rounded-sm"></div>
-            <h1 className="font-['Noto_Serif'] text-3xl text-[#2A2421]">Quản lý Tour</h1>
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
+            <div className="flex items-center gap-3">
+              <div className="w-1 h-5 bg-[#D4AF37] rounded-sm"></div>
+              <h1 className="font-['Noto_Serif'] text-3xl text-[#2A2421]">Quản lý Tour</h1>
+            </div>
+            <button onClick={() => setShowCancelScopePopup(true)} className="border border-red-300 px-5 py-3 text-xs font-bold uppercase tracking-widest text-red-600 hover:bg-red-50">
+              Hủy tour
+            </button>
           </div>
           <p className="text-xs text-[#2A2421]/50 ml-4">Theo dõi và phê duyệt các tour du lịch trong hệ thống.</p>
         </div>
@@ -554,21 +768,21 @@ export default function AdminActiveTours() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#D0C5AF]/15">
-                {filtered.length === 0 ? (
+                {pendingSellGroups.length === 0 ? (
                   <tr><td colSpan={8} className="px-5 py-16 text-center text-sm text-[#2A2421]/40">Không có tour nào</td></tr>
-                ) : filtered?.map(t => (
-                  <tr key={t?.id} className="hover:bg-[#FAFAF5] transition-colors">
-                    <td className="px-4 py-4 font-medium text-sm font-['Noto_Serif'] text-[#2A2421]">{t?.id}</td>
-                    <td className="px-4 py-4 text-sm font-semibold text-[#2A2421]">{t?.programName}</td>
-                    <td className="px-4 py-4 text-sm text-[#2A2421]/70">{t.transport === 'maybay' ? 'Máy bay' : 'Xe'}</td>
-                    <td className="px-4 py-4 text-sm text-[#2A2421]/70">{formatDate(t?.departureDate)}</td>
-                    <td className="px-4 py-4 text-sm text-[#2A2421]/70">{t?.createdAt ? formatDate(t?.createdAt) : '—'}</td>
-                    <td className="px-4 py-4 text-center text-sm font-bold">1</td>
-                    <td className="px-4 py-4 text-sm text-[#2A2421]/70">{t?.createdBy}</td>
+                ) : pendingSellGroups?.map(group => (
+                  <tr key={group.id} className="hover:bg-[#FAFAF5] transition-colors">
+                    <td className="px-4 py-4 font-medium text-sm font-['Noto_Serif'] text-[#2A2421]">{group.code}</td>
+                    <td className="px-4 py-4 text-sm font-semibold text-[#2A2421]">{group.primary?.programName}</td>
+                    <td className="px-4 py-4 text-sm text-[#2A2421]/70">{group.primary.transport === 'maybay' ? 'Máy bay' : 'Xe'}</td>
+                    <td className="px-4 py-4 text-sm text-[#2A2421]/70">{formatDate(group.instances[0]?.departureDate)}</td>
+                    <td className="px-4 py-4 text-sm text-[#2A2421]/70">{group.createdAt ? formatDate(group.createdAt) : '—'}</td>
+                    <td className="px-4 py-4 text-center text-sm font-bold">{group.instances.length}</td>
+                    <td className="px-4 py-4 text-sm text-[#2A2421]/70">{group.primary?.createdBy}</td>
                     <td className="px-4 py-4">
                       <div className="flex gap-2">
-                        <button onClick={() => setShowApprovePopup(t?.id)} className="px-3 py-1.5 text-[10px] font-bold bg-emerald-600 text-white hover:bg-emerald-700">Duyệt</button>
-                        <button onClick={() => setShowRejectPopup({ id: t?.id, name: t?.programName, mode: 'reject' })} className="px-3 py-1.5 text-[10px] font-bold border border-red-300 text-red-600 hover:bg-red-50">Từ chối</button>
+                        <button onClick={() => setShowApprovePopup(group.id)} className="px-3 py-1.5 text-[10px] font-bold bg-emerald-600 text-white hover:bg-emerald-700">Duyệt</button>
+                        <button onClick={() => setShowRejectPopup({ id: group.id, name: group.primary?.programName, mode: 'reject' })} className="px-3 py-1.5 text-[10px] font-bold border border-red-300 text-red-600 hover:bg-red-50">Từ chối</button>
                       </div>
                     </td>
                   </tr>
@@ -591,7 +805,7 @@ export default function AdminActiveTours() {
               <div className="flex gap-2">
                 <button disabled={selectedIds.size === 0} onClick={() => openBatchAction('cancel')}
                   className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest border transition-colors ${selectedIds.size === 0 ? 'border-gray-200 text-gray-300 cursor-not-allowed' : 'border-red-300 text-red-600 hover:bg-red-50'}`}>
-                  Há»§y tour ({selectedIds?.size})
+                  Hủy tour ({selectedIds?.size})
                 </button>
                 <button disabled={selectedIds.size === 0} onClick={() => openBatchAction('continue')}
                   className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors ${selectedIds.size === 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
@@ -626,12 +840,12 @@ export default function AdminActiveTours() {
                       <td className="px-4 py-4 text-sm font-semibold">{t?.programName}</td>
                       <td className="px-4 py-4 text-sm text-[#2A2421]/70">{formatDate(t?.departureDate)}</td>
                       <td className="px-4 py-4 text-sm">
-                        <span className="text-red-600 font-bold">{t?.expectedGuests}</span>
+                        <span className="text-red-600 font-bold">{guestCounts[t?.id] ?? 0}</span>
                         <span className="text-[#2A2421]/30"> / </span>
-                        <span className="text-[#2A2421]/50">{t?.minParticipants}</span>
+                        <span className="text-[#2A2421]/50">{MIN_CONFIRMED_DEPARTURE_GUESTS}</span>
                       </td>
                       <td className="px-4 py-4 text-sm text-[#2A2421]/70">{t?.bookingDeadline}</td>
-                      <td className="px-4 py-4 text-sm font-bold text-[#D4AF37]">{fmtCurrency(t?.expectedGuests * t?.priceAdult)}</td>
+                      <td className="px-4 py-4 text-sm font-bold text-[#D4AF37]">{fmtCurrency((guestCounts[t?.id] ?? 0) * t?.priceAdult)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -803,25 +1017,28 @@ export default function AdminActiveTours() {
       {showRejectPopup && (
         <RejectPopup
           title={showRejectPopup.mode === 'request_edit' ? 'Yêu cầu sửa' : 'Từ chối'}
-          onConfirm={reason => handleReject(showRejectPopup?.id, reason, showRejectPopup.mode)}
+          onConfirm={(reason) => {
+            const group = pendingSellGroups.find(item => item.id === showRejectPopup.id);
+            if (group) void handleRejectRequest(group.instances, reason, showRejectPopup.mode);
+          }}
           onCancel={() => setShowRejectPopup(null)}
         />
       )}
       {showApprovePopup && (() => {
-        const selectedInstance = instances?.find(instance => instance.id === showApprovePopup);
-        if (!selectedInstance) return null;
+        const selectedGroup = pendingSellGroups.find(group => group.id === showApprovePopup);
+        if (!selectedGroup) return null;
         return (
           <ApprovePreviewPopup
-            instance={selectedInstance}
+            instances={selectedGroup.instances}
             programs={programs}
-            onApprove={() => handleApprove(showApprovePopup)}
+            onApprove={() => handleApproveRequest(selectedGroup.instances)}
             onRequestEdit={() => {
               setShowApprovePopup(null);
-              setShowRejectPopup({ id: selectedInstance?.id, name: selectedInstance?.programName, mode: 'request_edit' });
+              setShowRejectPopup({ id: selectedGroup.id, name: selectedGroup.primary?.programName, mode: 'request_edit' });
             }}
             onReject={() => {
               setShowApprovePopup(null);
-              setShowRejectPopup({ id: selectedInstance?.id, name: selectedInstance?.programName, mode: 'reject' });
+              setShowRejectPopup({ id: selectedGroup.id, name: selectedGroup.primary?.programName, mode: 'reject' });
             }}
             onCancel={() => setShowApprovePopup(null)}
           />
@@ -833,10 +1050,18 @@ export default function AdminActiveTours() {
           instances={selectedInsufficientInstances}
           programs={programs}
           extendDates={extendDates}
+          guestCounts={guestCounts}
           onChangeExtendDate={(id, value) => setExtendDates(prev => ({ ...prev, [id]: value }))}
           onRemove={removeSelectedInPopup}
           onConfirm={handleBatchConfirm}
           onCancel={() => setBatchActionMode(null)}
+        />
+      )}
+      {showCancelScopePopup && (
+        <CancelTourScopePopup
+          provinceOptions={provinceOptions}
+          onConfirm={handleScopedCancel}
+          onCancel={() => setShowCancelScopePopup(false)}
         />
       )}
     </div>

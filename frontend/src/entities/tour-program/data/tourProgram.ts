@@ -14,6 +14,8 @@ export interface TourProgram {
   arrivalPoint?: string;
   tourType: 'mua_le' | 'quanh_nam';
   routeDescription?: string;
+  priceIncludes?: string;
+  priceExcludes?: string;
   holiday?: string;
   selectedDates?: string[];
   weekdays?: string[];
@@ -37,6 +39,9 @@ export interface TourProgram {
   submittedAt?: string;
   approvedAt?: string;
   rejectedAt?: string;
+  coverageWarningStatus?: 'ok' | 'warning';
+  coverageWarningDate?: string;
+  coveragePreviousStatus?: 'ok' | 'warning';
 }
 
 export interface ProgramItineraryDay {
@@ -166,10 +171,19 @@ export interface TourInstance {
   priceInfant?: number;
   minParticipants: number;
   bookingDeadline: string;
+  saleRequest?: {
+    id: string;
+    code?: string;
+    createdAt?: string;
+    totalRows?: number;
+    selectedRows?: number;
+    unselectedRows?: number;
+  };
+  warningState?: Record<string, unknown>;
   costEstimate?: CostEstimate;
   settlement?: SettlementData;
   assignedCoordinatorId?: string;
-  assignedGuide?: { id: string; name: string };
+  assignedGuide?: { id: string; name: string; email?: string };
   createdBy: string;
   createdAt: string;
   // Véng đời timestamps
@@ -245,6 +259,7 @@ export interface PricingConfig {
   sellPriceChild: number;
   sellPriceInfant: number;
   minParticipants: number;
+  guideUnitPrice?: number;
 }
 
 export interface CostEstimate {

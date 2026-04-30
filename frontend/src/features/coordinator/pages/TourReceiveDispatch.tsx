@@ -1,9 +1,9 @@
 import { Fragment, useMemo, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { Breadcrumb } from 'antd';
 import { type TourInstance } from '@entities/tour-program/data/tourProgram';
 import type { Booking } from '@entities/booking/data/bookings';
-import { useAppDataStore } from '@shared/store/useAppDataStore';
+import { useAppDataStore, type SupplierRow } from '@shared/store/useAppDataStore';
 import { useAuthStore } from '@shared/store/useAuthStore';
 import { updateTourInstanceCommand } from '@shared/lib/api/tourInstances';
 
@@ -47,9 +47,28 @@ function getTargetLabel(itemName: string) {
   return 'Tất cả';
 }
 
+function SupplierContactLink({ supplierName, suppliers }: { supplierName: string; suppliers: SupplierRow[] }) {
+  const supplier = suppliers.find((item) => item.name === supplierName);
+  const contact = supplier?.phone || supplier?.email || '';
+
+  return (
+    <span className="group relative inline-flex">
+      <button type="button" className="text-left font-medium text-[var(--color-secondary)] underline-offset-2 hover:underline">
+        {supplierName}
+      </button>
+      {contact && (
+        <span className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-max max-w-xs border border-[#D0C5AF]/40 bg-white px-3 py-2 text-xs text-[var(--color-primary)] opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+          SĐT: {contact}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export default function TourReceiveDispatch() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<Tab>('tong_quan');
   const [isReceived, setIsReceived] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
@@ -58,6 +77,8 @@ export default function TourReceiveDispatch() {
   const tourInstances = useAppDataStore(state => state.tourInstances);
   const tourPrograms = useAppDataStore(state => state.tourPrograms);
   const allBookings = useAppDataStore(state => state.bookings);
+  const suppliers = useAppDataStore(state => state.suppliers);
+  const readOnly = Boolean(location.state?.readOnly);
 
   const instance: TourInstance | undefined = tourInstances?.find(i => i.id === id);
   const program = instance ? tourPrograms?.find(p => p.id === instance?.programId) : undefined;
@@ -66,7 +87,7 @@ export default function TourReceiveDispatch() {
 
   const TABS: { key: Tab; label: string }[] = [
     { key: 'tong_quan', label: 'Tổng quan' },
-    { key: 'ds_kh', label: 'Danh sách booking' },
+    { key: 'ds_kh', label: 'Danh sách khách hàng' },
     { key: 'lichtrinh', label: 'Lịch trình' },
     { key: 'dutoan', label: 'Dự toán' },
   ];
@@ -147,7 +168,7 @@ export default function TourReceiveDispatch() {
           </div>
 
           {/* Receive button — only show if not yet received */}
-          {!isReceived && (
+          {!readOnly && !isReceived && (
             <button
               onClick={async () => {
                 if (token && instance) {
@@ -162,7 +183,7 @@ export default function TourReceiveDispatch() {
               Nhận điều hành
             </button>
           )}
-          {isReceived && (
+          {!readOnly && isReceived && (
             <span className="flex items-center gap-2 px-5 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold uppercase tracking-wider">
               <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
               Đã nhận điều hành
@@ -371,7 +392,9 @@ export default function TourReceiveDispatch() {
                                       </thead>
                                       <tbody>
                                         <tr>
-                                          <td className="px-4 py-3">{row?.supplierName}</td>
+                                          <td className="px-4 py-3">
+                                            <SupplierContactLink supplierName={row?.supplierName} suppliers={suppliers} />
+                                          </td>
                                           <td className="px-4 py-3">{row?.serviceVariant}</td>
                                           <td className="px-4 py-3 text-right">{formatCurrency(row?.unitPrice)}</td>
                                           <td className="px-4 py-3">{row?.note || '-'}</td>

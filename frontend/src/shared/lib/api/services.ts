@@ -55,3 +55,11 @@ export function addServicePrice(token: string, id: string, payload: ServicePrice
     body: JSON.stringify(payload),
   });
 }
+
+export function patchServicePrice(token: string, id: string, priceId: string, payload: ServicePriceRow) {
+  return apiRequest<{ success: boolean; price: ServicePriceRow }>(`/services/${id}/prices/${priceId}`, {
+    method: 'PATCH',
+    token,
+    body: JSON.stringify(payload),
+  });
+}

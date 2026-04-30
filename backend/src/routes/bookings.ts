@@ -276,10 +276,17 @@ function calculatePassengerSubtotal(
 ) {
   const counts = extractCounts(passengers);
   const singleRoomSupplement = passengers.reduce((sum, passenger) => sum + (passenger.singleRoomSupplement ?? 0), 0);
+  const freeInfants = Math.floor(counts.adult / 2);
+  const infantsChargedAsChildren = Math.max(0, counts.infant - freeInfants);
+  const includedChildren = Math.floor(counts.adult / 2);
+  const childrenChargedAsAdults = Math.max(0, counts.child - includedChildren - 1);
+  const billableAdults = counts.adult + childrenChargedAsAdults;
+  const billableChildren = Math.max(0, counts.child - childrenChargedAsAdults) + infantsChargedAsChildren;
+  const billableInfants = Math.max(0, counts.infant - infantsChargedAsChildren);
   const subtotal =
-    counts.adult * Number(schedule.priceAdult ?? 0)
-    + counts.child * Number(schedule.priceChild ?? schedule.priceAdult ?? 0)
-    + counts.infant * Number(schedule.priceInfant ?? 0)
+    billableAdults * Number(schedule.priceAdult ?? 0)
+    + billableChildren * Number(schedule.priceChild ?? schedule.priceAdult ?? 0)
+    + billableInfants * Number(schedule.priceInfant ?? 0)
     + singleRoomSupplement;
 
   return {
@@ -482,7 +489,7 @@ async function resolveVoucher(programId: string, promoCode: string) {
 async function buildBookingDraft(
   program: Awaited<ReturnType<typeof resolveProgramBySlug>>,
   input: BookingDraftInput,
-  options: { excludeBookingId?: string } = {},
+  options: { excludeBookingId?: string; skipAvailabilityCheck?: boolean } = {},
 ) {
   const { publicContent, schedule } = resolveScheduleFromPublicContent(program, input.scheduleId);
   const instance = schedule
@@ -529,7 +536,7 @@ async function buildBookingDraft(
 
   const { counts, subtotal, singleRoomSupplement } = calculatePassengerSubtotal(input.passengers, bookableSchedule);
   const availableSeats = bookableSchedule.availableSeats;
-  if (input.passengers.length > availableSeats) {
+  if (!options.skipAvailabilityCheck && input.passengers.length > availableSeats) {
     throw badRequest('So luong hanh khach vuot qua cho trong con lai');
   }
 
@@ -634,7 +641,7 @@ export function createBookingsRouter() {
       roomCounts: { single: 0, double: 0, triple: 0 },
       paymentMethod: 'bank',
       paymentRatio: 'full',
-    });
+    }, { skipAvailabilityCheck: true });
 
     res.json({
       success: true,
@@ -695,6 +702,7 @@ export function createBookingsRouter() {
       bookingId: booking.id,
       createdById: req.auth?.sub,
       payload: {
+        ...buildBookingEmailPayload(booking),
         bookingCode: booking.bookingCode,
         amount: Number(booking.totalAmount),
         paymentWindowExpiresAt: draft.expiresAt.toISOString(),
@@ -726,9 +734,17 @@ export function createBookingsRouter() {
       throw notFound('Booking not found');
     }
 
-    if (req.auth?.role === 'customer') {
-      if (booking.userId !== req.auth.sub) {
+    const authenticatedCustomerId = req.auth?.role === 'customer' ? req.auth.sub : null;
+    if (authenticatedCustomerId) {
+      if (booking.userId && booking.userId !== authenticatedCustomerId) {
         throw unauthorized();
+      }
+      if (!booking.userId) {
+        const incomingContact = normalizeContact(input.data.contact.email || input.data.contact.phone);
+        const existingContact = normalizeContact(booking.contactEmail || booking.contactPhone);
+        if (incomingContact !== existingContact) {
+          throw unauthorized();
+        }
       }
     } else {
       const incomingContact = normalizeContact(input.data.contact.email || input.data.contact.phone);
@@ -754,6 +770,7 @@ export function createBookingsRouter() {
       where: { id: booking.id },
       data: {
         tourInstanceId: draft.instance.id,
+        userId: authenticatedCustomerId ?? booking.userId,
         contactName: input.data.contact.name,
         contactEmail: input.data.contact.email.toLowerCase(),
         contactPhone: input.data.contact.phone,

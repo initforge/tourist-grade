@@ -84,6 +84,7 @@ export async function sendWishlistReminderEmails(prisma: WishlistReminderWriter,
       .map((instance) => calculateAvailableSeats(instance, instance.bookings))
       .filter((availableSeats) => availableSeats > 0);
     const lowSeatValue = availableSeatValues.find((availableSeats) => availableSeats < 5);
+    const newSchedule = item.tourProgram.instances.find((instance) => instance.createdAt >= today);
     const activeTargetedVouchers = item.tourProgram.voucherTargets
       .map((target) => target.voucher)
       .filter((voucher) => (
@@ -98,6 +99,7 @@ export async function sendWishlistReminderEmails(prisma: WishlistReminderWriter,
     const reasons = [
       lowSeatValue == null ? null : 'Sắp hết chỗ',
       voucher ? 'Có ưu đãi đang áp dụng' : null,
+      newSchedule ? 'Có lịch khởi hành mới' : null,
     ].filter((value): value is string => Boolean(value));
 
     if (reasons.length === 0) {

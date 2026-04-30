@@ -4,7 +4,7 @@ import { Gender, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { asyncHandler, badRequest, notFound } from '../lib/http.js';
 import { mapSupplier, mapTourGuide } from '../lib/mappers.js';
-import { OPEN_ENDED_DATE, nextCode, toRequiredDate } from '../lib/coordinator.js';
+import { nextCode, toRequiredDate } from '../lib/coordinator.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
 
 const supplierPriceSchema = z.object({
@@ -37,6 +37,7 @@ const supplierSchema = z.object({
   type: z.enum(['HOTEL', 'RESTAURANT', 'TRANSPORT']),
   serviceSummary: z.string().optional().default(''),
   operatingArea: z.string().optional().default(''),
+  standards: z.array(z.string()).optional().default([]),
   establishedYear: z.number().int().optional().nullable(),
   description: z.string().optional().default(''),
   isActive: z.boolean().default(true),
@@ -210,6 +211,7 @@ export function createSuppliersRouter() {
         type: input.data.type,
         serviceSummary: input.data.serviceSummary || null,
         operatingArea: input.data.operatingArea || null,
+        standardsJson: input.data.standards,
         establishedYear: input.data.establishedYear ?? null,
         description: input.data.description || null,
         isActive: input.data.isActive,
@@ -284,6 +286,7 @@ export function createSuppliersRouter() {
           type: input.data.type,
           serviceSummary: input.data.serviceSummary || null,
           operatingArea: input.data.operatingArea || null,
+          standardsJson: input.data.standards,
           establishedYear: input.data.establishedYear ?? null,
           description: input.data.description || null,
           isActive: input.data.isActive,
@@ -345,29 +348,20 @@ export function createSuppliersRouter() {
     }
 
     const effectiveDate = new Date(input.data.fromDate);
+    const endDate = toRequiredDate(input.data.toDate);
     await prisma.$transaction(async (tx) => {
       for (const variant of supplier.serviceVariants) {
         const nextPrice = input.data.priceMap[variant.id];
         if (!nextPrice || nextPrice <= 0) continue;
 
-        if (!input.data.toDate) {
-          await tx.supplierServicePrice.updateMany({
-            where: {
-              serviceVariantId: variant.id,
-              toDate: OPEN_ENDED_DATE,
-            },
-            data: {
-              toDate: effectiveDate,
-            },
-          });
-        }
+        await reconcileSupplierPriceRanges(tx, variant.prices, variant.id, effectiveDate, endDate);
 
         await tx.supplierServicePrice.create({
           data: {
             serviceVariantId: variant.id,
             unitPrice: nextPrice,
             fromDate: effectiveDate,
-            toDate: toRequiredDate(input.data.toDate),
+            toDate: endDate,
             note: input.data.note,
             createdByName: input.data.createdBy,
           },
@@ -402,6 +396,7 @@ export function createSuppliersRouter() {
         id: String(req.params.serviceId),
         supplierId: String(req.params.id),
       },
+      include: { prices: true },
     });
 
     if (!variant) {
@@ -409,27 +404,19 @@ export function createSuppliersRouter() {
     }
 
     const fromDate = new Date(input.data.fromDate);
-    if (!input.data.toDate) {
-      await prisma.supplierServicePrice.updateMany({
-        where: {
-          serviceVariantId: variant.id,
-          toDate: OPEN_ENDED_DATE,
-        },
+    const toDate = toRequiredDate(input.data.toDate);
+    const price = await prisma.$transaction(async (tx) => {
+      await reconcileSupplierPriceRanges(tx, variant.prices ?? [], variant.id, fromDate, toDate);
+      return tx.supplierServicePrice.create({
         data: {
-          toDate: fromDate,
+          serviceVariantId: variant.id,
+          unitPrice: input.data.unitPrice,
+          fromDate,
+          toDate,
+          note: input.data.note,
+          createdByName: input.data.createdBy,
         },
       });
-    }
-
-    const price = await prisma.supplierServicePrice.create({
-      data: {
-        serviceVariantId: variant.id,
-        unitPrice: input.data.unitPrice,
-        fromDate,
-        toDate: toRequiredDate(input.data.toDate),
-        note: input.data.note,
-        createdByName: input.data.createdBy,
-      },
     });
 
     res.status(201).json({
@@ -445,7 +432,130 @@ export function createSuppliersRouter() {
     });
   }));
 
+  router.patch('/:id/service-variants/:serviceId/prices/:priceId', asyncHandler(async (req, res) => {
+    const input = supplierPriceSchema.safeParse(req.body);
+    if (!input.success) {
+      throw badRequest('Invalid supplier price payload');
+    }
+
+    const variant = await prisma.supplierServiceVariant.findFirst({
+      where: {
+        id: String(req.params.serviceId),
+        supplierId: String(req.params.id),
+      },
+      include: { prices: true },
+    });
+
+    if (!variant) {
+      throw notFound('Supplier service not found');
+    }
+
+    const existingPrice = variant.prices.find((price) => price.id === String(req.params.priceId));
+    if (!existingPrice) {
+      throw notFound('Supplier price not found');
+    }
+
+    const price = await prisma.supplierServicePrice.update({
+      where: { id: existingPrice.id },
+      data: {
+        unitPrice: input.data.unitPrice,
+        fromDate: new Date(input.data.fromDate),
+        toDate: toRequiredDate(input.data.toDate),
+        note: input.data.note,
+        createdByName: input.data.createdBy,
+      },
+    });
+
+    res.json({
+      success: true,
+      price: {
+        id: price.id,
+        fromDate: price.fromDate.toISOString().slice(0, 10),
+        toDate: price.toDate.getUTCFullYear() >= 9999 ? '' : price.toDate.toISOString().slice(0, 10),
+        unitPrice: Number(price.unitPrice),
+        note: price.note ?? '',
+        createdBy: price.createdByName,
+      },
+    });
+  }));
+
   return router;
+}
+
+type SupplierPriceRecord = {
+  id: string;
+  unitPrice: Prisma.Decimal | number;
+  note: string | null;
+  fromDate: Date;
+  toDate: Date;
+  createdByName: string;
+};
+
+function addUtcDays(date: Date, days: number) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
+}
+
+function dateTime(date: Date) {
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
+
+function rangesOverlap(oldStart: Date, oldEnd: Date, newStart: Date, newEnd: Date) {
+  return dateTime(oldStart) <= dateTime(newEnd) && dateTime(oldEnd) >= dateTime(newStart);
+}
+
+async function reconcileSupplierPriceRanges(
+  tx: Prisma.TransactionClient,
+  prices: SupplierPriceRecord[],
+  serviceVariantId: string,
+  newStart: Date,
+  newEnd: Date,
+) {
+  const beforeNewStart = addUtcDays(newStart, -1);
+  const afterNewEnd = addUtcDays(newEnd, 1);
+
+  for (const price of prices) {
+    const oldStart = price.fromDate;
+    const oldEnd = price.toDate;
+    if (!rangesOverlap(oldStart, oldEnd, newStart, newEnd)) continue;
+
+    if (dateTime(oldStart) >= dateTime(newStart) && dateTime(oldEnd) <= dateTime(newEnd)) {
+      await tx.supplierServicePrice.deleteMany({ where: { id: price.id } });
+      continue;
+    }
+
+    if (dateTime(oldStart) < dateTime(newStart) && dateTime(oldEnd) >= dateTime(newStart) && dateTime(oldEnd) <= dateTime(newEnd)) {
+      await tx.supplierServicePrice.updateMany({
+        where: { id: price.id },
+        data: { toDate: beforeNewStart },
+      });
+      continue;
+    }
+
+    if (dateTime(oldStart) >= dateTime(newStart) && dateTime(oldStart) <= dateTime(newEnd) && dateTime(oldEnd) > dateTime(newEnd)) {
+      await tx.supplierServicePrice.updateMany({
+        where: { id: price.id },
+        data: { fromDate: afterNewEnd },
+      });
+      continue;
+    }
+
+    if (dateTime(oldStart) < dateTime(newStart) && dateTime(oldEnd) > dateTime(newEnd)) {
+      await tx.supplierServicePrice.updateMany({
+        where: { id: price.id },
+        data: { toDate: beforeNewStart },
+      });
+      await tx.supplierServicePrice.create({
+        data: {
+          serviceVariantId,
+          unitPrice: price.unitPrice,
+          fromDate: afterNewEnd,
+          toDate: oldEnd,
+          note: price.note,
+          createdByName: price.createdByName,
+        },
+      });
+    }
+  }
 }
 
 function buildVariantCreateInput(

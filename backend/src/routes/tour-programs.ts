@@ -39,6 +39,7 @@ const pricingConfigSchema = z.object({
   sellPriceChild: z.number(),
   sellPriceInfant: z.number(),
   minParticipants: z.number().int().min(1),
+  guideUnitPrice: z.number().optional(),
 });
 
 const tourProgramSchema = z.object({
@@ -55,6 +56,8 @@ const tourProgramSchema = z.object({
   arrivalPoint: z.string().optional().nullable(),
   tourType: z.enum(['mua_le', 'quanh_nam']),
   routeDescription: z.string().default(''),
+  priceIncludes: z.string().default(''),
+  priceExcludes: z.string().default(''),
   holiday: z.string().optional().nullable(),
   selectedDates: z.array(z.string()).optional(),
   weekdays: z.array(z.string()).optional(),
@@ -78,6 +81,9 @@ const tourProgramSchema = z.object({
   submittedAt: z.string().optional(),
   approvedAt: z.string().optional(),
   rejectedAt: z.string().optional(),
+  coverageWarningStatus: z.enum(['ok', 'warning']).optional().nullable(),
+  coverageWarningDate: z.string().optional().nullable(),
+  coveragePreviousStatus: z.enum(['ok', 'warning']).optional().nullable(),
 });
 
 const patchTourProgramSchema = tourProgramSchema.partial();
@@ -142,9 +148,32 @@ export function createTourProgramsRouter() {
       throw notFound('Tour program not found');
     }
 
-    const updated = await prisma.tourProgram.update({
-      where: { id: existing.id },
-      data: buildProgramUpdateData(existing, input.data, req.auth!.sub),
+    const updated = await prisma.$transaction(async (tx) => {
+      const nextProgram = await tx.tourProgram.update({
+        where: { id: existing.id },
+        data: buildProgramUpdateData(existing, input.data, req.auth!.sub),
+      });
+
+      if (input.data.status === 'inactive') {
+        await tx.tourInstance.updateMany({
+          where: {
+            programId: existing.id,
+            status: {
+              in: ['CHO_DUYET_BAN', 'YEU_CAU_CHINH_SUA', 'DANG_MO_BAN', 'TU_CHOI_BAN'],
+            },
+            bookings: {
+              none: {},
+            },
+          },
+          data: {
+            status: 'DA_HUY',
+            cancelReason: input.data.inactiveReason || 'Chương trình tour ngừng kinh doanh',
+            cancelledAt: new Date(),
+          },
+        });
+      }
+
+      return nextProgram;
     });
 
     res.json({
@@ -293,6 +322,11 @@ function buildProgramPublicContent(
     submittedAt: input.submittedAt ?? existing.submittedAt ?? null,
     approvedAt: input.approvedAt ?? existing.approvedAt ?? null,
     rejectedAt: input.rejectedAt ?? existing.rejectedAt ?? null,
+    coverageWarningStatus: input.coverageWarningStatus ?? existing.coverageWarningStatus ?? null,
+    coverageWarningDate: input.coverageWarningDate ?? existing.coverageWarningDate ?? null,
+    coveragePreviousStatus: input.coveragePreviousStatus ?? existing.coveragePreviousStatus ?? null,
+    priceIncludes: input.priceIncludes ?? existing.priceIncludes ?? '',
+    priceExcludes: input.priceExcludes ?? existing.priceExcludes ?? '',
   };
 }
 
@@ -406,14 +440,13 @@ function buildApprovedProgramInstances(
   const minParticipants = Math.max(1, toNumber(pricingConfig.minParticipants, 1));
 
   return rows
-    .filter((row) => row.checked)
     .map((row): Prisma.TourInstanceCreateManyInput => ({
       code: `REQ-${program.code}-${row.departureDate}`,
       programId: program.id,
       programNameSnapshot: program.name,
       departureDate: new Date(row.departureDate),
       bookingDeadlineAt: new Date(row.bookingDeadline),
-      status: 'CHO_DUYET_BAN',
+      status: row.checked ? 'CHO_DUYET_BAN' : 'TU_CHOI_BAN',
       departurePoint: program.departurePoint,
       arrivalPoint: program.arrivalPoint,
       sightseeingSpots: program.sightseeingSpots as Prisma.InputJsonValue,

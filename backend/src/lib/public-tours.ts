@@ -45,6 +45,17 @@ function toNumber(value: unknown, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function splitTextLines(value: unknown) {
+  if (typeof value !== 'string') {
+    return [];
+  }
+
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^[-+*]\s*/, ''))
+    .filter(Boolean);
+}
+
 function getPricingConfig(program: TourProgram) {
   const payload = toPlainObject(program.pricingConfigJson);
   return toPlainObject(payload.pricingConfig ?? payload);
@@ -117,8 +128,10 @@ export function buildPublicTour(
     const dateKey = toDateKey(instance.departureDate);
     const matchedBaseSchedule = baseSchedules.find((item) => item.date === dateKey);
     const availableSeats = calculateAvailableSeats(instance, instance.bookings);
+    const legacyId = typeof matchedBaseSchedule?.id === 'string' ? matchedBaseSchedule.id : undefined;
     return {
-      id: typeof matchedBaseSchedule?.id === 'string' ? matchedBaseSchedule.id : `${program.code}-${instance.code}`,
+      id: `${program.code}-${instance.code}`,
+      legacyId,
       instanceCode: instance.code,
       programCode: program.code,
       date: dateKey,
@@ -167,8 +180,8 @@ export function buildPublicTour(
     status: 'published',
     category: (base.category as 'domestic' | 'international' | undefined) ?? 'domestic',
     itinerary: Array.isArray(base.itinerary) ? base.itinerary : buildFallbackItinerary(program),
-    inclusions: Array.isArray(base.inclusions) ? base.inclusions : [],
-    exclusions: Array.isArray(base.exclusions) ? base.exclusions : [],
+    inclusions: Array.isArray(base.inclusions) ? base.inclusions : splitTextLines(base.priceIncludes),
+    exclusions: Array.isArray(base.exclusions) ? base.exclusions : splitTextLines(base.priceExcludes),
     childPolicy: (base.childPolicy as string | undefined) ?? 'Trẻ em tính theo chính sách giá tại thời điểm đặt tour.',
     cancellationPolicy: Array.isArray(base.cancellationPolicy) ? base.cancellationPolicy : [],
     departureSchedule,

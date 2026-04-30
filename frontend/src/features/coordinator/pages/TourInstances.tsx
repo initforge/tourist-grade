@@ -61,71 +61,74 @@ function getGuestCount(bookings: Booking[]) {
   return bookings.reduce((sum, booking) => sum + booking.passengers.length, 0);
 }
 
-function buildGuidePacketWorkbook(instance: TourInstance, itineraryLines: string[], bookings: Booking[], guideName: string) {
-  const passengers = bookings.flatMap((booking) => (
-    booking.passengers.map((passenger) => `
-      <tr>
-        <td>${booking.bookingCode}</td>
-        <td>${passenger.name}</td>
-        <td>${passenger.type}</td>
-        <td>${passenger.nationality ?? 'Việt Nam'}</td>
-      </tr>
-    `)
-  )).join('');
-
-  const itinerary = itineraryLines.map((line) => {
-    const [day, title, description] = line.split('|');
-    return `
-      <tr>
-        <td>${day}</td>
-        <td>${title}</td>
-        <td>${description}</td>
-      </tr>
-    `;
-  }).join('');
-
-  return `
-    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta charset="utf-8" />
-      </head>
-      <body>
-        <table border="1">
-          <tr><th colspan="2">Thông tin tour</th></tr>
-          <tr><td>Mã tour</td><td>${instance.id}</td></tr>
-          <tr><td>Chương trình</td><td>${instance.programName}</td></tr>
-          <tr><td>Hướng dẫn viên</td><td>${guideName}</td></tr>
-          <tr><td>Ngày khởi hành</td><td>${instance.departureDate}</td></tr>
-          <tr><td>Điểm khởi hành</td><td>${instance.departurePoint}</td></tr>
-          <tr><td>Điểm tham quan</td><td>${instance.sightseeingSpots.join(', ')}</td></tr>
-          <tr><td>Số khách</td><td>${getGuestCount(bookings)}</td></tr>
-        </table>
-        <br />
-        <table border="1">
-          <tr><th colspan="3">Lịch trình</th></tr>
-          <tr><th>Ngày</th><th>Tiêu đề</th><th>Mô tả</th></tr>
-          ${itinerary}
-        </table>
-        <br />
-        <table border="1">
-          <tr><th colspan="4">Danh sách hành khách</th></tr>
-          <tr><th>Booking</th><th>Họ tên</th><th>Loại khách</th><th>Quốc tịch</th></tr>
-          ${passengers}
-        </table>
-      </body>
-    </html>
-  `;
+function csvCell(value: unknown) {
+  const text = String(value ?? '').replace(/\r?\n/g, '\n');
+  return `"${text.replace(/"/g, '""')}"`;
 }
 
-function downloadGuidePacket(instance: TourInstance, itineraryLines: string[], bookings: Booking[], guideName: string) {
-  const workbook = buildGuidePacketWorkbook(instance, itineraryLines, bookings, guideName);
-  const blob = new Blob([`\uFEFF${workbook}`], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${instance.id}-hdv-packet.xls`;
-  link.click();
-  URL.revokeObjectURL(url);
+function getRoomSummary(booking: Booking) {
+  const rooms = booking.roomCounts;
+  if (!rooms) return 'Đơn 0 | Đôi 0 | Ba 0';
+  return `Đơn ${rooms.single ?? 0} | Đôi ${rooms.double ?? 0} | Ba ${rooms.triple ?? 0}`;
+}
+
+function buildGuideCommonFile(instance: TourInstance, itineraryLines: string[], bookings: Booking[], guideName: string) {
+  const itineraryRows = itineraryLines.map((line) => {
+    const [day, title, description] = line.split('|');
+    return `${day}\t${title}\t${description}`;
+  });
+
+  return [
+    'THÔNG TIN TOUR',
+    '1. Thông tin Tour',
+    `Tour: ${instance.programName}`,
+    `Đoàn: ${instance.id}`,
+    `Thời gian: ${instance.departureDate}`,
+    `Số lượng: ${getGuestCount(bookings)} khách`,
+    `Điểm đón: ${instance.departurePoint}`,
+    `Khởi hành: ${instance.departureDate}`,
+    `Hướng dẫn viên: ${guideName}`,
+    '',
+    '2. Lịch trình chi tiết',
+    'Ngày\tTiêu đề\tMô tả',
+    ...itineraryRows,
+  ].join('\n');
+}
+
+function buildGuidePassengerFile(bookings: Booking[]) {
+  const rows = [['Thông tin booking', 'STT khách', 'Họ tên', 'Ngày sinh', 'Giới tính', 'Quốc tịch']];
+
+  bookings.forEach((booking) => {
+    const bookingInfo = [
+      `Mã booking: ${booking.bookingCode}`,
+      `Người đặt: ${booking.contactInfo.name}`,
+      `Liên hệ: ${booking.contactInfo.phone}`,
+      `Số phòng: ${getRoomSummary(booking)}`,
+      `Ghi chú: ${booking.contactInfo.note ?? '-'}`,
+    ].join('\n');
+
+    booking.passengers.forEach((passenger, index) => {
+      rows.push([
+        index === 0 ? bookingInfo : '',
+        String(index + 1),
+        passenger.name,
+        passenger.dob,
+        passenger.gender === 'male' ? 'Nam' : 'Nữ',
+        passenger.nationality ?? 'Việt Nam',
+      ]);
+    });
+  });
+
+  return rows.map((row) => row.map(csvCell).join(',')).join('\n');
+}
+
+function buildGuidePacketPayload(instance: TourInstance, itineraryLines: string[], bookings: Booking[], guideName: string) {
+  return {
+    commonFileName: `${instance.id}-thong-tin-lich-trinh.txt`,
+    commonFileContent: buildGuideCommonFile(instance, itineraryLines, bookings, guideName),
+    passengerFileName: `${instance.id}-danh-sach-khach.csv`,
+    passengerFileContent: buildGuidePassengerFile(bookings),
+  };
 }
 
 export default function TourInstances() {
@@ -294,7 +297,16 @@ export default function TourInstances() {
         </button>
       );
     }
-    if (tab === 'dang_khoi_hanh') return null;
+    if (tab === 'dang_khoi_hanh') {
+      return (
+        <button
+          onClick={() => navigate(`/coordinator/tour-programs/${instance.id}/receive`, { state: { readOnly: true } })}
+          className="border border-outline-variant/50 px-4 py-1.5 text-[10px] uppercase tracking-wider text-primary/60 transition-colors hover:bg-surface"
+        >
+          Xem chi tiết
+        </button>
+      );
+    }
     if (tab === 'cho_quyet_toan') {
       return (
         <button
@@ -441,12 +453,15 @@ export default function TourInstances() {
               `${day.day}|${day.title}|${(day.description ?? '').replace(/[|]/g, '/')}`
             ));
             try {
+              const tourBookings = getTourBookings(dispatchTarget);
               const response = await updateTourInstanceCommand(token, dispatchTarget.id, 'assign-guide', {
-                assignedGuide: { id: guide.id, name: guide.name },
+                assignedGuide: { id: guide.id, name: guide.name, email: guide.email ?? '' },
+                guidePacket: buildGuidePacketPayload(dispatchTarget, itineraryLines, tourBookings, guide.name),
               });
               upsertTourInstance(response.tourInstance);
-              downloadGuidePacket(response.tourInstance, itineraryLines, getTourBookings(dispatchTarget), guide.name);
-              message.success(`Đã ${dispatchTarget.assignedGuide ? 'thay đổi' : 'phân công'} HDV: ${guide.name}`);
+              message.success(guide.email
+                ? `Đã ${dispatchTarget.assignedGuide ? 'thay đổi' : 'phân công'} HDV và gửi email cho ${guide.name}`
+                : `Đã ${dispatchTarget.assignedGuide ? 'thay đổi' : 'phân công'} HDV: ${guide.name}. HDV chưa có email để gửi file.`);
               setShowDispatchModal(false);
               setDispatchTarget(null);
               return;

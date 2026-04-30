@@ -148,7 +148,7 @@ test.describe('Reported feedback live audit', () => {
     await routeSection.locator('select').nth(0).selectOption({ label: 'Hà Nội' });
     await routeSection.locator('select').nth(1).selectOption({ label: 'Quảng Ninh' });
     await routeSection.getByLabel(/Tiêu chuẩn lưu trú/i).selectOption({ label: '4 sao' });
-    await routeSection.locator('textarea').fill('Audit wizard submit with DB-backed data.');
+    await routeSection.getByLabel(/Mô tả/i).fill('Audit wizard submit with DB-backed data.');
 
     const startInput = page.getByLabel(/Ngày bắt đầu/i);
     const endInput = page.getByLabel(/Ngày kết thúc/i);
@@ -157,7 +157,8 @@ test.describe('Reported feedback live audit', () => {
     endDate.setDate(endDate.getDate() + 7);
     await startInput.fill(startDate);
     await endInput.fill(endDate.toISOString().slice(0, 10));
-    await page.getByRole('button', { name: /T2|T3|T4|T5|T6|T7|CN/ }).first().click();
+    await page.locator('button').filter({ hasText: /Ch.n t.t c./i }).click();
+    await expect(page.getByText(/[1-9]\d* ng.y d./i).first()).toBeVisible();
     await page.getByRole('button', { name: /Tiếp theo: Lịch trình/i }).click();
 
     await expect(page.getByLabel(/Địa điểm lưu trú/i)).toHaveCount(0);
@@ -231,16 +232,16 @@ test.describe('Reported feedback live audit', () => {
     await expect(page.getByText(/L\u00fd do t\u1eeb ch\u1ed1i/i)).toBeVisible();
     await page.getByRole('button', { name: /Ch\u1ec9nh s\u1eeda/i }).click();
     await expect(page).toHaveURL(/\/coordinator\/tour-programs\/TP003\/edit$/);
-    await expect(page.getByRole('button', { name: /^4\s+Tour d\u1ef1 ki\u1ebfn$/i })).toBeVisible();
-    await page.getByRole('button', { name: /^4\s+Tour d\u1ef1 ki\u1ebfn$/i }).click();
+    await expect(page.getByRole('button', { name: /^4\s*Tour d\u1ef1 ki\u1ebfn$/i })).toBeVisible();
+    await page.getByRole('button', { name: /^4\s*Tour d\u1ef1 ki\u1ebfn$/i }).click();
     await expect(page.getByText(/Preview danh s\u00e1ch tour/i)).toBeVisible();
 
     await loginAs(page, 'coordinator', '/coordinator/tour-programs/TP004', { clearBookings: false });
     await expect(page.getByText(/L\u00fd do t\u1eeb ch\u1ed1i|L\u00fd do ng\u1eebng/i)).toBeVisible();
     await page.getByRole('button', { name: /Ch\u1ec9nh s\u1eeda/i }).click();
     await expect(page).toHaveURL(/\/coordinator\/tour-programs\/TP004\/edit$/);
-    await expect(page.getByRole('button', { name: /^4\s+Tour d\u1ef1 ki\u1ebfn$/i })).toBeVisible();
-    await page.getByRole('button', { name: /^4\s+Tour d\u1ef1 ki\u1ebfn$/i }).click();
+    await expect(page.getByRole('button', { name: /^4\s*Tour d\u1ef1 ki\u1ebfn$/i })).toBeVisible();
+    await page.getByRole('button', { name: /^4\s*Tour d\u1ef1 ki\u1ebfn$/i }).click();
     await expect(page.getByText(/Preview danh s\u00e1ch tour/i)).toBeVisible();
   });
 

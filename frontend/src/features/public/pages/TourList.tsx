@@ -35,6 +35,7 @@ export default function TourList() {
   const query = searchParams.get('q') ?? '';
   const region = searchParams.get('region') ?? 'all';
   const budget = searchParams.get('budget') ?? 'all';
+  const date = searchParams.get('date') ?? '';
 
   const filteredTours = tours.filter((tour) => {
     const text = getSearchText(tour);
@@ -45,7 +46,8 @@ export default function TourList() {
       (budget === 'under-5m' && price < 5000000) ||
       (budget === '5m-10m' && price >= 5000000 && price <= 10000000) ||
       (budget === 'over-10m' && price > 10000000);
-    return matchesQuery && matchesBudget && matchesRegion(tour, region);
+    const matchesDate = !date || tour.departureSchedule.some((schedule) => schedule.date >= date);
+    return matchesQuery && matchesBudget && matchesRegion(tour, region) && matchesDate;
   });
 
   const updateFilter = (key: string, value: string) => {
@@ -91,13 +93,22 @@ export default function TourList() {
         </header>
 
         <section className="public-floating-card p-4 md:p-5 mb-7 space-y-4">
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_220px]">
             <label className="block">
               <span className="text-[10px] uppercase tracking-[0.2em] text-secondary font-semibold">Tìm điểm đến</span>
               <input
                 value={query}
                 onChange={(event) => updateFilter('q', event.target.value)}
                 placeholder="Hạ Long, Ninh Thuận, Kyoto..."
+                className="mt-2 w-full border border-outline-variant/70 bg-white px-4 py-3 text-sm text-primary focus:outline-none focus:border-secondary"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[10px] uppercase tracking-[0.2em] text-secondary font-semibold">Thời gian</span>
+              <input
+                value={date}
+                onChange={(event) => updateFilter('date', event.target.value)}
+                type="date"
                 className="mt-2 w-full border border-outline-variant/70 bg-white px-4 py-3 text-sm text-primary focus:outline-none focus:border-secondary"
               />
             </label>

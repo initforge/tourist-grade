@@ -103,6 +103,13 @@ function buildDraftStorageKey(ownerKey: string, slug?: string, scheduleId?: stri
   return `${BOOKING_DRAFT_STORAGE_PREFIX}:${ownerKey}:${slug ?? 'unknown-tour'}:${scheduleId ?? 'unknown-schedule'}`;
 }
 
+function matchesScheduleId(schedule: DepartureScheduleEntry, scheduleId: string) {
+  return schedule.id === scheduleId
+    || schedule.legacyId === scheduleId
+    || schedule.instanceCode === scheduleId
+    || `${schedule.programCode ?? ''}-${schedule.instanceCode ?? ''}` === scheduleId;
+}
+
 function saveDraftToStorage(storageKey: string, payload: Record<string, unknown>) {
   try {
     localStorage.removeItem(LEGACY_BOOKING_DRAFT_STORAGE_KEY);
@@ -137,6 +144,10 @@ function isSuccessfulPaymentStatus(paymentStatus?: Booking['paymentStatus']) {
   return paymentStatus === 'partial' || paymentStatus === 'paid' || paymentStatus === 'refunded';
 }
 
+function isCancelledBookingStatus(status?: Booking['status']) {
+  return status === 'cancelled';
+}
+
 function getPassengerDisplayNumber(passengers: Passenger[], index: number) {
   const target = passengers[index];
   if (!target) {
@@ -148,6 +159,22 @@ function getPassengerDisplayNumber(passengers: Passenger[], index: number) {
 
 function shouldResetAppliedPromo(promoCode: string, discountAmount: number) {
   return promoCode.trim().length > 0 || discountAmount > 0;
+}
+
+function getBillablePassengerCounts(counts: Counts) {
+  const freeInfants = Math.floor(counts.adult / 2);
+  const infantsChargedAsChildren = Math.max(0, counts.infant - freeInfants);
+  const includedChildren = Math.floor(counts.adult / 2);
+  const childrenChargedAsAdults = Math.max(0, counts.child - includedChildren - 1);
+
+  return {
+    adult: counts.adult + childrenChargedAsAdults,
+    child: Math.max(0, counts.child - childrenChargedAsAdults) + infantsChargedAsChildren,
+    infant: Math.max(0, counts.infant - infantsChargedAsChildren),
+    infantsChargedAsChildren,
+    childrenChargedAsAdults,
+    hasChildSurchargeWarning: counts.child > includedChildren,
+  };
 }
 
 function getDefaultContact(user?: { name?: string; phone?: string; email?: string } | null): ContactState {
@@ -175,7 +202,7 @@ export default function BookingCheckout() {
   const upsertReview = useAppDataStore((state) => state.upsertReview);
 
   const tour = tours.find((item) => item.slug === slug);
-  const schedule: DepartureScheduleEntry | undefined = tour?.departureSchedule.find((item) => item.id === scheduleId);
+  const schedule: DepartureScheduleEntry | undefined = tour?.departureSchedule.find((item) => matchesScheduleId(item, scheduleId));
   const draftOwnerKey = user?.id ? `user-${user.id}` : 'guest';
   const draftStorageKey = useMemo(
     () => buildDraftStorageKey(draftOwnerKey, slug, scheduleId),
@@ -220,10 +247,11 @@ export default function BookingCheckout() {
   const selectableSeatLimit = availableSeats + existingHeldSeats;
 
   const totalGuests = counts.adult + counts.child + counts.infant;
+  const billableCounts = useMemo(() => getBillablePassengerCounts(counts), [counts]);
   const surchargeTotal = passengers.reduce((sum, passenger) => sum + (passenger.singleRoomSupplement ?? 0), 0);
   const subtotal = useMemo(
-    () => counts.adult * priceAdult + counts.child * priceChild + counts.infant * priceInfant + surchargeTotal,
-    [counts.adult, counts.child, counts.infant, priceAdult, priceChild, priceInfant, surchargeTotal],
+    () => billableCounts.adult * priceAdult + billableCounts.child * priceChild + billableCounts.infant * priceInfant + surchargeTotal,
+    [billableCounts.adult, billableCounts.child, billableCounts.infant, priceAdult, priceChild, priceInfant, surchargeTotal],
   );
   const totalAfterDiscount = Math.max(subtotal - discountAmount, 0);
   const isDepositDisabled = Boolean(schedule && Math.ceil((new Date(schedule.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) <= 7);
@@ -261,9 +289,26 @@ export default function BookingCheckout() {
 
     const draftBooking = (draft.booking as Booking | null | undefined) ?? null;
     const draftStep = (draft.activeStep as CheckoutStep | undefined) ?? 0;
-    if (draftStep === 2 || isSuccessfulPaymentStatus(draftBooking?.paymentStatus)) {
+    if (
+      draftStep === 2
+      || isSuccessfulPaymentStatus(draftBooking?.paymentStatus)
+      || isCancelledBookingStatus(draftBooking?.status)
+    ) {
       clearDraftFromStorage(draftStorageKey);
       return;
+    }
+
+    if (!draftBooking || draftStep === 0) {
+      clearDraftFromStorage(draftStorageKey);
+      return;
+    }
+
+    if (!bookingIdParam && !payosState) {
+      const shouldRestore = window.confirm('Bạn có thông tin đặt Tour dang dở. Bạn muốn khôi phục hay đặt mới?');
+      if (!shouldRestore) {
+        clearDraftFromStorage(draftStorageKey);
+        return;
+      }
     }
 
     setContact((current) => ({
@@ -360,7 +405,16 @@ export default function BookingCheckout() {
       return;
     }
 
-    if (activeStep === 2 || isSuccessfulPaymentStatus(checkoutBooking?.paymentStatus)) {
+    if (
+      activeStep === 2
+      || isSuccessfulPaymentStatus(checkoutBooking?.paymentStatus)
+      || isCancelledBookingStatus(checkoutBooking?.status)
+    ) {
+      clearDraftFromStorage(draftStorageKey);
+      return;
+    }
+
+    if (activeStep === 0 && !checkoutBooking) {
       clearDraftFromStorage(draftStorageKey);
       return;
     }
@@ -447,6 +501,29 @@ export default function BookingCheckout() {
 
     setDiscountAmount(0);
     setPromoMessage('');
+  };
+
+  const refreshScheduleAvailability = async () => {
+    if (!slug || !schedule) {
+      return null;
+    }
+
+    try {
+      const response = await getPublicTourDetail(slug);
+      const latestSchedule = response.tour.departureSchedule.find((item) => item.id === schedule.id);
+      const latestAvailableSeats = latestSchedule ? latestSchedule.availableSeats : 0;
+      setLiveScheduleAvailableSeats(latestAvailableSeats);
+      return latestAvailableSeats;
+    } catch {
+      setLiveScheduleAvailableSeats(schedule.availableSeats ?? null);
+      return schedule.availableSeats ?? null;
+    }
+  };
+
+  const refreshSeatsIfNeeded = async (message: string) => {
+    if (/ch[oỗ] tr[oố]ng|slot|seat|v[uư][oợ]t qu[aá]|available/i.test(message)) {
+      await refreshScheduleAvailability();
+    }
   };
 
   const syncPassengerCounts = (next: Counts) => {
@@ -588,7 +665,9 @@ export default function BookingCheckout() {
       }
       return response.booking;
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Không thể tạo đơn đặt chỗ.');
+      const message = submitError instanceof Error ? submitError.message : 'Không thể tạo đơn đặt chỗ.';
+      await refreshSeatsIfNeeded(message);
+      setError(message);
       return null;
     } finally {
       setIsSavingDraft(false);
@@ -626,7 +705,9 @@ export default function BookingCheckout() {
         setError('Không tạo được link thanh toán.');
       }
     } catch (paymentError) {
-      setError(paymentError instanceof Error ? paymentError.message : 'Không thể khởi tạo thanh toán.');
+      const message = paymentError instanceof Error ? paymentError.message : 'Không thể khởi tạo thanh toán.';
+      await refreshSeatsIfNeeded(message);
+      setError(message);
     } finally {
       setIsStartingPayment(false);
     }
@@ -728,6 +809,19 @@ export default function BookingCheckout() {
                     ))}
                   </div>
                   {countError && <p className="text-sm text-red-600">{countError}</p>}
+                  {(billableCounts.infantsChargedAsChildren > 0 || billableCounts.hasChildSurchargeWarning) && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                      {billableCounts.infantsChargedAsChildren > 0 && (
+                        <p>{billableCounts.infantsChargedAsChildren} em bé được tính giá như trẻ em.</p>
+                      )}
+                      {billableCounts.hasChildSurchargeWarning && billableCounts.childrenChargedAsAdults === 0 && (
+                        <p>Có thể phát sinh phụ phí với số lượng trẻ em đã chọn.</p>
+                      )}
+                      {billableCounts.childrenChargedAsAdults > 0 && (
+                        <p>{billableCounts.childrenChargedAsAdults} trẻ em được tính giá như người lớn.</p>
+                      )}
+                    </div>
+                  )}
                 </section>
 
                 <section className="bg-white border border-outline-variant/30 p-6 space-y-5">
@@ -947,9 +1041,9 @@ export default function BookingCheckout() {
 
                 <div className="space-y-3 rounded-2xl bg-[var(--color-surface)] p-4">
                   <SummaryRow label="Mã tour" value={`${schedule.programCode ?? tour.id} - ${schedule.instanceCode ?? schedule.id}`} />
-                  <SummaryRow label="Người lớn" value={`${counts.adult} × ${formatCurrency(priceAdult)}`} />
-                  <SummaryRow label="Trẻ em" value={`${counts.child} × ${formatCurrency(priceChild)}`} />
-                  <SummaryRow label="Em bé" value={`${counts.infant} × ${formatCurrency(priceInfant)}`} />
+                  <SummaryRow label="Người lớn tính phí" value={`${billableCounts.adult} × ${formatCurrency(priceAdult)}`} />
+                  <SummaryRow label="Trẻ em tính phí" value={`${billableCounts.child} × ${formatCurrency(priceChild)}`} />
+                  <SummaryRow label="Em bé theo giá em bé" value={`${billableCounts.infant} × ${formatCurrency(priceInfant)}`} />
                   <SummaryRow label="Phụ thu phòng đơn" value={surchargeTotal > 0 ? formatCurrency(surchargeTotal) : 'Không có'} />
                   {discountAmount > 0 && <SummaryRow label="Giảm giá" value={`- ${formatCurrency(discountAmount)}`} />}
                   <SummaryRow label="Tổng cộng" value={formatCurrency(totalAfterDiscount)} strong />

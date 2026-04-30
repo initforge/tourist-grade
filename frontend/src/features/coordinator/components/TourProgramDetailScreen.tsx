@@ -46,6 +46,8 @@ function toEditableProgram(program: TourProgram): EditableProgram {
   return {
     ...program,
     routeDescription: program?.routeDescription ?? '',
+    priceIncludes: program?.priceIncludes ?? '',
+    priceExcludes: program?.priceExcludes ?? '',
     selectedDates: program?.selectedDates ?? [],
     weekdays: program?.weekdays ?? [],
     yearRoundStartDate: program?.yearRoundStartDate ?? '',
@@ -389,6 +391,31 @@ export default function TourProgramDetailScreen({ role }: { role: DetailRole }) 
                 className="w-full border border-outline-variant/40 px-4 py-3 text-sm outline-none resize-none disabled:bg-surface disabled:text-primary/45"
               />
             </label>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <label className="block">
+                <span className="block text-[10px] uppercase tracking-widest text-primary/55 font-bold mb-2">Giá tour bao gồm</span>
+                <textarea
+                  aria-label="Giá tour bao gồm"
+                  value={draft?.priceIncludes ?? ''}
+                  onChange={event => updateDraft('priceIncludes', event?.target?.value)}
+                  disabled={!canEdit || !isEditing}
+                  rows={4}
+                  className="w-full border border-outline-variant/40 px-4 py-3 text-sm outline-none resize-none disabled:bg-surface disabled:text-primary/45"
+                />
+              </label>
+              <label className="block">
+                <span className="block text-[10px] uppercase tracking-widest text-primary/55 font-bold mb-2">Giá tour không bao gồm</span>
+                <textarea
+                  aria-label="Giá tour không bao gồm"
+                  value={draft?.priceExcludes ?? ''}
+                  onChange={event => updateDraft('priceExcludes', event?.target?.value)}
+                  disabled={!canEdit || !isEditing}
+                  rows={4}
+                  className="w-full border border-outline-variant/40 px-4 py-3 text-sm outline-none resize-none disabled:bg-surface disabled:text-primary/45"
+                />
+              </label>
+            </div>
 
             <section className="border border-outline-variant/20 p-6 bg-[var(--color-surface)]/35 space-y-5">
               <div>

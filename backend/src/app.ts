@@ -4,12 +4,22 @@ import type { NextFunction, Request, Response } from 'express';
 import { env } from './config/env.js';
 import { createV1Router } from './routes/v1.js';
 
+function isAllowedLocalDevOrigin(origin: string) {
+  return /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+}
+
 export function createApp() {
   const app = express();
 
   app.use(cors({
     origin(origin, callback) {
-      if (!origin || env.CORS_ORIGINS.includes(origin)) {
+      if (
+        !origin
+        || env.CORS_ORIGINS.includes(origin)
+        || origin.includes('localhost')
+        || origin.includes('127.0.0.1')
+        || isAllowedLocalDevOrigin(origin)
+      ) {
         callback(null, true);
         return;
       }

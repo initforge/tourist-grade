@@ -67,7 +67,7 @@ function formatDate(dateStr: string) {
 function formatAuditDateTime(dateStr?: string) {
   if (!dateStr) return '';
   return new Date(dateStr).toLocaleString('vi-VN', {
-    timeZone: 'UTC',
+    timeZone: 'Asia/Ho_Chi_Minh',
     hour12: false,
   });
 }

@@ -3,6 +3,7 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = {
+  $transaction: vi.fn(async (callback: (tx: typeof prismaMock) => unknown) => callback(prismaMock)),
   user: {
     findUnique: vi.fn(),
   },
@@ -11,6 +12,9 @@ const prismaMock = {
     findFirst: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+  },
+  tourInstance: {
+    createMany: vi.fn(),
   },
 };
 
@@ -71,6 +75,7 @@ function createProgramFixture(overrides: Record<string, unknown> = {}) {
         sellPriceChild: 2300000,
         sellPriceInfant: 0,
         minParticipants: 10,
+        guideUnitPrice: 500000,
       },
       draftPricingTables: {},
       draftManualPricing: {},
@@ -84,6 +89,8 @@ function createProgramFixture(overrides: Record<string, unknown> = {}) {
       coverageMonths: 3,
       approvalStatus: 'pending',
       lodgingStandard: '4 sao',
+      priceIncludes: 'Ve tham quan\nBua an',
+      priceExcludes: 'Chi phi ca nhan',
       draftPreviewRows: [],
     },
     createdById: 'coordinator-1',
@@ -104,6 +111,8 @@ function createPayload() {
     transport: 'xe',
     tourType: 'quanh_nam',
     routeDescription: 'Mo ta',
+    priceIncludes: 'Ve tham quan\nBua an',
+    priceExcludes: 'Chi phi ca nhan',
     weekdays: ['t2'],
     yearRoundStartDate: '2026-08-01',
     yearRoundEndDate: '2026-12-31',
@@ -120,6 +129,7 @@ function createPayload() {
       sellPriceChild: 2300000,
       sellPriceInfant: 0,
       minParticipants: 10,
+      guideUnitPrice: 500000,
     },
     draftPricingTables: {},
     draftManualPricing: {},
@@ -152,6 +162,13 @@ describe('tour-program routes', () => {
         publicContentJson: expect.objectContaining({
           lodgingStandard: '4 sao',
           coverageMonths: 3,
+          priceIncludes: 'Ve tham quan\nBua an',
+          priceExcludes: 'Chi phi ca nhan',
+        }),
+        pricingConfigJson: expect.objectContaining({
+          pricingConfig: expect.objectContaining({
+            guideUnitPrice: 500000,
+          }),
         }),
       }),
     }));
@@ -217,5 +234,63 @@ describe('tour-program routes', () => {
       }),
     }));
     expect(response.body.tourProgram.rejectionReason).toBe('Need revise planned tours');
+  });
+
+  it('approves a program and creates unchecked preview rows as rejected sale tours', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'manager-1', status: 'ACTIVE' });
+    prismaMock.tourProgram.findFirst.mockResolvedValue(createProgramFixture({
+      publicContentJson: {
+        approvalStatus: 'pending',
+        draftPreviewRows: [
+          {
+            id: 'T001',
+            departureDate: '2026-08-01',
+            endDate: '2026-08-03',
+            dayType: 'Ngay thuong',
+            expectedGuests: 10,
+            costPerAdult: 2500000,
+            sellPrice: 3100000,
+            profitPercent: 20,
+            bookingDeadline: '2026-07-25',
+            conflictLabel: '',
+            conflictDetails: [],
+            checked: true,
+          },
+          {
+            id: 'T002',
+            departureDate: '2026-08-08',
+            endDate: '2026-08-10',
+            dayType: 'Ngay thuong',
+            expectedGuests: 10,
+            costPerAdult: 2500000,
+            sellPrice: 3100000,
+            profitPercent: 20,
+            bookingDeadline: '2026-08-01',
+            conflictLabel: '',
+            conflictDetails: [],
+            checked: false,
+          },
+        ],
+      },
+    }));
+    prismaMock.tourProgram.update.mockResolvedValue(createProgramFixture({
+      status: 'ACTIVE',
+      publicContentJson: { approvalStatus: 'approved' },
+    }));
+    prismaMock.tourInstance.createMany.mockResolvedValue({ count: 2 });
+
+    const response = await request(createTestApp())
+      .post('/TP001/approve')
+      .set('Authorization', 'Bearer manager-token')
+      .send({});
+
+    expect(response.status).toBe(200);
+    expect(prismaMock.tourInstance.createMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.arrayContaining([
+        expect.objectContaining({ code: 'REQ-TP001-2026-08-01', status: 'CHO_DUYET_BAN' }),
+        expect.objectContaining({ code: 'REQ-TP001-2026-08-08', status: 'TU_CHOI_BAN' }),
+      ]),
+      skipDuplicates: true,
+    }));
   });
 });

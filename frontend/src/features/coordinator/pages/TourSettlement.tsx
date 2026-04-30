@@ -13,6 +13,7 @@ type SettlementRow = {
   categoryName: string;
   itemId: number;
   itemName: string;
+  supplierId: string;
   supplierName: string;
   serviceName: string;
   estimated: number;
@@ -24,45 +25,43 @@ function formatCurrency(value: number) {
   return `${value?.toLocaleString('vi-VN')} đ`;
 }
 
-function buildRows(instance: TourInstance): SettlementRow[] {
-  const settlementCategories = instance?.settlement?.actualCosts;
-  if (settlementCategories?.length) {
-    return settlementCategories.flatMap(category =>
-      category.items.map(item => ({
-        rowId: `${category.id}-${item.id}-${item.suppliers[0]?.supplierId ?? 'main'}`,
+function rowKey(categoryId: string, itemId: number, supplierId?: string) {
+  return `${categoryId}-${itemId}-${supplierId ?? 'main'}`;
+}
+
+function rowsFromCategories(categories: CostCategory[], useActualAsEstimate = false): SettlementRow[] {
+  return categories.flatMap(category =>
+    category.items.flatMap(item =>
+      item.suppliers.map(supplier => ({
+        rowId: rowKey(category.id, item.id, supplier.supplierId),
         categoryId: category.id,
         categoryName: category.name,
         itemId: item.id,
         itemName: item.name,
-        supplierName: item.suppliers[0]?.supplierName ?? '-',
-        serviceName: item.suppliers[0]?.serviceVariant ?? item.name,
-        estimated: item.total,
+        supplierId: supplier.supplierId,
+        supplierName: supplier.supplierName,
+        serviceName: supplier.serviceVariant,
+        estimated: useActualAsEstimate ? item.total : item.total,
         actual: item.total,
-        note: item.suppliers[0]?.notes ?? '',
+        note: supplier.notes ?? '',
       })),
-    );
+    ),
+  );
+}
+
+function buildRows(instance: TourInstance): SettlementRow[] {
+  const estimateRows = instance.costEstimate?.categories ? rowsFromCategories(instance.costEstimate.categories) : [];
+  const settlementRows = instance.settlement?.actualCosts?.length ? rowsFromCategories(instance.settlement.actualCosts, true) : [];
+
+  if (estimateRows.length > 0) {
+    const settledById = new Map(settlementRows.map(row => [row.rowId, row]));
+    return estimateRows.map(row => {
+      const settled = settledById.get(row.rowId);
+      return settled ? { ...row, actual: settled.actual, note: settled.note } : row;
+    });
   }
 
-  if (instance?.costEstimate) {
-    return instance.costEstimate.categories.flatMap(category =>
-      category.items.flatMap(item =>
-        item.suppliers.map(supplier => ({
-          rowId: `${category.id}-${item.id}-${supplier.supplierId}`,
-          categoryId: category.id,
-          categoryName: category.name,
-          itemId: item.id,
-          itemName: item.name,
-          supplierName: supplier.supplierName,
-          serviceName: supplier.serviceVariant,
-          estimated: supplier.quotedPrice * item.quantity,
-          actual: supplier.quotedPrice * item.quantity,
-          note: supplier.notes ?? '',
-        })),
-      ),
-    );
-  }
-
-  return [];
+  return settlementRows;
 }
 
 export default function TourSettlement() {
@@ -157,14 +156,14 @@ export default function TourSettlement() {
         unitPrice: row.actual,
         total: row.actual,
         suppliers: [{
-          supplierId: row.rowId,
+          supplierId: row.supplierId,
           supplierName: row.supplierName,
           serviceVariant: row.serviceName,
           quotedPrice: row.actual,
           notes: row.note,
           isPrimary: true,
         }],
-        primarySupplierId: row.rowId,
+        primarySupplierId: row.supplierId,
       })),
     }));
 

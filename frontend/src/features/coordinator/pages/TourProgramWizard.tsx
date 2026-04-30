@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRef } from 'react';
+import type { WheelEvent } from 'react';
 import { message } from 'antd';
 import {
   VIETNAM_PROVINCES,
@@ -63,6 +64,8 @@ interface FormState {
   arrivalPoint: string;
   tourType: FormTourType;
   holiday: string;
+  priceIncludes: string;
+  priceExcludes: string;
   selectedDates: string[];
   weekdays: string[];
   yearRoundStartDate: string;
@@ -277,6 +280,8 @@ function formFromProgram(program: TourProgram): FormState {
     sightseeingSpots: [...(program?.sightseeingSpots ?? [])],
     lodgingStandard: program?.lodgingStandard ?? '',
     routeDescription: program?.routeDescription ?? '',
+    priceIncludes: program?.priceIncludes ?? '',
+    priceExcludes: program?.priceExcludes ?? '',
     bookingDeadline: program?.bookingDeadline ?? 7,
     transport: program?.transport ?? 'xe',
     arrivalPoint: program?.arrivalPoint ?? '',
@@ -301,7 +306,7 @@ function pricingFromProgram(program: TourProgram): PricingConfigState {
     profitMargin: program?.pricingConfig?.profitMargin ?? 15,
     taxRate: program?.pricingConfig?.taxRate ?? 10,
     otherCostFactor: otherCostFactorPercent,
-    guideUnitPrice: 0,
+    guideUnitPrice: program?.pricingConfig?.guideUnitPrice ?? 0,
   };
 }
 
@@ -376,6 +381,8 @@ export default function AdminTourProgramWizard({
     arrivalPoint: '',
     tourType: 'quanh_nam',
     holiday: '',
+    priceIncludes: '',
+    priceExcludes: '',
     selectedDates: [],
     weekdays: [],
     yearRoundStartDate: '',
@@ -505,6 +512,20 @@ export default function AdminTourProgramWizard({
           next.holiday = '';
           next.selectedDates = [];
         }
+      }
+      if (
+        (key === 'weekdays' || key === 'yearRoundStartDate' || key === 'yearRoundEndDate')
+        && next.tourType === 'quanh_nam'
+      ) {
+        const generatedDates = next.weekdays.length > 0
+          ? buildDateRange(next.yearRoundStartDate, next.yearRoundEndDate, next.weekdays)
+          : [];
+        const previousGeneratedDates = yearRoundGeneratedDatesRef.current;
+        const manuallyRemovedDates = previousGeneratedDates.filter(dateKey => !prev.selectedDates.includes(dateKey));
+        next.selectedDates = previousGeneratedDates.length === 0 || prev.selectedDates.length === 0
+          ? generatedDates
+          : generatedDates.filter(dateKey => !manuallyRemovedDates.includes(dateKey));
+        yearRoundGeneratedDatesRef.current = generatedDates;
       }
       if (key === 'transport' && value === 'xe') {
         next.arrivalPoint = '';
@@ -780,6 +801,8 @@ export default function AdminTourProgramWizard({
       arrivalPoint: form.transport === 'maybay' ? form.arrivalPoint || undefined : undefined,
       tourType: form.tourType || 'quanh_nam',
       routeDescription: form.routeDescription.trim(),
+      priceIncludes: form.priceIncludes.trim(),
+      priceExcludes: form.priceExcludes.trim(),
       holiday: form.tourType === 'mua_le' ? form.holiday || undefined : undefined,
       selectedDates: form.selectedDates,
       weekdays: form.tourType === 'quanh_nam' ? form.weekdays : [],
@@ -807,6 +830,7 @@ export default function AdminTourProgramWizard({
         sellPriceChild: actualPrices.child,
         sellPriceInfant: actualPrices.infant,
         minParticipants: pricingConfig.expectedGuests,
+        guideUnitPrice: pricingConfig.guideUnitPrice,
       },
       draftPricingTables: pricingTableValue as TourProgramPricingTablesState,
       draftManualPricing: manualPricing,
@@ -917,6 +941,11 @@ export default function AdminTourProgramWizard({
       : ((readOnly && expectedYearRoundSelectedDates.length === 0) ? yearRoundDepartureDates : expectedYearRoundSelectedDates),
     [expectedYearRoundSelectedDates, form?.tourType, form.selectedDates, readOnly, yearRoundDepartureDates],
   );
+  const handleHolidayCalendarWheel = (event: WheelEvent<HTMLDivElement>) => {
+    if (readOnly || Math.abs(event.deltaY) < 8) return;
+    event.preventDefault();
+    setHolidayMonthAnchor(toDateKey(addMonths(displayMonth, event.deltaY > 0 ? 1 : -1)));
+  };
 
   useEffect(() => {
     if (form?.tourType !== 'quanh_nam') {
@@ -929,33 +958,29 @@ export default function AdminTourProgramWizard({
       return;
     }
 
-    const timer = window.setTimeout(() => {
-      setForm((current) => {
-        if (current.tourType !== 'quanh_nam') {
-          yearRoundGeneratedDatesRef.current = [];
-          return current;
-        }
+    setForm((current) => {
+      if (current.tourType !== 'quanh_nam') {
+        yearRoundGeneratedDatesRef.current = [];
+        return current;
+      }
 
-        const previousGeneratedDates = yearRoundGeneratedDatesRef.current;
-        let nextSelectedDates: string[];
+      const previousGeneratedDates = yearRoundGeneratedDatesRef.current;
+      let nextSelectedDates: string[];
 
-        if (previousGeneratedDates.length === 0) {
-          nextSelectedDates = current.selectedDates.length > 0
-            ? yearRoundDepartureDates.filter((dateKey) => current.selectedDates.includes(dateKey))
-            : yearRoundDepartureDates;
-        } else {
-          const manuallyRemovedDates = previousGeneratedDates.filter((dateKey) => !current.selectedDates.includes(dateKey));
-          nextSelectedDates = yearRoundDepartureDates.filter((dateKey) => !manuallyRemovedDates.includes(dateKey));
-        }
+      if (previousGeneratedDates.length === 0) {
+        nextSelectedDates = current.selectedDates.length > 0
+          ? yearRoundDepartureDates.filter((dateKey) => current.selectedDates.includes(dateKey))
+          : yearRoundDepartureDates;
+      } else {
+        const manuallyRemovedDates = previousGeneratedDates.filter((dateKey) => !current.selectedDates.includes(dateKey));
+        nextSelectedDates = yearRoundDepartureDates.filter((dateKey) => !manuallyRemovedDates.includes(dateKey));
+      }
 
-        yearRoundGeneratedDatesRef.current = yearRoundDepartureDates;
-        return areDateListsEqual(current.selectedDates, nextSelectedDates)
-          ? current
-          : { ...current, selectedDates: nextSelectedDates };
-      });
-    }, 0);
-
-    return () => window.clearTimeout(timer);
+      yearRoundGeneratedDatesRef.current = yearRoundDepartureDates;
+      return areDateListsEqual(current.selectedDates, nextSelectedDates)
+        ? current
+        : { ...current, selectedDates: nextSelectedDates };
+    });
   }, [form?.tourType, readOnly, yearRoundDepartureDates]);
 
   const suggestedAdultPrice = roundToThousand(
@@ -991,9 +1016,9 @@ export default function AdminTourProgramWizard({
       childVariableCost: 0,
       infantVariableCost: 0,
     };
-    const overlappingTours = existingTourInstances
+    const overlappingTours = Array.from(new Set(existingTourInstances
       .filter(instance => instance.departureDate >= departureDate && instance.departureDate <= addDays(departureDate, Math.max(0, dayCount - 1)))
-      .map(instance => `${instance.programName} - ${instance.departureDate}`);
+      .map(instance => `${instance.programName} - ${instance.departureDate}`)));
     const sellPrice = roundToThousand(departurePricing.adultNet * (1 + roundedActualProfitRate / 100));
     const profitPercent = departurePricing.adultNet > 0
       ? Number((((sellPrice - departurePricing.adultNet) / departurePricing.adultNet) * 100).toFixed(1))
@@ -1311,6 +1336,33 @@ export default function AdminTourProgramWizard({
                     <p className="text-xs text-red-500 mt-2">{stepOneErrors.routeDescription}</p>
                   )}
                 </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-primary/60 font-label block mb-1">
+                      Giá tour bao gồm
+                    </label>
+                    <textarea
+                      aria-label="Giá tour bao gồm"
+                      value={form?.priceIncludes}
+                      onChange={e => updateForm('priceIncludes', e?.target?.value)}
+                      rows={4}
+                      className="w-full border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none resize-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-primary/60 font-label block mb-1">
+                      Giá tour không bao gồm
+                    </label>
+                    <textarea
+                      aria-label="Giá tour không bao gồm"
+                      value={form?.priceExcludes}
+                      onChange={e => updateForm('priceExcludes', e?.target?.value)}
+                      rows={4}
+                      className="w-full border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none resize-none"
+                    />
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -1422,7 +1474,7 @@ export default function AdminTourProgramWizard({
                       Ngày khởi hành thuộc dịp lễ <span className="text-red-500">*</span>
                     </p>
                     <p className="text-xs text-primary/50 mb-3">Chọn ngày trên lịch thành đúng dịp lễ; các ngày không nằm trong dải lễ sẽ bị khóa.</p>
-                    <div className="border border-outline-variant/30 max-w-2xl">
+                    <div className="border border-outline-variant/30 max-w-2xl" onWheel={handleHolidayCalendarWheel}>
                       <div className="flex items-center justify-between px-4 py-3 border-b border-outline-variant/20 bg-[var(--color-surface)]">
                         <button
                           type="button"
@@ -1639,7 +1691,10 @@ export default function AdminTourProgramWizard({
                         <div className="max-h-72 overflow-y-auto scroll-smooth rounded-sm border border-outline-variant/15 bg-white">
                           {yearRoundDepartureDateGroups.map((group) => (
                             <section key={group.monthKey}>
-                              <div className="sticky top-0 z-10 border-b border-outline-variant/15 bg-[var(--color-surface)]/95 px-4 py-3">
+                              <div
+                                className="sticky top-0 z-10 border-b border-outline-variant/15 bg-[var(--color-surface)]/95 px-4 py-3"
+                                style={{ position: 'sticky', top: 0 }}
+                              >
                                 <p className="text-sm font-semibold text-primary">{group.label}</p>
                               </div>
                               <div className="divide-y divide-outline-variant/10">
@@ -1990,7 +2045,7 @@ export default function AdminTourProgramWizard({
                               <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 hidden min-w-[260px] border border-outline-variant/30 bg-white p-3 text-primary shadow-lg group-hover:block">
                                 <p className="mb-2 text-[10px] uppercase tracking-widest text-primary/45">Danh sách chương trình trùng</p>
                                 <div className="space-y-1 text-xs">
-                                  {row?.conflictDetails?.map(detail => <p key={`${row.id}-${detail}`}>{detail}</p>)}
+                                  {row?.conflictDetails?.map((detail, detailIndex) => <p key={`${row.id}-${detail}-${detailIndex}`}>{detail}</p>)}
                                 </div>
                               </div>
                             </div>

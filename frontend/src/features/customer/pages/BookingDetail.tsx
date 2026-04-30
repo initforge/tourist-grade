@@ -55,12 +55,12 @@ export default function BookingDetail() {
   }, [booking]);
 
   useEffect(() => {
-    if (!id || !accessToken || !user || booking) {
+    if (!id || !accessToken || !user) {
       return;
     }
 
     let cancelled = false;
-    setIsLoadingBooking(true);
+    setIsLoadingBooking(!booking);
     setBookingError('');
 
     void getBookingDetail(id, accessToken)
@@ -84,7 +84,7 @@ export default function BookingDetail() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, booking, id, upsertBooking, user]);
+  }, [accessToken, id, upsertBooking, user]);
 
   useEffect(() => {
     if (!id || !isPublicLookupView || booking) {

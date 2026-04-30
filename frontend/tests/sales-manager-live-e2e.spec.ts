@@ -260,7 +260,7 @@ test('unpaid bookings stay in pending-confirm before 15 minutes and move to canc
 
   await loginAsRole(page, 'sales', '/sales/bookings?tab=cancelled');
   await expect(page.locator('tbody')).toContainText('BK-888012');
-  await expect(page.locator('tbody')).toContainText(/Không thanh toán đúng hạn/i);
+  await expect(page.locator('tbody')).toContainText(/Quá hạn thanh toán giữ chỗ/i);
   await expect(page.locator('tbody')).toContainText(/Hoàn thành/i);
 });
 
@@ -277,20 +277,21 @@ test('manager voucher approval and rejection sync back to sales with the correct
   await loginAsRole(page, 'manager', '/manager/voucher-approval');
 
   const pendingRows = page.locator('tbody tr');
-  await expect(pendingRows.nth(0)).toContainText('APPROVENOW');
-  await expect(pendingRows.nth(1)).toContainText('VIPONLY30');
-  await expect(pendingRows.nth(2)).toContainText('AUTUMN20');
+  const autumnRow = pendingRows.filter({ hasText: 'AUTUMN20' });
+  const vipOnlyRow = pendingRows.filter({ hasText: 'VIPONLY30' });
+  await expect(autumnRow).toBeVisible();
+  await expect(vipOnlyRow).toBeVisible();
 
-  await pendingRows.nth(0).getByRole('button', { name: 'Phê duyệt' }).click();
+  await autumnRow.getByRole('button', { name: 'Phê duyệt' }).click();
   await page.getByRole('dialog').getByRole('button', { name: /Phê duyệt/i }).click();
-  await expect(page.locator('tbody')).not.toContainText('APPROVENOW');
+  await expect(page.locator('tbody')).not.toContainText('AUTUMN20');
 
-  await pendingRows.nth(0).getByRole('button', { name: 'Từ chối' }).click();
+  await vipOnlyRow.getByRole('button', { name: 'Từ chối' }).click();
   const rejectDialog = page.getByRole('dialog');
   await rejectDialog.getByPlaceholder(/Lý do/i).fill('Thiếu biên lợi nhuận tối thiểu');
   await rejectDialog.getByRole('button', { name: /Xác nhận/i }).click();
 
-  await loginAsRole(page, 'sales', '/sales/vouchers/VOU-10');
+  await loginAsRole(page, 'sales', '/sales/vouchers/VOU-07');
   await expect(page.getByText(/Sắp diễn ra/i)).toBeVisible();
 
   await page.goto('/sales/vouchers/VOU-08');

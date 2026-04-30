@@ -101,6 +101,7 @@ interface HotelOption {
   address: string;
   city: string;
   standard: Exclude<LodgingStandard, ''>;
+  standards: Exclude<LodgingStandard, ''>[];
   singlePrices: DatedPrice[];
   doublePrices: DatedPrice[];
   triplePrices: DatedPrice[];
@@ -232,6 +233,7 @@ const fallbackHotelOptions: HotelOption[] = [
     address: '12 Võ Nguyên Giáp, Đà Nẵng',
     city: 'Đà Nẵng',
     standard: '4 sao',
+    standards: ['4 sao'],
     singlePrices: [
       { startDate: '2026-01-01', endDate: '2026-05-31', price: 1550000 },
       { startDate: '2026-06-01', endDate: '2026-08-31', price: 1750000 },
@@ -254,6 +256,7 @@ const fallbackHotelOptions: HotelOption[] = [
     address: '81 Trần Bạch Đằng, Đà Nẵng',
     city: 'Đà Nẵng',
     standard: '4 sao',
+    standards: ['4 sao'],
     singlePrices: [
       { startDate: '2026-01-01', endDate: '2026-05-31', price: 1480000 },
       { startDate: '2026-06-01', endDate: '2026-08-31', price: 1680000 },
@@ -276,6 +279,7 @@ const fallbackHotelOptions: HotelOption[] = [
     address: '12 Bãi Cháy, Hạ Long',
     city: 'Quảng Ninh',
     standard: '4 sao',
+    standards: ['4 sao'],
     singlePrices: [
       { startDate: '2026-01-01', endDate: '2026-04-30', price: 1500000 },
       { startDate: '2026-05-01', endDate: '2026-08-31', price: 1760000 },
@@ -298,6 +302,7 @@ const fallbackHotelOptions: HotelOption[] = [
     address: '15 Hàng Gà, Hà Nội',
     city: 'Hà Nội',
     standard: '3 sao',
+    standards: ['3 sao'],
     singlePrices: [
       { startDate: '2026-01-01', endDate: '2026-05-31', price: 1200000 },
       { startDate: '2026-06-01', price: 1280000 },
@@ -491,6 +496,12 @@ function extractHotelStandard(source: string): Exclude<LodgingStandard, ''> {
   return '3 sao';
 }
 
+function extractHotelStandards(source: string): Exclude<LodgingStandard, ''>[] {
+  const matches = Array.from(source.matchAll(/([2-5])\s*sao/gi))
+    .map(match => `${match[1]} sao` as Exclude<LodgingStandard, ''>);
+  return matches.length > 0 ? Array.from(new Set(matches)) : [extractHotelStandard(source)];
+}
+
 function normalizeDefaults<T extends BaseSelection>(rows: T[]) {
   if (rows.length === 0) return rows;
   const existingDefaultIndex = rows.findIndex(row => row.isDefault);
@@ -668,8 +679,8 @@ export default function TourProgramPricingTables({
   const firstDepartureDate = departureDates[0] ?? toDateKey(new Date());
   const allDepartureDates = departureDates.length > 0 ? departureDates : [firstDepartureDate];
   const transportOptions: TransportOption[] = (() => {
-    const derived = suppliers
-      .filter((supplier) => supplier.category === 'Vận chuyển')
+    const transportSuppliers = suppliers.filter((supplier) => supplier.category === 'Vận chuyển');
+    const derived = transportSuppliers
       .flatMap((supplier) => {
       const roadServices = supplier.services
         .filter((item) => item.transportType === 'Xe' || item.name.toLowerCase().includes('xe'))
@@ -693,7 +704,7 @@ export default function TourProgramPricingTables({
       }];
       })
       .filter((item) => item.serviceLabel.trim().length > 0);
-    return derived.length > 0 ? derived : fallbackTransportOptions;
+    return derived.length > 0 ? derived : (transportSuppliers.length === 0 ? fallbackTransportOptions : []);
   })();
   const flightOptions = useMemo<FlightOption[]>(() => {
     const derived = suppliers
@@ -723,12 +734,14 @@ export default function TourProgramPricingTables({
       const double = supplier.services.find((item) => item.name.toLowerCase().includes('đôi'));
       const triple = supplier.services.find((item) => item.name.toLowerCase().includes('ba'));
       if (!single || !double || !triple) return result;
+      const standards = extractHotelStandards(`${supplier.standards?.join(' ') ?? ''} ${supplier.service} ${supplier.description}`);
       result.push({
         id: supplier.id,
         supplierName: supplier.name,
         address: supplier.address || supplier.operatingArea || '-',
         city: extractSpotsFromText(`${supplier.address} ${supplier.operatingArea}`, sightseeingSpots)[0] ?? supplier.operatingArea.split(',')[0]?.trim() ?? '',
-        standard: extractHotelStandard(`${supplier.service} ${supplier.description}`),
+        standard: standards[0],
+        standards,
         singlePrices: single.prices.map((price): DatedPrice => ({ startDate: price.fromDate, endDate: price.toDate || undefined, price: price.unitPrice })),
         doublePrices: double.prices.map((price): DatedPrice => ({ startDate: price.fromDate, endDate: price.toDate || undefined, price: price.unitPrice })),
         triplePrices: triple.prices.map((price): DatedPrice => ({ startDate: price.fromDate, endDate: price.toDate || undefined, price: price.unitPrice })),
@@ -864,7 +877,7 @@ export default function TourProgramPricingTables({
   const hotelOptionsByGroup = useMemo(() => Object.fromEntries(
     hotelGroups.map(group => [
       group.id,
-      hotelOptions.filter(option => option.city === group.city && (!lodgingStandard || option.standard === lodgingStandard)),
+      hotelOptions.filter(option => option.city === group.city && (!lodgingStandard || option.standards.includes(lodgingStandard))),
     ]),
   ) as Record<string, HotelOption[]>, [hotelGroups, hotelOptions, lodgingStandard]);
 
@@ -1540,7 +1553,7 @@ export default function TourProgramPricingTables({
                     <tr key={`${group.id}-header`} className="bg-gray-50">
                       <td className="border border-outline-variant/20 px-3 py-2 font-medium">{group.label}</td>
                       <td className="border border-outline-variant/20 px-3 py-2">Điểm lưu trú: {group.city}</td>
-                      <td className="border border-outline-variant/20 px-3 py-2 text-right">Đơn giá áp dụng: {formatMoney(display?.doublePrice ?? 0)}</td>
+                      <td className="border border-outline-variant/20 px-3 py-2 text-right">Thành tiền: {formatMoney(display?.doublePrice ?? 0)}</td>
                       <td className="border border-outline-variant/20 px-3 py-2" />
                       {!hideActionColumn && (
                         <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50">
@@ -1755,7 +1768,7 @@ export default function TourProgramPricingTables({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-[var(--color-surface)] text-left">
-              {['Nhà cung cấp', 'Tên dịch vụ', 'Đơn giá', 'Số lần', 'Ghi chú', ...(hideActionColumn ? [] : ['Thao tác'])].map(header => (
+              {['Nhà cung cấp', 'Tên dịch vụ', 'Đơn giá', 'Số lần', 'Ghi chú', 'Mặc định', ...(hideActionColumn ? [] : ['Thao tác'])].map(header => (
                 <th key={header} className="border border-outline-variant/20 px-3 py-2 font-medium">{header}</th>
               ))}
             </tr>
@@ -1820,6 +1833,15 @@ export default function TourProgramPricingTables({
                       className="w-full border border-outline-variant/30 px-3 py-2 outline-none"
                     />
                   </td>
+                  <td className="border border-outline-variant/20 px-3 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(option.isInsurance)}
+                      readOnly
+                      aria-label={`Mặc định ${option.serviceName}`}
+                      className="h-4 w-4 accent-[var(--color-secondary)]"
+                    />
+                  </td>
                   {!hideActionColumn && (
                     <td className="border border-outline-variant/20 px-3 py-2 text-center">
                       {!option.isInsurance && (
@@ -1832,7 +1854,7 @@ export default function TourProgramPricingTables({
             })}
             {!hideActionColumn && (
               <tr className="bg-gray-50">
-                <td className="border border-outline-variant/20 px-3 py-2" colSpan={5} />
+                <td className="border border-outline-variant/20 px-3 py-2" colSpan={6} />
                 <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50">
                   {sectionButton('Chọn dịch vụ +', () => openPicker('other', 'Chọn chi phí khác'), 'Thêm chi phí khác')}
                 </td>

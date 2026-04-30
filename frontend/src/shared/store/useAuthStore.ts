@@ -3,6 +3,7 @@ import type { User } from '@entities/user/data/users';
 import { apiRequest, ApiError } from '@shared/lib/api/client';
 
 const STORAGE_KEY = '__travela_auth_tokens';
+const BOOKING_DRAFT_STORAGE_PREFIX = 'travela-public-booking-draft';
 
 interface StoredTokens {
   accessToken: string;
@@ -32,6 +33,16 @@ function persistTokens(tokens: StoredTokens | null) {
   }
 
   localStorage?.removeItem(STORAGE_KEY);
+}
+
+function clearPublicBookingDrafts() {
+  try {
+    Object.keys(localStorage ?? {})
+      .filter((key) => key.startsWith(BOOKING_DRAFT_STORAGE_PREFIX))
+      .forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // Local storage cleanup is best-effort during logout.
+  }
 }
 
 interface AuthState {
@@ -178,6 +189,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     }
 
+    clearPublicBookingDrafts();
     persistTokens(null);
     set({
       user: null,

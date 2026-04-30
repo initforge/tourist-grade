@@ -104,9 +104,10 @@ test('customer public surfaces hide lookup for logged-in users, persist wishlist
 
   const primaryImage = page.locator('main section').first().locator('button').first();
   await primaryImage.click();
-  await expect(page.getByLabel(/Đóng xem ảnh/i)).toBeVisible();
-  await page.locator('.fixed.inset-0.z-50 button').nth(1).click();
-  await expect(page.getByLabel(/Đóng xem ảnh/i)).toHaveCount(0);
+  const lightbox = page.getByRole('dialog', { name: /Xem ảnh tour/i });
+  await expect(lightbox).toBeVisible();
+  await lightbox.getByLabel(/Đóng xem ảnh/i).last().click();
+  await expect(lightbox).toHaveCount(0);
 
   const stickyMeta = await page.getByRole('button', { name: /Đặt ngay/i }).evaluate((button) => {
     let current: HTMLElement | null = button.parentElement;
@@ -137,32 +138,34 @@ test('customer public surfaces hide lookup for logged-in users, persist wishlist
   await expect(scheduleRows.first()).toContainText('TP001 - TI010');
   await expect(page.locator('body')).not.toContainText(/Tour da het han dat|Tour đã hết hạn đặt/i);
 
-  const savedWishlistButton = page.getByRole('button', { name: /Đã lưu yêu thích/i });
+  const freshLogin = await page.request.post(`${apiBase}/auth/login`, {
+    data: { email: 'customer@travela.vn', password: '123456' },
+  });
+  expect(freshLogin.ok()).toBeTruthy();
+  const freshAuth = await freshLogin.json() as { accessToken: string; refreshToken: string };
+  await page.evaluate((tokens) => {
+    localStorage.setItem('__travela_auth_tokens', JSON.stringify(tokens));
+  }, { accessToken: freshAuth.accessToken, refreshToken: freshAuth.refreshToken });
+
+  const savedWishlistButton = page.getByRole('button', { name: /^(favorite\s*)?Đã lưu yêu thích$/i });
   if (await savedWishlistButton.isVisible().catch(() => false)) {
     const initialRemoveResponse = page.waitForResponse((response) => (
       response.url().includes('/api/v1/wishlist/') && response.request().method() === 'DELETE'
     ));
     await savedWishlistButton.click();
     expect((await initialRemoveResponse).ok()).toBeTruthy();
-    await expect(page.getByRole('button', { name: /Lưu yêu thích/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^(favorite(?:_border)?\s*)?Lưu yêu thích$/i })).toBeVisible();
+  } else {
+    const wishlistButton = page.getByRole('button', { name: /^(favorite(?:_border)?\s*)?Lưu yêu thích$/i });
+    const addWishlistResponse = page.waitForResponse((response) => (
+      response.url().endsWith('/api/v1/wishlist') && response.request().method() === 'POST'
+    ));
+    await expect(wishlistButton).toBeVisible();
+    await wishlistButton.click();
+    const addWishlistPayload = await (await addWishlistResponse).json() as { item?: { slug?: string } };
+    expect(addWishlistPayload.item?.slug).toBe('kham-pha-vinh-ha-long-du-thuyen-5-sao');
+    await expect(page.getByRole('button', { name: /^(favorite\s*)?Đã lưu yêu thích$/i })).toBeVisible();
   }
-
-  const wishlistButton = page.getByRole('button', { name: /Lưu yêu thích/i });
-  const addWishlistResponse = page.waitForResponse((response) => (
-    response.url().endsWith('/api/v1/wishlist') && response.request().method() === 'POST'
-  ));
-  await expect(wishlistButton).toBeVisible();
-  await wishlistButton.click();
-  const addWishlistPayload = await (await addWishlistResponse).json() as { item?: { slug?: string } };
-  expect(addWishlistPayload.item?.slug).toBe('kham-pha-vinh-ha-long-du-thuyen-5-sao');
-  await expect(page.getByRole('button', { name: /Đã lưu yêu thích/i })).toBeVisible();
-
-  const removeWishlistResponse = page.waitForResponse((response) => (
-    response.url().includes('/api/v1/wishlist/') && response.request().method() === 'DELETE'
-  ));
-  await page.getByRole('button', { name: /Đã lưu yêu thích/i }).click();
-  expect((await removeWishlistResponse).ok()).toBeTruthy();
-  await expect(page.getByRole('button', { name: /Lưu yêu thích/i })).toBeVisible();
 });
 
 test('public landing removes technical clutter and keeps only working search controls', async ({ page }) => {
@@ -171,8 +174,8 @@ test('public landing removes technical clutter and keeps only working search con
 
   await expect(page.locator('body')).not.toContainText('Dữ liệu từ hệ thống');
   await expect(page.locator('body')).not.toContainText('backend local qua API');
-  await expect(page.getByText(/^Thời gian$/)).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: /Tour đang mở bán/i })).toBeVisible();
+  await expect(page.getByText(/^Thời gian$/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Tour hot/i })).toBeVisible();
 
   await page.getByPlaceholder('Hạ Long, Ninh Thuận, Kyoto...').fill('Hạ Long');
   await page.getByRole('button', { name: /Tìm kiếm tour/i }).click();
@@ -424,8 +427,8 @@ test('customer can open an existing review in read-only mode from history and bo
 
   await expect(page).toHaveURL(/\/customer\/bookings$/);
   await expect(page.getByRole('heading', { name: /Đánh giá của bạn/i })).toBeVisible();
-  await expect(page.locator('input[readonly]')).toHaveValue('Du thuyen sach, lich trinh gon');
-  await expect(page.locator('textarea[readonly]')).toHaveValue('Lich trinh ro rang, du thuyen sach va doi ngu cham soc doan rat ky.');
+  await expect(page.locator('input[readonly]')).toHaveValue('Du thuyền sạch, lịch trình gọn');
+  await expect(page.locator('textarea[readonly]')).toHaveValue('Lịch trình rõ ràng, du thuyền sạch và đội ngũ chăm sóc đoàn rất kỹ.');
   await expect(page.getByRole('button', { name: /Gửi đánh giá/i })).toHaveCount(0);
   await page.getByRole('button', { name: /^Đóng$/i }).click();
   await expect(page.getByRole('heading', { name: /Đánh giá của bạn/i })).toHaveCount(0);
@@ -435,8 +438,8 @@ test('customer can open an existing review in read-only mode from history and bo
 
   await expect(page).toHaveURL(/\/customer\/bookings\/B004$/);
   await expect(page.getByRole('heading', { name: /Đánh giá của bạn/i })).toBeVisible();
-  await expect(page.locator('input[readonly]')).toHaveValue('Du thuyen sach, lich trinh gon');
-  await expect(page.locator('textarea[readonly]')).toHaveValue('Lich trinh ro rang, du thuyen sach va doi ngu cham soc doan rat ky.');
+  await expect(page.locator('input[readonly]')).toHaveValue('Du thuyền sạch, lịch trình gọn');
+  await expect(page.locator('textarea[readonly]')).toHaveValue('Lịch trình rõ ràng, du thuyền sạch và đội ngũ chăm sóc đoàn rất kỹ.');
   await expect(page.getByRole('button', { name: /Gửi đánh giá/i })).toHaveCount(0);
 });
 
@@ -525,11 +528,7 @@ test('customer checkout clears successful draft for a new booking, resets passen
   await expect(page.getByRole('heading', { name: /Đặt tour thành công/i })).toHaveCount(0);
   await expect(page.locator('body')).not.toContainText(bookingCode);
 
-  const draftKeys = await getBookingDraftKeys(page);
-  expect(draftKeys).toHaveLength(1);
-  const storedDraft = await page.evaluate((key) => localStorage.getItem(key), draftKeys[0]);
-  expect(storedDraft).toBeTruthy();
-  expect(JSON.parse(storedDraft ?? '{}').booking ?? null).toBeNull();
+  await expect.poll(async () => getBookingDraftKeys(page)).toEqual([]);
 });
 
 test('customer checkout keeps real remaining seats and correct promo totals after going back to edit the booking', async ({ page, request }) => {

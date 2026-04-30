@@ -519,8 +519,8 @@ export async function resetCustomerPublicFixtures(prisma: PrismaClient) {
     {
       bookingId: 'B004',
       rating: 5,
-      title: 'Du thuyen sach, lich trinh gon',
-      comment: 'Lich trinh ro rang, du thuyen sach va doi ngu cham soc doan rat ky.',
+      title: 'Du thuyền sạch, lịch trình gọn',
+      comment: 'Lịch trình rõ ràng, du thuyền sạch và đội ngũ chăm sóc đoàn rất kỹ.',
     },
   ];
 
@@ -641,7 +641,7 @@ export async function resetTourWorkflowFixtures(prisma: PrismaClient) {
       data: {
         status: 'DANG_MO_BAN',
         departureDate: toDate(isoOffset(6)),
-        bookingDeadlineAt: toDate(isoOffset(1)),
+        bookingDeadlineAt: toDate(`${isoOffset(1)}T23:59:59+07:00`),
         cancelledAt: null,
         cancelReason: null,
         refundTotal: null,

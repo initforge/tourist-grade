@@ -47,6 +47,7 @@ export interface SupplierRow {
   address: string;
   establishedYear: string;
   description: string;
+  standards?: string[];
   services: SupplierServiceLine[];
   mealServices: SupplierServiceLine[];
 }

@@ -15,8 +15,11 @@ const prismaMock = {
   },
   servicePrice: {
     updateMany: vi.fn(),
+    deleteMany: vi.fn(),
     create: vi.fn(),
+    update: vi.fn(),
   },
+  $transaction: vi.fn(),
 };
 
 vi.mock('../lib/prisma.js', () => ({
@@ -83,6 +86,7 @@ describe('services routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.user.findUnique.mockResolvedValue({ id: 'coordinator-1', status: 'ACTIVE' });
+    prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => Promise<unknown>) => callback(prismaMock as never));
   });
 
   it('creates a service with initial price rows and preserves age pricing setup', async () => {
@@ -160,10 +164,10 @@ describe('services routes', () => {
     expect(response.status).toBe(201);
     expect(prismaMock.servicePrice.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
-        serviceId: 'service-db-1',
+        id: 'PRICE-1',
       }),
       data: {
-        endDate: new Date('2026-06-01T00:00:00.000Z'),
+        endDate: new Date('2026-05-31T00:00:00.000Z'),
       },
     }));
     expect(prismaMock.servicePrice.create).toHaveBeenCalledWith(expect.objectContaining({

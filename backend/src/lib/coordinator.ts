@@ -51,17 +51,21 @@ export function toPrismaObject<T extends Record<string, unknown>>(value: T) {
 
 export function unwrapEstimatePayload(value: unknown): {
   estimate: unknown;
-  assignedGuide?: { id: string; name: string } | null;
+  assignedGuide?: { id: string; name: string; email?: string } | null;
+  saleRequest?: Record<string, unknown> | null;
+  warningState?: Record<string, unknown> | null;
 } {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return { estimate: value };
   }
 
   const record = value as Record<string, unknown>;
-  if ('estimate' in record || 'assignedGuide' in record) {
+  if ('estimate' in record || 'assignedGuide' in record || 'saleRequest' in record || 'warningState' in record) {
     return {
       estimate: record.estimate,
-      assignedGuide: (record.assignedGuide as { id: string; name: string } | null | undefined) ?? undefined,
+      assignedGuide: (record.assignedGuide as { id: string; name: string; email?: string } | null | undefined) ?? undefined,
+      saleRequest: (record.saleRequest as Record<string, unknown> | null | undefined) ?? undefined,
+      warningState: (record.warningState as Record<string, unknown> | null | undefined) ?? undefined,
     };
   }
 
@@ -70,14 +74,20 @@ export function unwrapEstimatePayload(value: unknown): {
 
 export function wrapEstimatePayload(
   estimate: unknown,
-  assignedGuide?: { id: string; name: string } | null,
+  assignedGuide?: { id: string; name: string; email?: string } | null,
+  metadata: {
+    saleRequest?: Record<string, unknown> | null;
+    warningState?: Record<string, unknown> | null;
+  } = {},
 ) {
-  if (estimate == null && assignedGuide == null) {
+  if (estimate == null && assignedGuide == null && metadata.saleRequest == null && metadata.warningState == null) {
     return null;
   }
 
   return {
     estimate: estimate ?? null,
     assignedGuide: assignedGuide ?? null,
+    saleRequest: metadata.saleRequest ?? null,
+    warningState: metadata.warningState ?? null,
   };
 }

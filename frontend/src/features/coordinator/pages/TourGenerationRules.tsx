@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { message } from 'antd';
 import { Link } from 'react-router-dom';
 import { Breadcrumb } from 'antd';
-import { type TourInstance, type TourProgram } from '@entities/tour-program/data/tourProgram';
+import { type SpecialDay, type TourInstance, type TourProgram } from '@entities/tour-program/data/tourProgram';
 import { createTourInstance, deleteTourInstance, patchTourInstance } from '@shared/lib/api/tourInstances';
+import { patchTourProgram } from '@shared/lib/api/tourPrograms';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
 import { useAuthStore } from '@shared/store/useAuthStore';
 import { PageSearchInput } from '@shared/ui/PageSearchInput';
@@ -24,6 +25,7 @@ type PreviewRow = {
   conflictLabel: string;
   conflictDetails: string[];
   checked: boolean;
+  blockedReason?: string;
 };
 
 type RuleEditorState = {
@@ -59,8 +61,16 @@ type ActiveProgramRow = {
   latestRequestCreatedAt: string;
 };
 
-const REQUEST_PIPELINE_STATUSES = new Set(['cho_duyet_ban', 'yeu_cau_chinh_sua', 'dang_mo_ban']);
-const REQUEST_STATUSES = new Set(['cho_duyet_ban', 'yeu_cau_chinh_sua', 'dang_mo_ban', 'cho_nhan_dieu_hanh', 'cho_du_toan', 'cho_duyet_du_toan', 'san_sang_trien_khai', 'dang_trien_khai', 'cho_quyet_toan', 'hoan_thanh']);
+type CancellationWindow = {
+  startDate: string;
+  endDate: string;
+  reason: string;
+  provinces: string[];
+};
+
+const CANCELLATION_SCOPE_OCCASION = 'TOUR_CANCELLATION_SCOPE';
+const REQUEST_PIPELINE_STATUSES = new Set(['dang_mo_ban']);
+const REQUEST_STATUSES = new Set(['cho_duyet_ban', 'yeu_cau_chinh_sua', 'dang_mo_ban', 'tu_choi_ban']);
 const WEEKDAY_VALUES = ['cn', 't2', 't3', 't4', 't5', 't6', 't7'] as const;
 const YEAR_ROUND_START_ERROR = 'tour phải tạo ít nhất trước 1 tháng';
 const END_DATE_ERROR = 'Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu';
@@ -114,6 +124,13 @@ function formatDate(value?: string) {
 
 function formatMoney(value: number) {
   return Math.round(value).toLocaleString('vi-VN');
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 }
 
 function roundToThousand(value: number) {
@@ -209,7 +226,57 @@ function buildConflictDetails(instances: TourInstance[], programId: string, depa
   return [...labels];
 }
 
-function buildPreviewRows(program: TourProgram, instances: TourInstance[], startDate: string, endDate: string, existingRows: PreviewRow[] = []) {
+function parseCancellationWindows(specialDays: SpecialDay[]): CancellationWindow[] {
+  return specialDays
+    .filter(day => day.occasion === CANCELLATION_SCOPE_OCCASION)
+    .map((day) => {
+      try {
+        const meta = JSON.parse(day.note || '{}') as { reason?: string; provinces?: string[] };
+        return {
+          startDate: day.startDate,
+          endDate: day.endDate,
+          reason: meta.reason || day.name,
+          provinces: Array.isArray(meta.provinces) ? meta.provinces : [],
+        };
+      } catch {
+        return {
+          startDate: day.startDate,
+          endDate: day.endDate,
+          reason: day.name,
+          provinces: [],
+        };
+      }
+    })
+    .filter(window => window.provinces.length > 0);
+}
+
+function getCancellationBlockReason(program: TourProgram, departureDate: string, endDate: string, cancellationWindows: CancellationWindow[]) {
+  const departurePoint = normalizeSearchText(program.departurePoint);
+  const sightseeing = program.sightseeingSpots.map(normalizeSearchText);
+
+  const matched = cancellationWindows.find((window) => {
+    const overlaps = departureDate <= window.endDate && endDate >= window.startDate;
+    if (!overlaps) return false;
+
+    return window.provinces.some((province) => {
+      const normalizedProvince = normalizeSearchText(province);
+      return departurePoint.includes(normalizedProvince) || sightseeing.some(spot => spot.includes(normalizedProvince));
+    });
+  });
+
+  return matched
+    ? `Nằm trong đợt hủy ${formatDate(matched.startDate)} - ${formatDate(matched.endDate)}: ${matched.reason}`
+    : '';
+}
+
+function buildPreviewRows(
+  program: TourProgram,
+  instances: TourInstance[],
+  startDate: string,
+  endDate: string,
+  existingRows: PreviewRow[] = [],
+  cancellationWindows: CancellationWindow[] = [],
+) {
   const dates = buildDepartureDates(program, startDate, endDate);
   const rowsByDeparture = new Map(existingRows.map(row => [row.departureDate, row]));
 
@@ -217,6 +284,7 @@ function buildPreviewRows(program: TourProgram, instances: TourInstance[], start
     const previousRow = rowsByDeparture.get(departureDate);
     const endDateKey = addDays(departureDate, Math.max(0, program.duration.days - 1));
     const conflictDetails = buildConflictDetails(instances, program.id, departureDate, endDateKey);
+    const blockedReason = getCancellationBlockReason(program, departureDate, endDateKey, cancellationWindows);
     const costPerAdult = previousRow?.costPerAdult ?? roundToThousand(program.pricingConfig.netPrice ?? 0);
     const sellPrice = previousRow?.sellPrice ?? roundToThousand(program.pricingConfig.sellPriceAdult ?? 0);
     const profitPercent = costPerAdult > 0
@@ -241,9 +309,10 @@ function buildPreviewRows(program: TourProgram, instances: TourInstance[], start
       sellPrice,
       profitPercent,
       bookingDeadline: previousRow?.bookingDeadline ?? addDays(departureDate, -Math.max(0, program.bookingDeadline ?? 0)),
-      conflictLabel: `${conflictDetails.length} chương trình trùng thời điểm`,
-      conflictDetails,
-      checked: previousRow?.checked ?? true,
+      conflictLabel: blockedReason || `${conflictDetails.length} chương trình trùng thời điểm`,
+      conflictDetails: blockedReason ? [blockedReason, ...conflictDetails] : conflictDetails,
+      checked: blockedReason ? false : (previousRow?.checked ?? true),
+      blockedReason,
     };
   });
 }
@@ -262,11 +331,11 @@ function validateDateRange(startDate: string, endDate: string, minStartDate: str
   return { startError, endError };
 }
 
-function buildCreateEditor(row: ActiveProgramRow, instances: TourInstance[], todayPlusOneMonth: string): RuleEditorState {
+function buildCreateEditor(row: ActiveProgramRow, instances: TourInstance[], todayPlusOneMonth: string, cancellationWindows: CancellationWindow[]): RuleEditorState {
   const nextAfterFarthest = row.farthestRequested ? getNextDepartureAfter(row.program, row.farthestRequested.departureDate) : '';
   const startDate = maxDateKey(todayPlusOneMonth, nextAfterFarthest || todayPlusOneMonth);
   const endDate = buildDefaultEndDate(startDate, row.statusLabel, row.minimumCoverageMonths);
-  const rows = buildPreviewRows(row.program, instances, startDate, endDate);
+  const rows = buildPreviewRows(row.program, instances, startDate, endDate, [], cancellationWindows);
 
   return {
     mode: 'create',
@@ -288,7 +357,7 @@ function buildCreateEditor(row: ActiveProgramRow, instances: TourInstance[], tod
   };
 }
 
-function buildEditEditor(instance: TourInstance, program: TourProgram, instances: TourInstance[], todayPlusOneMonth: string): RuleEditorState {
+function buildEditEditor(instance: TourInstance, program: TourProgram, instances: TourInstance[], todayPlusOneMonth: string, cancellationWindows: CancellationWindow[]): RuleEditorState {
   const startDate = instance.departureDate;
   const endDate = addMonthsToKey(startDate, 1);
   const rows = buildPreviewRows(program, instances, startDate, endDate, [{
@@ -306,7 +375,7 @@ function buildEditEditor(instance: TourInstance, program: TourProgram, instances
     conflictLabel: '0 chương trình trùng thời điểm',
     conflictDetails: [],
     checked: true,
-  }]);
+  }], cancellationWindows);
 
   return {
     mode: 'edit',
@@ -332,7 +401,7 @@ function buildEditEditor(instance: TourInstance, program: TourProgram, instances
   };
 }
 
-function applyEditorDates(editor: RuleEditorState, instances: TourInstance[], program: TourProgram, nextStartDate: string, nextEndDate: string) {
+function applyEditorDates(editor: RuleEditorState, instances: TourInstance[], program: TourProgram, nextStartDate: string, nextEndDate: string, cancellationWindows: CancellationWindow[]) {
   const { startError, endError } = validateDateRange(nextStartDate, nextEndDate, editor.minStartDate);
   return {
     ...editor,
@@ -343,20 +412,24 @@ function applyEditorDates(editor: RuleEditorState, instances: TourInstance[], pr
       selectionError: '',
       rows: startError || endError || !nextStartDate || !nextEndDate
         ? []
-        : buildPreviewRows(program, instances, nextStartDate, nextEndDate, editor.rows),
+        : buildPreviewRows(program, instances, nextStartDate, nextEndDate, editor.rows, cancellationWindows),
   };
 }
 
-function saveGeneratedRows(rows: PreviewRow[], editor: RuleEditorState, program: TourProgram): TourInstance[] {
+function saveGeneratedRows(
+  rows: PreviewRow[],
+  editor: RuleEditorState,
+  program: TourProgram,
+  saleRequest: NonNullable<TourInstance['saleRequest']>,
+): TourInstance[] {
   const createdAt = new Date().toISOString();
   return rows
-    .filter(row => row.checked)
     .map((row, index) => ({
       id: editor.requestId && index === 0 ? editor.requestId : `REQ-${program.id}-${row.departureDate}`,
       programId: program.id,
       programName: program.name,
       departureDate: row.departureDate,
-      status: 'cho_duyet_ban' as const,
+      status: row.checked ? 'cho_duyet_ban' as const : 'tu_choi_ban' as const,
       departurePoint: program.departurePoint,
       sightseeingSpots: program.sightseeingSpots,
       transport: program.transport,
@@ -369,7 +442,7 @@ function saveGeneratedRows(rows: PreviewRow[], editor: RuleEditorState, program:
       bookingDeadline: row.bookingDeadline,
       createdBy: program.createdBy,
       createdAt,
-      warningDate: editor.statusLabel === 'Cảnh báo' ? createdAt : undefined,
+      saleRequest,
       cancelReason: editor.managerRequestNote || undefined,
     }));
 }
@@ -377,9 +450,13 @@ function saveGeneratedRows(rows: PreviewRow[], editor: RuleEditorState, program:
 export default function TourGenerationRules() {
   const tourPrograms = useAppDataStore(state => state.tourPrograms);
   const storeTourInstances = useAppDataStore(state => state.tourInstances);
+  const specialDays = useAppDataStore(state => state.specialDays);
+  const upsertTourProgram = useAppDataStore(state => state.upsertTourProgram);
   const setTourInstances = useAppDataStore(state => state.setTourInstances);
   const token = useAuthStore(state => state.accessToken);
   const todayPlusOneMonth = useMemo(() => toDateKey(addCalendarMonths(new Date(), 1)), []);
+  const cancellationWindows = useMemo(() => parseCancellationWindows(specialDays), [specialDays]);
+  const warningSyncRef = useRef(new Set<string>());
   const [subTab, setSubTab] = useState<SubTab>('quy_tac');
   const [searchQuery, setSearchQuery] = useState('');
   const [localRequests, setLocalRequests] = useState<TourInstance[]>(
@@ -418,12 +495,12 @@ export default function TourGenerationRules() {
         const minimumCoverageMonths = Math.max(1, program.coverageMonths ?? 1);
         const statusLabel: ProgramStatusLabel = assessedCoverageMonths < minimumCoverageMonths ? 'Cảnh báo' : 'Đã đủ';
         const statusSince = statusLabel === 'Cảnh báo'
-          ? (
+          ? (program.coverageWarningDate || (
               requestRows
                 .map(instance => instance.warningDate || instance.createdAt)
                 .filter(Boolean)
                 .sort((left, right) => left.localeCompare(right))[0] || program.updatedAt
-            )
+            ))
           : (
               requestRows
                 .map(instance => instance.createdAt)
@@ -490,24 +567,79 @@ export default function TourGenerationRules() {
     });
   }, [pendingApprovalItems, searchQuery, tourPrograms]);
 
-  const selectedCount = editor?.rows.filter(row => row.checked).length ?? 0;
-  const unselectedCount = editor ? editor.rows.length - selectedCount : 0;
+  const selectedCount = editor?.rows.filter(row => row.checked && !row.blockedReason).length ?? 0;
+  const blockedCount = editor?.rows.filter(row => row.blockedReason).length ?? 0;
+  const unselectedCount = editor ? editor.rows.length - selectedCount - blockedCount : 0;
+
+  useEffect(() => {
+    if (!token) return;
+
+    activePrograms.forEach((row) => {
+      const desiredStatus = row.statusLabel === 'Cảnh báo' ? 'warning' : 'ok';
+      const currentStatus = row.program.coverageWarningStatus ?? 'ok';
+      const shouldSetWarningDate = desiredStatus === 'warning' && currentStatus !== 'warning';
+      const shouldMarkRecovered = desiredStatus === 'ok' && currentStatus === 'warning';
+
+      if (!shouldSetWarningDate && !shouldMarkRecovered) return;
+
+      const syncKey = `${row.program.id}:${desiredStatus}:${row.program.coverageWarningDate ?? ''}`;
+      if (warningSyncRef.current.has(syncKey)) return;
+      warningSyncRef.current.add(syncKey);
+
+      const payload: Partial<TourProgram> = {
+        coverageWarningStatus: desiredStatus,
+        coveragePreviousStatus: currentStatus,
+        coverageWarningDate: shouldSetWarningDate
+          ? (row.program.coverageWarningDate ?? toDateKey(new Date()))
+          : row.program.coverageWarningDate,
+      };
+
+      void patchTourProgram(token, row.program.id, payload)
+        .then((response) => upsertTourProgram(response.tourProgram))
+        .catch(() => null);
+    });
+  }, [activePrograms, token, upsertTourProgram]);
 
   const handleSendOrSave = async () => {
     if (!editor) return;
     const program = tourPrograms.find(item => item.id === editor.programId);
     if (!program) return;
-    if (!editor.startDate || !editor.endDate || editor.startError || editor.endError || selectedCount === 0) {
+    if (!editor.startDate || !editor.endDate || editor.startError || editor.endError || editor.rows.length === 0) {
       setEditor(current => current ? {
         ...current,
         startError: current.startDate ? current.startError : 'Vui lòng chọn Sinh từ ngày',
         endError: current.endDate ? current.endError : 'Vui lòng chọn Đến ngày',
-        selectionError: selectedCount === 0 ? 'Vui lòng chọn ít nhất một tour để gửi duyệt' : '',
+        selectionError: current.rows.length === 0 ? 'Khoảng thời gian này chưa sinh ra tour dự kiến' : '',
       } : current);
       return;
     }
 
-    const nextRequests = saveGeneratedRows(editor.rows, editor, program);
+    const savableRows = editor.rows.filter(row => !row.blockedReason);
+    if (savableRows.length === 0) {
+      setEditor(current => current ? {
+        ...current,
+        selectionError: 'Các tour dự kiến trong khoảng này đang nằm trong đợt hủy và sẽ không được tạo.',
+      } : current);
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const saleRequest = {
+      id: editor.requestId
+        ? (allInstances.find(instance => instance.id === editor.requestId)?.saleRequest?.id ?? `SR-${program.id}-${Date.now()}`)
+        : `SR-${program.id}-${Date.now()}`,
+      code: editor.requestId
+        ? (allInstances.find(instance => instance.id === editor.requestId)?.saleRequest?.code ?? `YC-${program.id}-${now.slice(0, 10)}`)
+        : `YC-${program.id}-${now.slice(0, 10)}-${String(Date.now()).slice(-4)}`,
+      createdAt: editor.requestId
+        ? (allInstances.find(instance => instance.id === editor.requestId)?.saleRequest?.createdAt ?? now)
+        : now,
+      totalRows: savableRows.length,
+      selectedRows: savableRows.filter(row => row.checked).length,
+      unselectedRows: savableRows.filter(row => !row.checked).length,
+    };
+
+    const nextRequests = saveGeneratedRows(savableRows, editor, program, saleRequest);
     if (!token) return;
 
     try {
@@ -640,7 +772,7 @@ export default function TourGenerationRules() {
                       </td>
                       <td className="px-5 py-4">
                         <button
-                          onClick={() => setEditor(buildCreateEditor(row, allInstances, todayPlusOneMonth))}
+                          onClick={() => setEditor(buildCreateEditor(row, allInstances, todayPlusOneMonth, cancellationWindows))}
                           className="px-4 py-2 bg-primary text-white text-[10px] font-bold uppercase tracking-wider hover:bg-[var(--color-secondary)] transition-colors"
                         >
                           Tạo tour
@@ -698,7 +830,7 @@ export default function TourGenerationRules() {
                               <button
                                 onClick={() => {
                                   if (!program) return;
-                                  setEditor(buildEditEditor(instance, program, allInstances, todayPlusOneMonth));
+                                  setEditor(buildEditEditor(instance, program, allInstances, todayPlusOneMonth, cancellationWindows));
                                 }}
                                 className="px-3 py-1.5 bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-blue-700 transition-colors"
                               >
@@ -853,7 +985,7 @@ export default function TourGenerationRules() {
                           if (!current) return current;
                           const nextEndDate = current.endDate && nextStartDate > current.endDate ? '' : current.endDate;
                           const program = tourPrograms.find(item => item.id === current.programId);
-                          return program ? applyEditorDates(current, allInstances, program, nextStartDate, nextEndDate) : current;
+                          return program ? applyEditorDates(current, allInstances, program, nextStartDate, nextEndDate, cancellationWindows) : current;
                         });
                       }}
                       className="w-full border border-outline-variant/50 px-4 py-2.5 outline-none"
@@ -871,7 +1003,7 @@ export default function TourGenerationRules() {
                         setEditor(current => {
                           if (!current) return current;
                           const program = tourPrograms.find(item => item.id === current.programId);
-                          return program ? applyEditorDates(current, allInstances, program, current.startDate, nextEndDate) : current;
+                          return program ? applyEditorDates(current, allInstances, program, current.startDate, nextEndDate, cancellationWindows) : current;
                         });
                       }}
                       className="w-full border border-outline-variant/50 px-4 py-2.5 outline-none"
@@ -907,7 +1039,16 @@ export default function TourGenerationRules() {
                       </thead>
                       <tbody>
                         {editor.rows.map(row => (
-                          <tr key={row.id} className={`border-b border-outline-variant/20 last:border-0 ${row.checked ? 'bg-white' : 'bg-gray-100 text-gray-400'}`}>
+                          <tr
+                            key={row.id}
+                            className={`border-b border-outline-variant/20 last:border-0 ${
+                              row.blockedReason
+                                ? 'bg-red-50 text-red-700'
+                                : row.checked
+                                  ? 'bg-white'
+                                  : 'bg-gray-100 text-gray-400'
+                            }`}
+                          >
                             <td className="px-4 py-3 font-mono text-xs">{row.id}</td>
                             <td className="px-4 py-3 text-sm whitespace-nowrap">{formatDate(row.departureDate)}</td>
                             <td className="px-4 py-3 text-sm whitespace-nowrap">{formatDate(row.endDate)}</td>
@@ -917,7 +1058,7 @@ export default function TourGenerationRules() {
                                 type="number"
                                 min={1}
                                 value={row.expectedGuests}
-                                disabled={!row.checked}
+                                disabled={!row.checked || Boolean(row.blockedReason)}
                                 onChange={event => setEditor(current => current ? ({
                                   ...current,
                                   selectionError: '',
@@ -933,7 +1074,7 @@ export default function TourGenerationRules() {
                               <input
                                 type="date"
                                 value={row.bookingDeadline}
-                                disabled={!row.checked}
+                                disabled={!row.checked || Boolean(row.blockedReason)}
                                 onChange={event => setEditor(current => current ? ({
                                   ...current,
                                   selectionError: '',
@@ -954,12 +1095,13 @@ export default function TourGenerationRules() {
                                 type="checkbox"
                                 checked={row.checked}
                                 aria-label={`${editor.mode === 'create' ? 'Tạo' : 'Chọn'} ${row.id}`}
+                                disabled={Boolean(row.blockedReason)}
                                 onChange={() => setEditor(current => current ? ({
                                   ...current,
                                   selectionError: '',
                                   rows: current.rows.map(item => item.id === row.id ? { ...item, checked: !item.checked } : item),
                                 }) : current)}
-                                className="accent-[var(--color-secondary)] w-4 h-4"
+                                className="accent-[var(--color-secondary)] w-4 h-4 disabled:cursor-not-allowed"
                               />
                             </td>
                           </tr>
@@ -977,6 +1119,7 @@ export default function TourGenerationRules() {
                   <div className="flex items-center justify-between border border-t-0 border-outline-variant/30 bg-[var(--color-surface)] px-4 py-3 text-sm text-primary/70">
                     <span>Đã chọn: {selectedCount} tour</span>
                     <span>Chưa chọn: {unselectedCount} tour</span>
+                    {blockedCount > 0 && <span>Bị chặn bởi đợt hủy: {blockedCount} tour</span>}
                   </div>
                   {editor.selectionError && (
                     <p className="mt-3 text-xs text-red-600">{editor.selectionError}</p>

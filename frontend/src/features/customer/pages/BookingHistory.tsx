@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Booking } from '@entities/booking/data/bookings';
 import { useAuthStore } from '@shared/store/useAuthStore';
@@ -16,6 +16,9 @@ import {
 } from '@shared/lib/booking';
 import { createBookingPaymentLink } from '@shared/lib/api/bookings';
 
+const BOOKING_IMAGE_FALLBACK =
+  'https://images.unsplash.com/photo-1528127269322-539801943592?q=80&w=1200&auto=format&fit=crop';
+
 export default function BookingHistory() {
   useRequireAuth('/login?redirect=/customer/bookings');
   const navigate = useNavigate();
@@ -23,10 +26,17 @@ export default function BookingHistory() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const publicTours = useAppDataStore((state) => state.publicTours);
   const bookings = useAppDataStore((state) => state.bookings);
+  const initializeProtected = useAppDataStore((state) => state.initializeProtected);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed' | 'cancelled'>('upcoming');
   const [cancelBooking, setCancelBooking] = useState<Booking | null>(null);
   const [reviewBooking, setReviewBooking] = useState<Booking | null>(null);
   const [payBookingId, setPayBookingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (accessToken) {
+      void initializeProtected();
+    }
+  }, [accessToken, initializeProtected]);
 
   const statusMap: Record<typeof activeTab, Booking['status'][]> = {
     upcoming: ['pending', 'pending_cancel', 'confirmed'],
@@ -44,7 +54,7 @@ export default function BookingHistory() {
     cancelled: bookings.filter((booking) => booking.userId === user?.id && statusMap.cancelled.includes(booking.status)).length,
   };
 
-  const getBookingImage = (tourId: string) => publicTours.find((tour) => tour.id === tourId)?.image ?? '';
+  const getBookingImage = (tourId: string) => publicTours.find((tour) => tour.id === tourId)?.image || BOOKING_IMAGE_FALLBACK;
 
   const handlePay = async (booking: Booking) => {
     setPayBookingId(booking.id);

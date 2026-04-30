@@ -1,5 +1,6 @@
 export interface DepartureScheduleEntry {
   id: string;
+  legacyId?: string;
   programCode?: string;
   instanceCode?: string;
   date: string;

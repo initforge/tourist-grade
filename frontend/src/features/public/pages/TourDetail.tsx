@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { addWishlistItem, removeWishlistItem } from '@shared/lib/api/wishlist';
 import { useAuthStore } from '@shared/store/useAuthStore';
-import { type DepartureScheduleEntry } from '@entities/tour/data/tours';
+import { type DepartureScheduleEntry, type Tour } from '@entities/tour/data/tours';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
+import { getPublicTourDetail } from '@shared/lib/api/bookings';
 
 const MONTH_NAMES: Record<number, string> = {
   1: 'Tháng 1',
@@ -55,11 +56,46 @@ export default function TourDetail() {
   const [collapsedItineraryDays, setCollapsedItineraryDays] = useState<number[]>([]);
   const [activeImageIndex, setActiveImageIndex] = useState<number | null>(null);
   const [wishlistBusy, setWishlistBusy] = useState(false);
+  const [freshTour, setFreshTour] = useState<Tour | null>(null);
+  const [isRefreshingTour, setIsRefreshingTour] = useState(false);
 
-  const tour = publicTours.find((item) => item.slug === slug);
+  const storeTour = publicTours.find((item) => item.slug === slug);
+  const tour = freshTour ?? storeTour;
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [slug]);
+
+  useEffect(() => {
+    if (!slug) {
+      setFreshTour(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsRefreshingTour(true);
+    setFreshTour(null);
+
+    void getPublicTourDetail(slug)
+      .then((response) => {
+        if (!cancelled) {
+          setFreshTour(response.tour);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFreshTour(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsRefreshingTour(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
   const isWishlisted = Boolean(tour && wishlist.some((item) => item.tourId === tour.id));
@@ -79,7 +115,7 @@ export default function TourDetail() {
     setActiveImageIndex(null);
   }, [slug]);
 
-  if (!tour && publicLoading) {
+  if (!tour && (publicLoading || isRefreshingTour)) {
     return (
       <div className="public-page min-h-screen flex items-center justify-center pt-20">
         <p className="text-lg text-[#2A2421]/60">Đang tải chi tiết tour...</p>
@@ -205,8 +241,8 @@ export default function TourDetail() {
     <div className="public-page">
       <main className="public-container public-hero pb-16 md:pb-20">
         <section className="mb-5 md:mb-6">
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.85fr)]">
-            <button type="button" onClick={() => setActiveImageIndex(0)} className="public-media-frame relative aspect-[16/11] md:aspect-[16/10] lg:min-h-[420px] group text-left">
+          <div className="grid gap-3 lg:grid-cols-2 lg:h-[460px]">
+            <button type="button" onClick={() => setActiveImageIndex(0)} className="public-media-frame relative aspect-[16/11] md:aspect-[16/10] lg:aspect-auto lg:h-full group text-left overflow-hidden rounded-sm">
               <img alt={tour.title} className="w-full h-full object-cover" src={safeGalleryImages[0]} onError={useFallbackImage} />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all" />
               <div className="absolute bottom-4 left-4 bg-white/90 px-3 py-1 text-[10px] tracking-[0.2em] uppercase font-medium text-primary">
@@ -214,13 +250,13 @@ export default function TourDetail() {
               </div>
             </button>
 
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-2 auto-rows-fr">
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-2 lg:h-full auto-rows-fr">
               {(secondaryImages.length > 0 ? secondaryImages : [safeGalleryImages[0]]).map((image, imageIndex) => (
                 <button
                   key={`${image}-${imageIndex}`}
                   type="button"
                   onClick={() => setActiveImageIndex(imageIndex + 1)}
-                  className={`public-media-frame overflow-hidden ${imageIndex === 0 ? 'aspect-[16/10] md:col-span-2' : 'aspect-[4/3]'}`}
+                  className={`public-media-frame overflow-hidden rounded-sm ${imageIndex === 0 ? 'aspect-[16/10] md:col-span-2 lg:aspect-auto' : 'aspect-[4/3] lg:aspect-auto'}`}
                 >
                   <img alt={`${tour.title} ${imageIndex + 2}`} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" src={image} onError={useFallbackImage} />
                 </button>
@@ -287,7 +323,14 @@ export default function TourDetail() {
                       </tr>
                     </thead>
                     <tbody>
-                      {scheduleRows.map((row) => {
+                      {scheduleRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="px-4 py-12 text-center">
+                            <p className="font-headline text-lg text-primary">Lịch khởi hành đang cập nhật</p>
+                            <p className="mt-2 text-sm text-primary/55">Lưu yêu thích để nhận thông báo sớm nhất</p>
+                          </td>
+                        </tr>
+                      ) : scheduleRows.map((row) => {
                         const scheduleItem = row.date;
                         const isSelected = selectedSchedule?.id === scheduleItem.id;
                         const adultPrice = scheduleItem.priceAdult ?? tour.price.adult;
@@ -427,7 +470,7 @@ export default function TourDetail() {
               </div>
             </div>
 
-            <div className="w-full lg:w-[340px] xl:w-[360px] shrink-0 lg:self-start lg:sticky lg:top-24">
+            <div className="w-full lg:w-[340px] xl:w-[360px] shrink-0 lg:self-start lg:sticky lg:top-24" style={{ position: 'sticky', top: '6rem' }}>
               <div className="public-floating-card overflow-hidden">
                 <div className="p-5 space-y-4">
                   <div>
@@ -617,12 +660,32 @@ export default function TourDetail() {
       </main>
 
       {activeImageIndex !== null && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Xem ảnh tour">
           <button className="absolute inset-0" onClick={() => setActiveImageIndex(null)} aria-label="Đóng xem ảnh" />
           <div className="relative z-10 max-w-6xl w-full">
-            <button onClick={() => setActiveImageIndex(null)} className="absolute right-0 -top-12 text-white">
+            <button onClick={() => setActiveImageIndex(null)} className="absolute right-0 -top-12 text-white" aria-label="Đóng xem ảnh">
               <span className="material-symbols-outlined text-3xl">close</span>
             </button>
+            {safeGalleryImages.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveImageIndex((current) => (current === null ? 0 : (current - 1 + safeGalleryImages.length) % safeGalleryImages.length))}
+                  className="absolute left-0 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white/90 p-3 text-primary shadow-lg hover:bg-white"
+                  aria-label="Ảnh trước"
+                >
+                  <span className="material-symbols-outlined">chevron_left</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveImageIndex((current) => (current === null ? 0 : (current + 1) % safeGalleryImages.length))}
+                  className="absolute right-0 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white/90 p-3 text-primary shadow-lg hover:bg-white"
+                  aria-label="Ảnh tiếp theo"
+                >
+                  <span className="material-symbols-outlined">chevron_right</span>
+                </button>
+              </>
+            )}
             <img src={safeGalleryImages[activeImageIndex] ?? safeGalleryImages[0]} alt={`${tour.title} preview`} className="w-full max-h-[80vh] object-contain rounded-sm" onError={useFallbackImage} />
           </div>
         </div>

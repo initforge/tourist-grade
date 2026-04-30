@@ -3,12 +3,14 @@ import { Breadcrumb, message } from 'antd';
 import { Link } from 'react-router-dom';
 import {
   addSupplierBulkPrices,
+  addSupplierServicePrice,
   createGuide,
   createSupplier,
   deleteGuide as deleteGuideRequest,
   deleteSupplier as deleteSupplierRequest,
   patchGuide,
   patchSupplier,
+  patchSupplierServicePrice,
   type GuidePayload,
   type SupplierPayload,
 } from '@shared/lib/api/suppliers';
@@ -31,6 +33,7 @@ interface SupplierFormState {
   establishedYear: string;
   description: string;
   operatingArea: string;
+  standards: string[];
   status: SupplierStatus;
   service: string;
   transportType: TransportType;
@@ -59,9 +62,16 @@ type QuotePopupState = {
   supplierId: string;
 };
 
+type SupplierPriceEditorState = {
+  supplierId: string;
+  serviceId: string;
+  priceId?: string;
+};
+
 type SupplierErrors = Record<string, string>;
 
 const languageOptions: LanguageOption[] = ['Tiếng Anh', 'Tiếng Trung', 'Tiếng Nhật', 'Tiếng Hàn'];
+const hotelStandardOptions = ['3 sao', '4 sao', '5 sao'];
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const formatCurrency = (value: number) => `${value.toLocaleString('vi-VN')} đ`;
 
@@ -115,7 +125,7 @@ function createTransportService(index: number, type: TransportType): SupplierSer
     capacity: type === 'Xe' ? 0 : undefined,
     transportType: type,
     priceMode: 'Báo giá',
-    prices: [createPrice(`transport-price-${Date.now()}-${index}`, 0)],
+    prices: [],
   };
 }
 
@@ -148,6 +158,7 @@ const initialSuppliers: SupplierRow[] = [
     address: '12 Bãi Cháy, Hạ Long',
     establishedYear: '2016',
     description: 'Khách sạn 4 sao phục vụ khách đoàn, có nhà hàng nội khu.',
+    standards: ['4 sao'],
     services: createHotelServices(),
     mealServices: [createMealService(0)],
   },
@@ -164,8 +175,8 @@ const initialSuppliers: SupplierRow[] = [
     establishedYear: '2014',
     description: 'Nhà xe chuyên tour ghép và tour riêng.',
     services: [
-      { ...createTransportService(0, 'Xe'), name: 'Xe 16 chỗ', capacity: 16, prices: [createPrice('P2', 8100000)] },
-      { ...createTransportService(1, 'Xe'), name: 'Xe 25 chỗ', capacity: 25, prices: [createPrice('P3', 9600000)] },
+      { ...createTransportService(0, 'Xe'), name: 'Xe 16 chỗ', capacity: 16 },
+      { ...createTransportService(1, 'Xe'), name: 'Xe 25 chỗ', capacity: 25 },
     ],
     mealServices: [],
   },
@@ -237,6 +248,7 @@ function createInitialSupplierForm(): SupplierFormState {
     establishedYear: '',
     description: '',
     operatingArea: '',
+    standards: ['4 sao'],
     status: 'Hoạt động',
     service: 'Lưu trú',
     transportType: 'Xe',
@@ -311,8 +323,82 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
+function SupplierServicesTable({
+  supplier,
+  onEditPrice,
+}: {
+  supplier: SupplierRow;
+  onEditPrice?: (serviceId: string, priceId: string) => void;
+}) {
+  const rows = [...supplier.services, ...supplier.mealServices];
+
+  return (
+    <div className="overflow-x-auto border border-outline-variant/20">
+      <table className="w-full text-left text-sm">
+        <thead className="bg-surface-container-low">
+          <tr>
+            {['Tên dịch vụ', 'Mô tả', 'Đơn vị', 'Hình thức giá', 'Bảng giá'].map(header => (
+              <th key={header} className="px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-primary/50">{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={5} className="px-4 py-6 text-center text-sm text-primary/45">Chưa có dịch vụ</td>
+            </tr>
+          )}
+          {rows.map(service => (
+            <tr key={service.id} className="border-t border-outline-variant/10 align-top">
+              <td className="px-4 py-3 font-medium text-primary">{service.name || '-'}</td>
+              <td className="px-4 py-3 text-primary/65">{service.description || service.menu || service.note || '-'}</td>
+              <td className="px-4 py-3">{service.unit}</td>
+              <td className="px-4 py-3">{service.priceMode || '-'}</td>
+              <td className="px-4 py-3">
+                {service.prices.length === 0 ? (
+                  <span className="text-primary/40">-</span>
+                ) : (
+                  <div className="space-y-2">
+                    {service.prices.map(price => (
+                      <div key={price.id} className="flex items-center justify-between gap-3 border-b border-outline-variant/10 pb-2 last:border-b-0 last:pb-0">
+                        <div>
+                          <p className="font-medium">{formatCurrency(price.unitPrice)}</p>
+                          <p className="text-xs text-primary/50">{price.fromDate} - {price.toDate || 'Đang áp dụng'} · {price.note || 'Không có'}</p>
+                        </div>
+                        {onEditPrice && (
+                          <button
+                            onClick={() => onEditPrice(service.id, price.id)}
+                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center border border-outline-variant/40 text-primary hover:border-secondary hover:text-secondary"
+                            aria-label={`Sửa bảng giá ${service.name}`}
+                          >
+                            <span className="material-symbols-outlined text-base">edit</span>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function closeOpenEndedPrices(rows: SupplierPriceRow[], newFromDate: string) {
   return rows.map(price => (!price.toDate ? { ...price, toDate: newFromDate } : price));
+}
+
+function openEndedKey(value?: string) {
+  return value || '9999-12-31';
+}
+
+function getIntersectingSupplierPrices(prices: SupplierPriceRow[], fromDate: string, toDate?: string) {
+  if (!fromDate) return [];
+  const rangeEnd = openEndedKey(toDate);
+  return prices.filter(price => price.fromDate <= rangeEnd && openEndedKey(price.toDate) >= fromDate);
 }
 
 function validateSupplierForm(form: SupplierFormState) {
@@ -321,9 +407,12 @@ function validateSupplierForm(form: SupplierFormState) {
   if (!form.phone.trim()) errors.phone = 'Cần nhập số điện thoại';
   if (!form.email.trim()) errors.email = 'Cần nhập email';
   if (!form.address.trim()) errors.address = 'Cần nhập địa chỉ';
-  if (!form.operatingArea.trim()) errors.operatingArea = 'Cần nhập khu vực hoạt động';
+  if (!(form.category === 'Vận chuyển' && form.transportType === 'Máy bay') && !form.operatingArea.trim()) {
+    errors.operatingArea = 'Cần nhập khu vực hoạt động';
+  }
 
   if (form.category === 'Khách sạn') {
+    if (!form.standards.length) errors.standards = 'Cần chọn hạng sao';
     if (form.services.length !== 3) errors.services = 'Khách sạn phải có đủ phòng đơn, phòng đôi và phòng ba';
     form.services.forEach((service) => {
       if (service.quantity <= 0) errors[`quantity-${service.id}`] = 'Số lượng phải lớn hơn 0';
@@ -347,7 +436,6 @@ function validateSupplierForm(form: SupplierFormState) {
         if (capacities.has(capacity)) errors[`capacity-${service.id}`] = 'Không được trùng số chỗ giữa các dịch vụ xe';
         capacities.add(capacity);
       }
-      if ((service.prices.at(-1)?.unitPrice ?? 0) <= 0) errors[`price-${service.id}`] = 'Cần nhập đơn giá';
     });
   }
 
@@ -528,8 +616,8 @@ function SupplierServiceEditor({
               <thead className="bg-surface-container-low">
                 <tr>
                   {(form.transportType === 'Xe'
-                    ? ['Tên dịch vụ', 'Số chỗ', 'Đơn giá']
-                    : ['Tên dịch vụ', 'Đơn giá']
+                    ? ['Tên dịch vụ', 'Số chỗ']
+                    : ['Tên dịch vụ']
                   ).map(header => (
                     <th key={header} className="px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-primary/50">{header}</th>
                   ))}
@@ -552,7 +640,6 @@ function SupplierServiceEditor({
                         {renderError(`capacity-${service.id}`)}
                       </td>
                     )}
-                    {renderPriceCell(service)}
                   </tr>
                 ))}
               </tbody>
@@ -568,10 +655,12 @@ export default function AdminSuppliers() {
   const role = useAuthStore(state => state?.user?.role || 'guest');
   const token = useAuthStore(state => state?.accessToken);
   const currentUser = useAuthStore(state => state?.user?.name || 'Điều phối viên');
+  const provinces = useAppDataStore(state => state.provinces);
   const suppliersStore = useAppDataStore(state => state.suppliers);
   const setSuppliers = useAppDataStore(state => state.setSuppliers);
   const guidesStore = useAppDataStore(state => state.guides);
   const setGuides = useAppDataStore(state => state.setGuides);
+  const initializeProtected = useAppDataStore(state => state.initializeProtected);
   const [activeTab, setActiveTab] = useState<'suppliers' | 'guides'>('suppliers');
   const [searchQuery, setSearchQuery] = useState('');
   const [detailSupplierId, setDetailSupplierId] = useState<string | null>(null);
@@ -579,12 +668,14 @@ export default function AdminSuppliers() {
   const [supplierEditorId, setSupplierEditorId] = useState<string | 'new' | null>(null);
   const [guideEditorId, setGuideEditorId] = useState<string | 'new' | null>(null);
   const [quotePopup, setQuotePopup] = useState<QuotePopupState | null>(null);
+  const [supplierPriceEditor, setSupplierPriceEditor] = useState<SupplierPriceEditorState | null>(null);
   const [supplierForm, setSupplierForm] = useState<SupplierFormState>(createInitialSupplierForm());
   const [guideForm, setGuideForm] = useState<GuideFormState>(createInitialGuideForm());
   const [errors, setErrors] = useState<SupplierErrors>({});
 
   const supplierRows = suppliersStore.length > 0 ? suppliersStore : initialSuppliers;
   const guideRows = guidesStore.length > 0 ? guidesStore : initialGuides;
+  const provinceOptions = provinces.length > 0 ? provinces.map(province => province.name) : ['Hà Nội', 'Quảng Ninh', 'Ninh Bình', 'Đà Nẵng', 'Thành phố Hồ Chí Minh'];
 
   const filteredSupplierRows = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase();
@@ -603,6 +694,11 @@ export default function AdminSuppliers() {
   const editingSupplier = supplierRows.find(supplier => supplier.id === supplierEditorId) ?? null;
   const editingGuide = guideRows.find(guide => guide.id === guideEditorId) ?? null;
   const quoteSupplier = supplierRows.find(supplier => supplier.id === quotePopup?.supplierId) ?? null;
+  const activePriceSupplier = supplierRows.find(supplier => supplier.id === supplierPriceEditor?.supplierId) ?? null;
+  const activePriceService = activePriceSupplier
+    ? [...activePriceSupplier.services, ...activePriceSupplier.mealServices].find(service => service.id === supplierPriceEditor?.serviceId) ?? null
+    : null;
+  const activeSupplierPrice = activePriceService?.prices.find(price => price.id === supplierPriceEditor?.priceId);
 
   const persistSuppliers = (rows: SupplierRow[]) => setSuppliers(rows);
   const persistGuides = (rows: TourGuide[]) => setGuides(rows);
@@ -614,6 +710,7 @@ export default function AdminSuppliers() {
         return {
           ...createInitialSupplierForm(),
           category,
+          standards: category === 'Khách sạn' ? ['4 sao'] : [],
           service: createSupplierSummary(category),
           services: category === 'Khách sạn' ? createHotelServices() : category === 'Nhà hàng' ? [createRestaurantService(0)] : [createTransportService(0, 'Xe')],
         };
@@ -623,6 +720,7 @@ export default function AdminSuppliers() {
         return {
           ...previous,
           transportType: type,
+          operatingArea: type === 'Máy bay' ? '' : previous.operatingArea,
           services: [createTransportService(0, type)],
         };
       }
@@ -686,6 +784,7 @@ export default function AdminSuppliers() {
       establishedYear: supplier.establishedYear,
       description: supplier.description,
       operatingArea: supplier.operatingArea,
+      standards: supplier.standards ?? [],
       status: supplier.status as SupplierStatus,
       service: supplier.service,
       transportType: supplier.category === 'Vận chuyển' && supplier.services[0]?.transportType === 'Máy bay' ? 'Máy bay' : 'Xe',
@@ -719,7 +818,8 @@ export default function AdminSuppliers() {
         address: supplierForm.address,
         type: toApiSupplierType(supplierForm.category),
         serviceSummary: supplierForm.service || createSupplierSummary(supplierForm.category),
-        operatingArea: supplierForm.operatingArea,
+        operatingArea: supplierForm.category === 'Vận chuyển' && supplierForm.transportType === 'Máy bay' ? '' : supplierForm.operatingArea,
+        standards: supplierForm.category === 'Khách sạn' ? supplierForm.standards : [],
         establishedYear: supplierForm.establishedYear ? Number(supplierForm.establishedYear) : null,
         description: supplierForm.description,
         isActive: supplierForm.status === 'Hoạt động',
@@ -770,6 +870,7 @@ export default function AdminSuppliers() {
         category: supplierForm.category,
         service: supplierForm.service || createSupplierSummary(supplierForm.category),
         operatingArea: supplierForm.operatingArea,
+        standards: supplierForm.category === 'Khách sạn' ? supplierForm.standards : [],
         status: supplierForm.status,
         address: supplierForm.address,
         establishedYear: supplierForm.establishedYear,
@@ -794,6 +895,7 @@ export default function AdminSuppliers() {
       establishedYear: supplierForm.establishedYear,
       description: supplierForm.description,
       operatingArea: supplierForm.operatingArea,
+      standards: supplierForm.category === 'Khách sạn' ? supplierForm.standards : [],
       status: supplierForm.status,
       service: supplierForm.service,
       category: supplierForm.category,
@@ -1023,6 +1125,28 @@ export default function AdminSuppliers() {
     message.success('Đã cập nhật bảng giá nhà cung cấp');
   };
 
+  const saveSupplierPriceRow = (priceDraft: SupplierPriceRow) => {
+    if (!token || !activePriceSupplier || !activePriceService) {
+      message.error('Phiên đăng nhập đã hết hạn. Không thể cập nhật bảng giá nhà cung cấp.');
+      return;
+    }
+
+    void (async () => {
+      try {
+        if (activeSupplierPrice) {
+          await patchSupplierServicePrice(token, activePriceSupplier.id, activePriceService.id, activeSupplierPrice.id, priceDraft);
+        } else {
+          await addSupplierServicePrice(token, activePriceSupplier.id, activePriceService.id, priceDraft);
+        }
+        await initializeProtected();
+        setSupplierPriceEditor(null);
+        message.success('Đã cập nhật bảng giá nhà cung cấp');
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : 'Không thể cập nhật bảng giá nhà cung cấp');
+      }
+    })();
+  };
+
   return (
     <div className="min-h-screen bg-[var(--color-background)]">
       <main className="flex-1 p-10">
@@ -1115,7 +1239,6 @@ export default function AdminSuppliers() {
             <div className="flex flex-wrap justify-end gap-3">
               <button onClick={() => openEditSupplier(detailSupplier)} className="border border-primary px-5 py-3 text-xs font-bold uppercase tracking-widest text-primary">Sửa</button>
               <button onClick={() => deleteSupplier(detailSupplier.id)} className="border border-rose-200 px-5 py-3 text-xs font-bold uppercase tracking-widest text-rose-700">Xóa</button>
-              <button onClick={() => setQuotePopup({ supplierId: detailSupplier.id })} className="border border-secondary px-5 py-3 text-xs font-bold uppercase tracking-widest text-secondary">Thêm mới bảng giá</button>
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Field label="Mã NCC" value={detailSupplier.id} />
@@ -1127,8 +1250,13 @@ export default function AdminSuppliers() {
               <Field label="Địa chỉ" value={detailSupplier.address} />
               <Field label="Năm thành lập" value={detailSupplier.establishedYear} />
               <Field label="Trạng thái" value={detailSupplier.status} />
+              {detailSupplier.category === 'Khách sạn' && <Field label="Hạng sao" value={(detailSupplier.standards ?? []).join(', ') || '-'} />}
             </div>
             <Field label="Mô tả" value={detailSupplier.description} />
+            <div className="space-y-3">
+              <p className="text-xs font-bold uppercase tracking-widest text-primary/60">Danh sách dịch vụ</p>
+              <SupplierServicesTable supplier={detailSupplier} />
+            </div>
           </div>
         </Modal>
       )}
@@ -1169,11 +1297,20 @@ export default function AdminSuppliers() {
                 <input value={supplierForm.name} onChange={event => updateSupplierForm('name', event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3" />
                 {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
               </label>
-              <label className="space-y-2 text-sm font-medium text-primary">
-                <span>Khu vực hoạt động</span>
-                <input value={supplierForm.operatingArea} onChange={event => updateSupplierForm('operatingArea', event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3" />
-                {errors.operatingArea && <p className="text-xs text-red-600">{errors.operatingArea}</p>}
-              </label>
+              {!(supplierForm.category === 'Vận chuyển' && supplierForm.transportType === 'Máy bay') && (
+                <label className="space-y-2 text-sm font-medium text-primary">
+                  <span>Khu vực hoạt động</span>
+                  {supplierForm.category === 'Khách sạn' || supplierForm.category === 'Nhà hàng' ? (
+                    <select value={supplierForm.operatingArea} onChange={event => updateSupplierForm('operatingArea', event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3 bg-white">
+                      <option value="">Chọn tỉnh thành</option>
+                      {provinceOptions.map(province => <option key={province}>{province}</option>)}
+                    </select>
+                  ) : (
+                    <input value={supplierForm.operatingArea} onChange={event => updateSupplierForm('operatingArea', event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3" />
+                  )}
+                  {errors.operatingArea && <p className="text-xs text-red-600">{errors.operatingArea}</p>}
+                </label>
+              )}
               <label className="space-y-2 text-sm font-medium text-primary">
                 <span>Số điện thoại</span>
                 <input value={supplierForm.phone} onChange={event => updateSupplierForm('phone', event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3" />
@@ -1193,14 +1330,40 @@ export default function AdminSuppliers() {
                 <input value={supplierForm.address} onChange={event => updateSupplierForm('address', event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3" />
                 {errors.address && <p className="text-xs text-red-600">{errors.address}</p>}
               </label>
-              <label className="space-y-2 text-sm font-medium text-primary">
-                <span>Trạng thái</span>
-                <select value={supplierForm.status} onChange={event => updateSupplierForm('status', event.target.value as SupplierStatus)} className="w-full border border-outline-variant/50 px-4 py-3 bg-white">
-                  <option>Hoạt động</option>
-                  <option>Dừng hoạt động</option>
-                </select>
-              </label>
+              {supplierEditorId !== 'new' && (
+                <label className="space-y-2 text-sm font-medium text-primary">
+                  <span>Trạng thái</span>
+                  <select value={supplierForm.status} onChange={event => updateSupplierForm('status', event.target.value as SupplierStatus)} className="w-full border border-outline-variant/50 px-4 py-3 bg-white">
+                    <option>Hoạt động</option>
+                    <option>Dừng hoạt động</option>
+                  </select>
+                </label>
+              )}
             </div>
+
+            {supplierForm.category === 'Khách sạn' && (
+              <div className="space-y-3 rounded-sm border border-outline-variant/20 p-4">
+                <p className="text-xs font-bold uppercase tracking-widest text-primary/60">Hạng sao khách sạn</p>
+                <div className="flex flex-wrap gap-4">
+                  {hotelStandardOptions.map(option => (
+                    <label key={option} className="flex items-center gap-2 text-sm text-primary">
+                      <input
+                        type="checkbox"
+                        checked={supplierForm.standards.includes(option)}
+                        onChange={event => {
+                          const nextStandards = event.target.checked
+                            ? [...supplierForm.standards, option]
+                            : supplierForm.standards.filter(item => item !== option);
+                          updateSupplierForm('standards', nextStandards);
+                        }}
+                      />
+                      {option}
+                    </label>
+                  ))}
+                </div>
+                {errors.standards && <p className="text-xs text-red-600">{errors.standards}</p>}
+              </div>
+            )}
 
             <label className="block space-y-2 text-sm font-medium text-primary">
               <span>Mô tả</span>
@@ -1226,6 +1389,19 @@ export default function AdminSuppliers() {
 
             <SupplierServiceEditor form={supplierForm} errors={errors} onChange={updateDraftService} onAddLine={addDraftService} />
             {errors.services && <p className="text-xs text-red-600">{errors.services}</p>}
+
+            {editingSupplier && editingSupplier.category !== 'Vận chuyển' && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs font-bold uppercase tracking-widest text-primary/60">Bảng giá</p>
+                  <button onClick={() => setQuotePopup({ supplierId: editingSupplier.id })} className="border border-secondary px-5 py-3 text-xs font-bold uppercase tracking-widest text-secondary">Thêm mới bảng giá</button>
+                </div>
+                <SupplierServicesTable
+                  supplier={editingSupplier}
+                  onEditPrice={(serviceId, priceId) => setSupplierPriceEditor({ supplierId: editingSupplier.id, serviceId, priceId })}
+                />
+              </div>
+            )}
 
             <div className="flex gap-4 border-t border-outline-variant/20 pt-6">
               <button onClick={resetSupplierEditor} className="flex-1 border border-primary py-4 text-[10px] font-bold uppercase tracking-[0.24em] text-primary">Hủy</button>
@@ -1307,6 +1483,15 @@ export default function AdminSuppliers() {
       {quotePopup && quoteSupplier && (
         <QuotePopupModal supplier={quoteSupplier} onClose={() => setQuotePopup(null)} onApply={applyQuoteChanges} />
       )}
+
+      {supplierPriceEditor && activePriceService && (
+        <SupplierPriceEditorModal
+          service={activePriceService}
+          price={activeSupplierPrice}
+          onClose={() => setSupplierPriceEditor(null)}
+          onSave={saveSupplierPriceRow}
+        />
+      )}
     </div>
   );
 }
@@ -1324,6 +1509,15 @@ function QuotePopupModal({
   const [toDate, setToDate] = useState('');
   const [reason, setReason] = useState('Cập nhật báo giá');
   const [priceMap, setPriceMap] = useState<Record<string, number>>({});
+  const today = todayKey();
+  const fromDateError = !fromDate
+    ? 'Cần nhập ngày hiệu lực'
+    : fromDate < today
+      ? 'Ngày hiệu lực phải lớn hơn hoặc bằng ngày hiện tại'
+      : '';
+  const toDateError = toDate && toDate < fromDate
+    ? 'Ngày hết hiệu lực phải lớn hơn hoặc bằng ngày hiệu lực'
+    : '';
 
   const rows = [
     ...supplier.services,
@@ -1336,11 +1530,30 @@ function QuotePopupModal({
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <label className="space-y-2 text-sm font-medium text-primary">
             <span>Từ ngày</span>
-            <input type="date" value={fromDate} onChange={event => setFromDate(event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3" />
+            <input
+              type="date"
+              value={fromDate}
+              min={today}
+              onChange={event => {
+                const nextDate = event.target.value;
+                setFromDate(nextDate);
+                if (toDate && nextDate && nextDate > toDate) setToDate('');
+              }}
+              className="w-full border border-outline-variant/50 px-4 py-3"
+            />
+            {fromDateError && <p className="text-xs text-red-600">{fromDateError}</p>}
           </label>
           <label className="space-y-2 text-sm font-medium text-primary">
             <span>Đến ngày</span>
-            <input type="date" value={toDate} onChange={event => setToDate(event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3" />
+            <input
+              type="date"
+              value={toDate}
+              min={fromDate || today}
+              disabled={Boolean(fromDateError)}
+              onChange={event => setToDate(event.target.value)}
+              className="w-full border border-outline-variant/50 px-4 py-3 disabled:bg-surface-container-low disabled:text-primary/35"
+            />
+            {toDateError && <p className="text-xs text-red-600">{toDateError}</p>}
           </label>
           <label className="space-y-2 text-sm font-medium text-primary">
             <span>Lý do</span>
@@ -1359,11 +1572,19 @@ function QuotePopupModal({
             </thead>
             <tbody>
               {rows.map(service => {
-                const currentPrice = service.prices[service.prices.length - 1]?.unitPrice ?? 0;
+                const currentPrices = getIntersectingSupplierPrices(service.prices, fromDate, toDate);
                 return (
                   <tr key={service.id} className="border-t border-outline-variant/10">
                     <td className="px-4 py-3 font-medium">{service.name}</td>
-                    <td className="px-4 py-3">{formatCurrency(currentPrice)}</td>
+                    <td className="px-4 py-3">
+                      {currentPrices.length > 0 ? (
+                        <div className="space-y-1">
+                          {currentPrices.map(price => (
+                            <p key={price.id}>{price.fromDate} - {price.toDate || 'Đang áp dụng'}: {formatCurrency(price.unitPrice)}</p>
+                          ))}
+                        </div>
+                      ) : '-'}
+                    </td>
                     <td className="px-4 py-3">
                       <input
                         type="number"
@@ -1381,7 +1602,121 @@ function QuotePopupModal({
 
         <div className="flex justify-end gap-3 border-t border-outline-variant/20 pt-6">
           <button onClick={onClose} className="border border-outline-variant/50 px-5 py-3 text-primary/70">Hủy bỏ</button>
-          <button onClick={() => onApply(priceMap, reason, fromDate, toDate)} className="bg-primary px-6 py-3 text-xs font-bold uppercase tracking-widest text-white">Lưu báo giá</button>
+          <button
+            onClick={() => {
+              if (fromDateError || toDateError) {
+                message.error(fromDateError || toDateError);
+                return;
+              }
+              onApply(priceMap, reason, fromDate, toDate);
+            }}
+            className="bg-primary px-6 py-3 text-xs font-bold uppercase tracking-widest text-white"
+          >
+            Lưu báo giá
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function SupplierPriceEditorModal({
+  service,
+  price,
+  onClose,
+  onSave,
+}: {
+  service: SupplierServiceLine;
+  price?: SupplierPriceRow;
+  onClose: () => void;
+  onSave: (price: SupplierPriceRow) => void;
+}) {
+  const currentUser = useAuthStore(state => state?.user?.name || 'Điều phối viên');
+  const [fromDate, setFromDate] = useState(price?.fromDate ?? todayKey());
+  const [toDate, setToDate] = useState(price?.toDate ?? '');
+  const [unitPrice, setUnitPrice] = useState(String(price?.unitPrice ?? ''));
+  const [note, setNote] = useState(price?.note ?? '');
+  const today = todayKey();
+  const fromDateError = !fromDate
+    ? 'Cần nhập ngày hiệu lực'
+    : fromDate < today
+      ? 'Ngày hiệu lực phải lớn hơn hoặc bằng ngày hiện tại'
+      : '';
+  const toDateError = toDate && toDate < fromDate
+    ? 'Ngày hết hiệu lực phải lớn hơn hoặc bằng ngày hiệu lực'
+    : '';
+
+  return (
+    <Modal title={price ? 'Chỉnh sửa bảng giá' : 'Thêm mới bảng giá'} subtitle={service.name} onClose={onClose}>
+      <div className="space-y-5">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <label className="space-y-2 text-sm font-medium text-primary">
+            <span>Từ ngày</span>
+            <input
+              type="date"
+              value={fromDate}
+              min={today}
+              onChange={event => {
+                const nextDate = event.target.value;
+                setFromDate(nextDate);
+                if (toDate && nextDate && nextDate > toDate) setToDate('');
+              }}
+              className="w-full border border-outline-variant/50 px-4 py-3"
+            />
+            {fromDateError && <p className="text-xs text-red-600">{fromDateError}</p>}
+          </label>
+          <label className="space-y-2 text-sm font-medium text-primary">
+            <span>Đến ngày</span>
+            <input
+              type="date"
+              value={toDate}
+              min={fromDate || today}
+              disabled={Boolean(fromDateError)}
+              onChange={event => setToDate(event.target.value)}
+              className="w-full border border-outline-variant/50 px-4 py-3 disabled:bg-surface-container-low disabled:text-primary/35"
+            />
+            {toDateError && <p className="text-xs text-red-600">{toDateError}</p>}
+          </label>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <label className="space-y-2 text-sm font-medium text-primary">
+            <span>Đơn giá</span>
+            <input type="number" value={unitPrice} onChange={event => setUnitPrice(event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3" />
+          </label>
+          <label className="space-y-2 text-sm font-medium text-primary">
+            <span>Người tạo</span>
+            <input value={currentUser} readOnly className="w-full border border-outline-variant/50 bg-surface-container-low px-4 py-3" />
+          </label>
+        </div>
+        <label className="block space-y-2 text-sm font-medium text-primary">
+          <span>Ghi chú</span>
+          <input value={note} onChange={event => setNote(event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3" />
+        </label>
+        <div className="flex gap-4 border-t border-outline-variant/20 pt-6">
+          <button onClick={onClose} className="flex-1 border border-primary py-4 text-[10px] font-bold uppercase tracking-[0.24em] text-primary">Hủy</button>
+          <button
+            onClick={() => {
+              if (!unitPrice.trim() || Number(unitPrice) <= 0) {
+                message.error('Đơn giá phải lớn hơn 0');
+                return;
+              }
+              if (fromDateError || toDateError) {
+                message.error(fromDateError || toDateError);
+                return;
+              }
+              onSave({
+                id: price?.id ?? '',
+                fromDate,
+                toDate,
+                unitPrice: Number(unitPrice),
+                note: note || 'Bảng giá cập nhật',
+                createdBy: currentUser,
+              });
+            }}
+            className="flex-1 bg-primary py-4 text-[10px] font-bold uppercase tracking-[0.24em] text-white"
+          >
+            Lưu bảng giá
+          </button>
         </div>
       </div>
     </Modal>

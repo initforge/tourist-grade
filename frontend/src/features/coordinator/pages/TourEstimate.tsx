@@ -11,7 +11,7 @@ import type {
   TourProgram,
 } from '@entities/tour-program/data/tourProgram';
 import { addServicePrice } from '@shared/lib/api/services';
-import { addSupplierBulkPrices } from '@shared/lib/api/suppliers';
+import { addSupplierBulkPrices, addSupplierServicePrice } from '@shared/lib/api/suppliers';
 import { updateTourInstanceCommand } from '@shared/lib/api/tourInstances';
 import {
   getRetainedAmountFromCancelledBooking,
@@ -49,6 +49,10 @@ type EstimateChoice = {
   serviceId?: string;
   serviceLineId?: string;
   mealLine?: boolean;
+  phone?: string;
+  contactInfo?: string;
+  priceRows?: DatedPrice[];
+  childPriceRows?: DatedPrice[];
 };
 
 type EstimateRow = {
@@ -143,7 +147,11 @@ function parseDateKey(value: string) {
 }
 
 function todayKey() {
-  return new Date().toISOString().slice(0, 10);
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function addDays(value: string, days: number) {
@@ -232,6 +240,41 @@ function getBookingStats(bookings: Booking[]) {
   return stats;
 }
 
+function getExpectedGuestStats(instance: TourInstance) {
+  const expectedGuests = Math.max(1, instance.expectedGuests || instance.minParticipants || 1);
+  const doubleRooms = Math.floor(expectedGuests / 2);
+  const singleRooms = expectedGuests % 2;
+  return {
+    adults: expectedGuests,
+    children: 0,
+    infants: 0,
+    totalGuests: expectedGuests,
+    roomCounts: {
+      single: singleRooms,
+      double: Math.max(1, doubleRooms),
+      triple: 0,
+    },
+  };
+}
+
+function getEstimateStats(instance: TourInstance, bookings: Booking[]) {
+  const stats = getBookingStats(bookings);
+  if (stats.totalGuests === 0) {
+    return getExpectedGuestStats(instance);
+  }
+
+  const roomTotal = stats.roomCounts.single + stats.roomCounts.double + stats.roomCounts.triple;
+  if (roomTotal > 0) {
+    return stats;
+  }
+
+  const fallback = getExpectedGuestStats({ ...instance, expectedGuests: stats.totalGuests });
+  return {
+    ...stats,
+    roomCounts: fallback.roomCounts,
+  };
+}
+
 function hasBookingDeadlinePassed(instance: TourInstance) {
   const deadline = new Date(instance.bookingDeadline);
   return !Number.isNaN(deadline.getTime()) && deadline <= new Date();
@@ -299,6 +342,7 @@ function fallbackTransportChoices(): EstimateChoice[] {
     unit: 'chuyến',
     systemManagedPrice: false,
     unitPriceEditable: true,
+    priceRows: [{ startDate: '2026-01-01', price: option.unitPrice }],
   }));
 }
 
@@ -311,6 +355,7 @@ function fallbackFlightChoices(): EstimateChoice[] {
     unit: 'khách',
     systemManagedPrice: false,
     unitPriceEditable: true,
+    priceRows: [{ startDate: '2026-01-01', price: option.unitPrice }],
   }));
 }
 
@@ -328,6 +373,7 @@ function fallbackHotelChoices(city: string, roomType: 'single' | 'double' | 'tri
         unit: 'phòng',
         systemManagedPrice: true,
         unitPriceEditable: false,
+        priceRows: prices,
       };
     });
 }
@@ -341,6 +387,7 @@ function fallbackMealChoices(dateKey: string): EstimateChoice[] {
     unit: 'khách',
     systemManagedPrice: true,
     unitPriceEditable: false,
+    priceRows: option.prices,
   }));
 }
 
@@ -354,6 +401,8 @@ function fallbackAttractionChoices(dateKey: string): EstimateChoice[] {
     unit: 'khách',
     systemManagedPrice: true,
     unitPriceEditable: false,
+    priceRows: option.adultPrices,
+    childPriceRows: option.childPrices,
   }));
 }
 
@@ -370,6 +419,7 @@ function fallbackOtherChoices(dateKey: string): EstimateChoice[] {
     formulaCountDefault: option.formulaCountDefault,
     formulaQuantity: option.formulaQuantity,
     formulaQuantityDefault: option.formulaQuantityDefault,
+    priceRows: option.prices,
   }));
 }
 
@@ -379,7 +429,7 @@ function supplierTransportChoices(suppliers: SupplierRow[], dateKey: string, typ
       ? supplier.services
         .filter((service) => (service.transportType ?? 'Xe') === type)
         .map((service) => ({
-          id: `supplier-${supplier.id}-${service.id}`,
+          id: type === 'Máy bay' ? `${supplier.id}-flight` : `${supplier.id}-${service.id}`,
           supplierName: supplier.name,
           serviceVariant: service.name,
           unitPrice: pickSupplierPrice(service.prices, dateKey),
@@ -388,6 +438,9 @@ function supplierTransportChoices(suppliers: SupplierRow[], dateKey: string, typ
           unitPriceEditable: type !== 'Xe' || isQuotedPriceMode(service.priceMode),
           supplierId: supplier.id,
           serviceLineId: service.id,
+          phone: supplier.phone,
+          contactInfo: supplier.email,
+          priceRows: service.prices.map((price) => ({ startDate: price.fromDate, endDate: price.toDate || undefined, price: price.unitPrice })),
         }))
       : []
   ));
@@ -399,7 +452,7 @@ function supplierHotelChoices(suppliers: SupplierRow[], city: string, roomName: 
       ? supplier.services
         .filter((service) => service.name === roomName)
         .map((service) => ({
-          id: `supplier-${supplier.id}-${service.id}`,
+          id: supplier.id,
           supplierName: supplier.name,
           serviceVariant: service.name,
           unitPrice: pickSupplierPrice(service.prices, dateKey),
@@ -408,6 +461,9 @@ function supplierHotelChoices(suppliers: SupplierRow[], city: string, roomName: 
           unitPriceEditable: false,
           supplierId: supplier.id,
           serviceLineId: service.id,
+          phone: supplier.phone,
+          contactInfo: supplier.email,
+          priceRows: service.prices.map((price) => ({ startDate: price.fromDate, endDate: price.toDate || undefined, price: price.unitPrice })),
         }))
       : []
   ));
@@ -420,8 +476,9 @@ function supplierMealChoices(suppliers: SupplierRow[], dateKey: string): Estimat
       ...supplier.mealServices.map((service) => ({ ...service, mealLine: true })),
     ];
     if (supplier.category !== 'Nhà hàng' && supplier.category !== 'Khách sạn') return [];
-    return serviceLines.map((service) => ({
-      id: `supplier-${supplier.id}-${service.id}-${service.mealLine ? 'meal' : 'main'}`,
+    const uniqueServiceLines = Array.from(new Map(serviceLines.map((service) => [service.id, service])).values());
+    return uniqueServiceLines.map((service) => ({
+      id: service.id,
       supplierName: supplier.name,
       serviceVariant: service.name,
       unitPrice: pickSupplierPrice(service.prices, dateKey),
@@ -431,6 +488,9 @@ function supplierMealChoices(suppliers: SupplierRow[], dateKey: string): Estimat
       supplierId: supplier.id,
       serviceLineId: service.id,
       mealLine: service.mealLine,
+      phone: supplier.phone,
+      contactInfo: supplier.email,
+      priceRows: service.prices.map((price) => ({ startDate: price.fromDate, endDate: price.toDate || undefined, price: price.unitPrice })),
     }));
   });
 }
@@ -438,21 +498,35 @@ function supplierMealChoices(suppliers: SupplierRow[], dateKey: string): Estimat
 function serviceChoices(services: ServiceRow[], category: 'Vé tham quan' | 'Các dịch vụ khác' | 'Hướng dẫn viên', target: RowTarget, dateKey: string): EstimateChoice[] {
   return services
     .filter((service) => service.category === category)
-    .map((service) => ({
-      id: `service-${service.id}-${target}`,
-      supplierName: service.supplierName ?? service.name,
-      serviceVariant: service.name,
-      unitPrice: pickServicePrice(service.prices, target === 'child' ? 'child' : 'adult', dateKey),
-      childUnitPrice: service.setup === 'Theo độ tuổi' ? pickServicePrice(service.prices, 'child', dateKey) : undefined,
-      unit: service.unit,
-      systemManagedPrice: service.priceMode === 'Giá niêm yết',
-      unitPriceEditable: isQuotedPriceMode(service.priceMode),
-      formulaCount: service.formulaCount as EstimateChoice['formulaCount'],
-      formulaCountDefault: Number(service.formulaCountDefault || 0) || undefined,
-      formulaQuantity: service.formulaQuantity as EstimateChoice['formulaQuantity'],
-      formulaQuantityDefault: Number(service.formulaQuantityDefault || 0) || undefined,
-      serviceId: service.id,
-    }));
+    .map((service) => {
+      const adultRows = service.prices
+        .filter((price) => !price.note || price.note.toLowerCase().includes('người lớn'))
+        .map((price) => ({ startDate: price.effectiveDate, endDate: price.endDate || undefined, price: price.unitPrice }));
+      const childRows = service.setup === 'Theo độ tuổi'
+        ? service.prices
+          .filter((price) => price.note.toLowerCase().includes('trẻ em'))
+          .map((price) => ({ startDate: price.effectiveDate, endDate: price.endDate || undefined, price: price.unitPrice }))
+        : adultRows;
+
+      return {
+        id: service.id,
+        supplierName: service.supplierName ?? service.name,
+        serviceVariant: service.name,
+        unitPrice: pickServicePrice(service.prices, target === 'child' ? 'child' : 'adult', dateKey),
+        childUnitPrice: service.setup === 'Theo độ tuổi' ? pickServicePrice(service.prices, 'child', dateKey) : undefined,
+        unit: service.unit,
+        systemManagedPrice: service.priceMode === 'Giá niêm yết',
+        unitPriceEditable: isQuotedPriceMode(service.priceMode),
+        formulaCount: service.formulaCount as EstimateChoice['formulaCount'],
+        formulaCountDefault: Number(service.formulaCountDefault || 0) || undefined,
+        formulaQuantity: service.formulaQuantity as EstimateChoice['formulaQuantity'],
+        formulaQuantityDefault: Number(service.formulaQuantityDefault || 0) || undefined,
+        serviceId: service.id,
+        contactInfo: service.contactInfo,
+        priceRows: adultRows,
+        childPriceRows: childRows,
+      };
+    });
 }
 
 function mergeChoices(primary: EstimateChoice[], secondary: EstimateChoice[]) {
@@ -463,6 +537,26 @@ function mergeChoices(primary: EstimateChoice[], secondary: EstimateChoice[]) {
     seen.add(key);
     return true;
   });
+}
+
+function selectedChoices(choices: EstimateChoice[], selections: Array<{ optionId: string }>) {
+  if (selections.length === 0) return [];
+  const selectedIds = new Set(selections.map((selection) => selection.optionId));
+  const seen = new Set<string>();
+  return choices.filter((choice) => {
+    if (!selectedIds.has(choice.id) || seen.has(choice.id)) return false;
+    seen.add(choice.id);
+    return true;
+  });
+}
+
+function preferredSelection(selections: Array<{ optionId: string; isDefault?: boolean }>) {
+  return selections.find((selection) => selection.isDefault) ?? selections[0];
+}
+
+function findPreferredChoice(choices: EstimateChoice[], selections: Array<{ optionId: string; isDefault?: boolean }>) {
+  const preferred = preferredSelection(selections);
+  return choices.find((choice) => choice.id === preferred?.optionId) ?? choices[0];
 }
 
 function recalcRow(row: EstimateRow) {
@@ -545,14 +639,16 @@ function buildFallbackRows(
   services: ServiceRow[],
 ) {
   const departureDate = instance.departureDate;
-  const stats = getBookingStats(bookings);
+  const stats = getEstimateStats(instance, bookings);
   const pricingTables = program.draftPricingTables;
   const rows: EstimateRow[] = [];
   const pushRow = (row: EstimateRow) => rows.push(recalcRow(row));
 
-  pricingTables?.transport?.forEach((selection, index) => {
-    const choices = mergeChoices(supplierTransportChoices(suppliers, departureDate, 'Xe'), fallbackTransportChoices());
-    const selected = choices.find((choice) => choice.id === selection.optionId) ?? choices[0];
+  const transportSelections = pricingTables?.transport ?? [];
+  const allTransportChoices = mergeChoices(supplierTransportChoices(suppliers, departureDate, 'Xe'), fallbackTransportChoices());
+  const transportChoices = selectedChoices(allTransportChoices, transportSelections);
+  transportSelections.forEach((selection, index) => {
+    const selected = transportChoices.find((choice) => choice.id === selection.optionId);
     if (!selected) return;
     pushRow({
       rowId: `A-transport-${index}`,
@@ -573,13 +669,15 @@ function buildFallbackRows(
       total: 0,
       note: '',
       optionId: selected.id,
-      optionChoices: choices,
+      optionChoices: transportChoices,
     });
   });
 
-  pricingTables?.flight?.forEach((selection, index) => {
-    const choices = mergeChoices(supplierTransportChoices(suppliers, departureDate, 'Máy bay'), fallbackFlightChoices());
-    const selected = choices.find((choice) => choice.id === selection.optionId) ?? choices[0];
+  const flightSelections = pricingTables?.flight ?? [];
+  const allFlightChoices = mergeChoices(supplierTransportChoices(suppliers, departureDate, 'Máy bay'), fallbackFlightChoices());
+  const flightChoices = selectedChoices(allFlightChoices, flightSelections);
+  flightSelections.forEach((selection, index) => {
+    const selected = flightChoices.find((choice) => choice.id === selection.optionId);
     if (!selected) return;
     pushRow({
       rowId: `A-flight-${index}`,
@@ -600,7 +698,7 @@ function buildFallbackRows(
       total: 0,
       note: '',
       optionId: selected.id,
-      optionChoices: choices,
+      optionChoices: flightChoices,
     });
   });
 
@@ -617,9 +715,8 @@ function buildFallbackRows(
       if (roomCount <= 0) return;
       const storeChoices = supplierHotelChoices(suppliers, group.city, roomName, nightlyDateKeys[0]);
       const fallbackChoices = fallbackHotelChoices(group.city, roomType, nightlyDateKeys);
-      const choices = mergeChoices(storeChoices, fallbackChoices);
-      const defaultSelection = selections.find((item) => item.isDefault) ?? selections[0];
-      const selected = choices.find((choice) => choice.id === defaultSelection?.optionId || choice.supplierName === hotelCatalog[defaultSelection?.optionId ?? '']?.supplierName) ?? choices[0];
+      const choices = selectedChoices(mergeChoices(storeChoices, fallbackChoices), selections);
+      const selected = findPreferredChoice(choices, selections);
       if (!selected) return;
       pushRow({
         rowId: `B-${group.id}-${roomType}`,
@@ -649,9 +746,8 @@ function buildFallbackRows(
   getMealGroups(program).forEach((group) => {
     const selections = pricingTables?.meals?.[group.id] ?? [];
     const dateKey = addDays(departureDate, group.day - 1);
-    const choices = mergeChoices(supplierMealChoices(suppliers, dateKey), fallbackMealChoices(dateKey));
-    const defaultSelection = selections.find((item) => item.isDefault) ?? selections[0];
-    const selected = choices.find((choice) => choice.id === defaultSelection?.optionId) ?? choices[0];
+    const choices = selectedChoices(mergeChoices(supplierMealChoices(suppliers, dateKey), fallbackMealChoices(dateKey)), selections);
+    const selected = findPreferredChoice(choices, selections);
     if (!selected) return;
     pushRow({
       rowId: `C-${group.id}`,
@@ -680,9 +776,8 @@ function buildFallbackRows(
   Object.entries(pricingTables?.attractions ?? {}).forEach(([groupId, selections], index) => {
     const day = Number(groupId.split('-')[1] || index + 1);
     const dateKey = addDays(departureDate, day - 1);
-    const choices = mergeChoices(serviceChoices(services, 'Vé tham quan', 'adult', dateKey), fallbackAttractionChoices(dateKey));
-    const defaultSelection = selections.find((item) => item.isDefault) ?? selections[0];
-    const selected = choices.find((choice) => choice.id === defaultSelection?.optionId) ?? choices[0];
+    const choices = selectedChoices(mergeChoices(serviceChoices(services, 'Vé tham quan', 'adult', dateKey), fallbackAttractionChoices(dateKey)), selections);
+    const selected = findPreferredChoice(choices, selections);
     if (!selected) return;
     if (stats.adults > 0) {
       pushRow({
@@ -734,17 +829,17 @@ function buildFallbackRows(
     }
   });
 
-  const guideChoices = mergeChoices(serviceChoices(services, 'Hướng dẫn viên', 'adult', departureDate), [
+  const guideChoices = mergeChoices([
     {
       id: 'guide-default',
       supplierName: instance.assignedGuide?.name ?? 'Chưa phân công',
       serviceVariant: 'Hướng dẫn viên',
-      unitPrice: 400000,
+      unitPrice: program.pricingConfig.guideUnitPrice ?? 0,
       unit: 'đ',
       systemManagedPrice: false,
       unitPriceEditable: true,
     },
-  ]);
+  ], serviceChoices(services, 'Hướng dẫn viên', 'adult', departureDate));
   const selectedGuideChoice = guideChoices[0];
   pushRow({
     rowId: 'E-guide',
@@ -768,9 +863,10 @@ function buildFallbackRows(
     optionChoices: guideChoices,
   });
 
-  pricingTables?.otherCosts?.forEach((selection, index) => {
-    const choices = mergeChoices(serviceChoices(services, 'Các dịch vụ khác', 'adult', departureDate), fallbackOtherChoices(departureDate));
-    const selected = choices.find((choice) => choice.id === selection.optionId) ?? choices[0];
+  const otherSelections = pricingTables?.otherCosts ?? [];
+  const otherChoices = selectedChoices(mergeChoices(serviceChoices(services, 'Các dịch vụ khác', 'adult', departureDate), fallbackOtherChoices(departureDate)), otherSelections);
+  otherSelections.forEach((selection, index) => {
+    const selected = otherChoices.find((choice) => choice.id === selection.optionId);
     if (!selected) return;
     const quantity = selected.formulaQuantity === 'Theo số người'
       ? Math.max(1, stats.totalGuests)
@@ -802,7 +898,7 @@ function buildFallbackRows(
       total: 0,
       note: selection.note ?? '',
       optionId: selected.id,
-      optionChoices: choices,
+      optionChoices: otherChoices,
     });
   });
 
@@ -865,6 +961,49 @@ function getGroupedRows(rows: EstimateRow[]) {
   return Array.from(byCategory.values());
 }
 
+function SupplierContactLink({ row }: { row: EstimateRow }) {
+  const choice = row.optionChoices.find((item) => item.id === row.optionId)
+    ?? row.optionChoices.find((item) => item.supplierName === row.supplierName);
+  const phone = choice?.phone || choice?.contactInfo || '';
+
+  return (
+    <span className="group relative inline-flex">
+      <button type="button" className="text-left font-medium text-[var(--color-secondary)] underline-offset-2 hover:underline">
+        {row.supplierName}
+      </button>
+      {phone && (
+        <span className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-max max-w-xs border border-[#D0C5AF]/40 bg-white px-3 py-2 text-xs text-[var(--color-primary)] opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+          SĐT: {phone}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function getSelectedChoice(row: EstimateRow) {
+  return row.optionChoices.find((choice) => choice.id === row.optionId)
+    ?? row.optionChoices.find((choice) => (
+      choice.supplierName === row.supplierName && choice.serviceVariant === row.serviceVariant
+    ));
+}
+
+function getPriceRowsForEstimateRow(row: EstimateRow) {
+  const choice = getSelectedChoice(row);
+  return row.target === 'child' && choice?.childPriceRows?.length
+    ? choice.childPriceRows
+    : choice?.priceRows ?? [];
+}
+
+function openEndedKey(value?: string) {
+  return value && value.trim() ? value : '9999-12-31';
+}
+
+function getIntersectingPrices(prices: DatedPrice[], fromDate: string, toDate?: string) {
+  if (!fromDate) return [];
+  const rangeEnd = openEndedKey(toDate);
+  return prices.filter((price) => price.startDate <= rangeEnd && openEndedKey(price.endDate) >= fromDate);
+}
+
 export default function TourEstimate() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -901,13 +1040,17 @@ export default function TourEstimate() {
     () => relatedBookings.filter(isBookingFinanciallyRelevantForOperations),
     [relatedBookings],
   );
-  const bookingStats = useMemo(() => getBookingStats(manifestBookings), [manifestBookings]);
+  const estimateStats = useMemo(() => (
+    instance ? getEstimateStats(instance, financialBookings) : getBookingStats([])
+  ), [financialBookings, instance]);
 
   const [estimateRows, setEstimateRows] = useState<EstimateRow[]>(() => (
     instance && program
-      ? hydrateRows(buildFallbackRows(instance, program, manifestBookings, suppliers, services), instance, bookingStats, program.duration.days)
+      ? hydrateRows(buildFallbackRows(instance, program, financialBookings, suppliers, services), instance, estimateStats, program.duration.days)
       : []
   ));
+  const [priceModalRowId, setPriceModalRowId] = useState<string | null>(null);
+  const [priceDraft, setPriceDraft] = useState({ fromDate: todayKey(), toDate: '', unitPrice: '' });
 
   useEffect(() => {
     if (!instance || !program) return;
@@ -915,11 +1058,11 @@ export default function TourEstimate() {
       setEstimateRows((current) => (
         current.length > 0
           ? current
-          : hydrateRows(buildFallbackRows(instance, program, manifestBookings, suppliers, services), instance, bookingStats, program.duration.days)
+          : hydrateRows(buildFallbackRows(instance, program, financialBookings, suppliers, services), instance, estimateStats, program.duration.days)
       ));
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [bookingStats, instance, manifestBookings, program, services, suppliers]);
+  }, [estimateStats, financialBookings, instance, program, services, suppliers]);
 
   const groupedRows = useMemo(() => getGroupedRows(estimateRows), [estimateRows]);
   const totalCost = estimateRows.reduce((sum, row) => sum + row.total, 0);
@@ -928,6 +1071,18 @@ export default function TourEstimate() {
   ), 0);
   const profit = expectedRevenue - totalCost;
   const margin = expectedRevenue > 0 ? (profit / expectedRevenue) * 100 : 0;
+  const priceModalRow = estimateRows.find((row) => row.rowId === priceModalRowId);
+  const priceFromError = !priceDraft.fromDate
+    ? 'Ngày hiệu lực là bắt buộc'
+    : priceDraft.fromDate < todayKey()
+      ? 'Ngày hiệu lực phải lớn hơn hoặc bằng ngày hiện tại'
+      : '';
+  const priceToError = priceDraft.toDate && priceDraft.toDate < priceDraft.fromDate
+    ? 'Ngày hết hiệu lực phải lớn hơn hoặc bằng ngày hiệu lực'
+    : '';
+  const currentPricesInRange = priceModalRow
+    ? getIntersectingPrices(getPriceRowsForEstimateRow(priceModalRow), priceDraft.fromDate, priceDraft.toDate)
+    : [];
 
   if (!instance || !program) {
     return (
@@ -967,16 +1122,66 @@ export default function TourEstimate() {
         const sameGroupChoice = row.optionChoices.find((choice) => (
           choice.supplierName === selectedChoice.supplierName && choice.serviceVariant === selectedChoice.serviceVariant
         )) ?? selectedChoice;
-        return applyChoice(row, sameGroupChoice, bookingStats, program.duration.days);
+        return applyChoice(row, sameGroupChoice, estimateStats, program.duration.days);
       });
     });
   };
 
-  const handleSupplierChange = (row: EstimateRow, supplierName: string) => {
-    const candidate = row.optionChoices.find((choice) => (
-      choice.supplierName === supplierName && choice.serviceVariant === row.serviceVariant
-    )) ?? row.optionChoices.find((choice) => choice.supplierName === supplierName);
-    if (candidate) updateRowChoice(row.rowId, candidate.id);
+  const openPriceModal = (row: EstimateRow) => {
+    setPriceModalRowId(row.rowId);
+    setPriceDraft({ fromDate: todayKey(), toDate: '', unitPrice: String(row.unitPrice || '') });
+  };
+
+  const persistSinglePriceToSystem = async () => {
+    if (!token || !priceModalRow) {
+      message.error('Phiên đăng nhập đã hết hạn. Không thể cập nhật bảng giá.');
+      return;
+    }
+    if (priceFromError || priceToError || Number(priceDraft.unitPrice) <= 0) {
+      message.error(priceFromError || priceToError || 'Đơn giá mới phải lớn hơn 0');
+      return;
+    }
+
+    const selectedChoice = getSelectedChoice(priceModalRow);
+    if (!selectedChoice) {
+      message.warning('Chưa tìm thấy bảng giá hệ thống tương ứng để cập nhật');
+      return;
+    }
+
+    try {
+      if (selectedChoice.supplierId && selectedChoice.serviceLineId) {
+        await addSupplierServicePrice(token, selectedChoice.supplierId, selectedChoice.serviceLineId, {
+          id: '',
+          fromDate: priceDraft.fromDate,
+          toDate: priceDraft.toDate,
+          unitPrice: Number(priceDraft.unitPrice),
+          note: `Cập nhật từ dự toán ${instance.id}`,
+          createdBy: currentUser,
+        });
+      } else if (selectedChoice.serviceId) {
+        const service = services.find((item) => item.id === selectedChoice.serviceId);
+        const note = service?.setup === 'Theo độ tuổi'
+          ? (priceModalRow.target === 'child' ? 'Trẻ em' : 'Người lớn')
+          : `Cập nhật từ dự toán ${instance.id}`;
+        await addServicePrice(token, selectedChoice.serviceId, {
+          id: '',
+          unitPrice: Number(priceDraft.unitPrice),
+          note,
+          effectiveDate: priceDraft.fromDate,
+          endDate: priceDraft.toDate,
+          createdBy: currentUser,
+        });
+      } else {
+        message.warning('Chưa tìm thấy bảng giá hệ thống tương ứng để cập nhật');
+        return;
+      }
+
+      await initializeProtected();
+      setPriceModalRowId(null);
+      message.success('Đã cập nhật bảng giá');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : 'Không thể cập nhật bảng giá');
+    }
   };
 
   const buildCostEstimate = () => {
@@ -1026,7 +1231,7 @@ export default function TourEstimate() {
       totalVariableCost,
       totalCost,
       pricingConfig,
-      estimatedGuests: instance.expectedGuests,
+      estimatedGuests: estimateStats.totalGuests,
     };
     return estimate;
   };
@@ -1245,12 +1450,6 @@ export default function TourEstimate() {
           ) : (
             <>
               <button
-                onClick={updatePricesToSystem}
-                className="border border-[var(--color-secondary)] px-6 py-2 text-sm font-medium uppercase tracking-widest text-[var(--color-secondary)] transition-colors hover:bg-[var(--color-secondary)]/5"
-              >
-                Cập nhật giá lên hệ thống
-              </button>
-              <button
                 onClick={async () => {
                   const persisted = await persistEstimate(false);
                   if (!persisted) return;
@@ -1398,10 +1597,10 @@ export default function TourEstimate() {
           </div>
 
           <div className="mb-4 flex flex-wrap gap-6 text-xs text-[var(--color-primary)]/55">
-            <span>Người lớn: <strong className="text-[var(--color-primary)]">{bookingStats.adults}</strong></span>
-            <span>Trẻ em: <strong className="text-[var(--color-primary)]">{bookingStats.children}</strong></span>
-            <span>Trẻ sơ sinh: <strong className="text-[var(--color-primary)]">{bookingStats.infants}</strong></span>
-            <span>Phòng đơn/đôi/ba: <strong className="text-[var(--color-primary)]">{bookingStats.roomCounts.single}/{bookingStats.roomCounts.double}/{bookingStats.roomCounts.triple}</strong></span>
+            <span>Người lớn: <strong className="text-[var(--color-primary)]">{estimateStats.adults}</strong></span>
+            <span>Trẻ em: <strong className="text-[var(--color-primary)]">{estimateStats.children}</strong></span>
+            <span>Trẻ sơ sinh: <strong className="text-[var(--color-primary)]">{estimateStats.infants}</strong></span>
+            <span>Phòng đơn/đôi/ba: <strong className="text-[var(--color-primary)]">{estimateStats.roomCounts.single}/{estimateStats.roomCounts.double}/{estimateStats.roomCounts.triple}</strong></span>
           </div>
 
           <div className="mb-6 overflow-hidden border border-[#D0C5AF]/40 bg-white shadow-sm">
@@ -1409,7 +1608,7 @@ export default function TourEstimate() {
               <table className="w-full border-collapse text-left">
                 <thead>
                   <tr className="bg-[#D4AF37] text-white shadow-sm">
-                    {['STT', 'Khoản mục', 'Nhà cung cấp', 'Dịch vụ', 'Đơn vị', 'Đối tượng', 'Số lượng', 'Số lần', 'Đơn giá áp dụng', 'Thành tiền'].map((header) => (
+                    {['STT', 'Khoản mục', 'Nhà cung cấp', 'Dịch vụ', 'Đơn vị', 'Đối tượng', 'Số lượng', 'Số lần', 'Đơn giá áp dụng', 'Thành tiền', 'Thao tác'].map((header) => (
                       <th key={header} className="whitespace-nowrap px-4 py-4 text-[10px] font-bold uppercase tracking-widest">{header}</th>
                     ))}
                   </tr>
@@ -1418,34 +1617,26 @@ export default function TourEstimate() {
                   {groupedRows.map((category) => (
                     <React.Fragment key={category.categoryId}>
                       <tr className="border-t border-[#D0C5AF]/30 bg-[var(--color-surface)]">
-                        <td colSpan={10} className="px-6 py-3 font-bold text-[var(--color-primary)]">{category.categoryId}. {category.categoryName}</td>
+                        <td colSpan={11} className="px-6 py-3 font-bold text-[var(--color-primary)]">{category.categoryId}. {category.categoryName}</td>
                       </tr>
                       {category.rows.map((row, index) => {
-                        const supplierNames = Array.from(new Set(row.optionChoices.map((choice) => choice.supplierName)));
-                        const serviceOptions = row.optionChoices.filter((choice) => choice.supplierName === row.supplierName);
                         return (
                           <tr key={row.rowId} className="border-t border-[#D0C5AF]/10 bg-white">
                             <td className="px-4 py-3">{index + 1}</td>
                             <td className="px-4 py-3 font-medium">{row.itemName}</td>
+                            <td className="px-4 py-3"><SupplierContactLink row={row} /></td>
                             <td className="px-4 py-3">
-                              {supplierNames.length > 1 ? (
-                                <select
-                                  value={row.supplierName}
-                                  onChange={(event) => handleSupplierChange(row, event.target.value)}
-                                  className="w-full border border-[#D0C5AF]/40 px-2 py-1"
-                                >
-                                  {supplierNames.map((supplierName) => <option key={supplierName} value={supplierName}>{supplierName}</option>)}
-                                </select>
-                              ) : row.supplierName}
-                            </td>
-                            <td className="px-4 py-3">
-                              {serviceOptions.length > 1 ? (
+                              {row.optionChoices.length > 1 ? (
                                 <select
                                   value={row.optionId}
                                   onChange={(event) => updateRowChoice(row.rowId, event.target.value)}
                                   className="w-full border border-[#D0C5AF]/40 px-2 py-1"
                                 >
-                                  {serviceOptions.map((choice) => <option key={choice.id} value={choice.id}>{choice.serviceVariant}</option>)}
+                                  {row.optionChoices.map((choice) => (
+                                    <option key={choice.id} value={choice.id}>
+                                      {choice.serviceVariant}{choice.supplierName !== row.supplierName ? ` - ${choice.supplierName}` : ''}
+                                    </option>
+                                  ))}
                                 </select>
                               ) : row.serviceVariant}
                             </td>
@@ -1482,6 +1673,17 @@ export default function TourEstimate() {
                               )}
                             </td>
                             <td className="px-4 py-3 text-right font-bold">{formatCurrency(row.total)}</td>
+                            <td className="px-4 py-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => openPriceModal(row)}
+                                className="inline-flex h-8 w-8 items-center justify-center border border-[#D0C5AF]/50 text-[var(--color-secondary)] transition-colors hover:border-[var(--color-secondary)] hover:bg-[var(--color-secondary)]/5"
+                                title="Cập nhật bảng giá"
+                                aria-label={`Cập nhật bảng giá ${row.itemName}`}
+                              >
+                                <span className="material-symbols-outlined text-[18px]">edit</span>
+                              </button>
+                            </td>
                           </tr>
                         );
                       })}
@@ -1492,12 +1694,117 @@ export default function TourEstimate() {
                   <tr className="border-t-2 border-[#D0C5AF]/50">
                     <td colSpan={9} className="px-6 py-5 text-right text-[11px] font-bold uppercase tracking-widest text-[var(--color-primary)]">Tổng dự chi:</td>
                     <td className="px-6 py-5 text-right text-lg font-bold text-[var(--color-primary)]">{formatCurrency(totalCost)}</td>
+                    <td />
                   </tr>
                 </tfoot>
               </table>
             </div>
           </div>
         </>
+      )}
+
+      {priceModalRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[var(--color-primary)]/40 backdrop-blur-sm" onClick={() => setPriceModalRowId(null)} />
+          <div role="dialog" aria-modal="true" className="relative w-full max-w-3xl bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="font-serif text-2xl text-[var(--color-primary)]">Cập nhật bảng giá</h3>
+                <p className="mt-1 text-sm text-[var(--color-primary)]/55">{priceModalRow.serviceVariant} - {priceModalRow.supplierName}</p>
+              </div>
+              <button onClick={() => setPriceModalRowId(null)} className="text-[var(--color-primary)]/40 hover:text-[var(--color-primary)]" aria-label="Đóng cập nhật bảng giá">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <label className="text-sm">
+                <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[var(--color-primary)]/50">Từ ngày</span>
+                <input
+                  type="date"
+                  min={todayKey()}
+                  value={priceDraft.fromDate}
+                  onChange={(event) => {
+                    const nextFromDate = event.target.value;
+                    setPriceDraft((current) => ({
+                      ...current,
+                      fromDate: nextFromDate,
+                      toDate: current.toDate && nextFromDate > current.toDate ? '' : current.toDate,
+                    }));
+                  }}
+                  className="w-full border border-[#D0C5AF]/50 px-3 py-2"
+                />
+                {priceFromError && <span className="mt-1 block text-xs text-red-600">{priceFromError}</span>}
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[var(--color-primary)]/50">Đến ngày</span>
+                <input
+                  type="date"
+                  min={priceDraft.fromDate || todayKey()}
+                  disabled={Boolean(priceFromError)}
+                  value={priceDraft.toDate}
+                  onChange={(event) => setPriceDraft((current) => ({ ...current, toDate: event.target.value }))}
+                  className="w-full border border-[#D0C5AF]/50 px-3 py-2 disabled:bg-stone-100 disabled:text-stone-400"
+                />
+                {priceToError && <span className="mt-1 block text-xs text-red-600">{priceToError}</span>}
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[var(--color-primary)]/50">Đơn giá mới</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={priceDraft.unitPrice}
+                  onChange={(event) => setPriceDraft((current) => ({ ...current, unitPrice: event.target.value }))}
+                  className="w-full border border-[#D0C5AF]/50 px-3 py-2 text-right"
+                />
+              </label>
+            </div>
+
+            <div className="mt-6 overflow-hidden border border-[#D0C5AF]/30">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-[var(--color-surface)] text-[10px] uppercase tracking-widest text-[var(--color-primary)]/50">
+                  <tr>
+                    <th className="px-4 py-3">Dịch vụ</th>
+                    <th className="px-4 py-3">Giá hiện tại trong khoảng đã chọn</th>
+                    <th className="px-4 py-3 text-right">Đơn giá mới</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t border-[#D0C5AF]/20">
+                    <td className="px-4 py-3 font-medium text-[var(--color-primary)]">{priceModalRow.serviceVariant}</td>
+                    <td className="px-4 py-3 text-[var(--color-primary)]/70">
+                      {currentPricesInRange.length > 0 ? (
+                        <div className="space-y-1">
+                          {currentPricesInRange.map((price, index) => (
+                            <p key={`${price.startDate}-${price.endDate ?? 'open'}-${index}`}>
+                              {new Date(`${price.startDate}T00:00:00`).toLocaleDateString('vi-VN')}
+                              {' - '}
+                              {price.endDate ? new Date(`${price.endDate}T00:00:00`).toLocaleDateString('vi-VN') : '31/12/9999'}
+                              {': '}
+                              {formatCurrency(price.price)}
+                            </p>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-[var(--color-primary)]/40">Chưa có bảng giá giao với khoảng đã chọn</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-[var(--color-primary)]">{formatCurrency(Number(priceDraft.unitPrice || 0))}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setPriceModalRowId(null)} className="border border-[#D0C5AF]/50 px-5 py-2 text-xs font-bold uppercase tracking-widest text-[var(--color-primary)]/70">
+                Hủy
+              </button>
+              <button type="button" onClick={persistSinglePriceToSystem} className="bg-[var(--color-tertiary)] px-5 py-2 text-xs font-bold uppercase tracking-widest text-white">
+                Lưu bảng giá
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {guestPopup && (

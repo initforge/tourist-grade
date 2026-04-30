@@ -30,7 +30,14 @@ const assignGuideSchema = z.object({
   assignedGuide: z.object({
     id: z.string(),
     name: z.string(),
+    email: z.string().email().optional().or(z.literal('')),
   }).nullable(),
+  guidePacket: z.object({
+    commonFileName: z.string(),
+    commonFileContent: z.string(),
+    passengerFileName: z.string(),
+    passengerFileContent: z.string(),
+  }).optional(),
 });
 
 const instanceUpsertSchema = z.object({
@@ -64,6 +71,15 @@ const instanceUpsertSchema = z.object({
   minParticipants: z.number().int().min(1),
   bookingDeadline: z.string(),
   warningDate: z.string().optional(),
+  saleRequest: z.object({
+    id: z.string(),
+    code: z.string().optional(),
+    createdAt: z.string().optional(),
+    totalRows: z.number().int().min(1).optional(),
+    selectedRows: z.number().int().min(0).optional(),
+    unselectedRows: z.number().int().min(0).optional(),
+  }).optional(),
+  warningState: z.record(z.string(), z.any()).optional(),
   cancelReason: z.string().optional().nullable(),
   createdAt: z.string().optional(),
 }).passthrough();
@@ -126,6 +142,12 @@ export function createTourInstancesRouter() {
         priceChild: input.data.priceChild,
         priceInfant: input.data.priceInfant ?? null,
         warningDate: input.data.warningDate ? new Date(input.data.warningDate) : null,
+        costEstimateJson: input.data.saleRequest || input.data.warningState
+          ? toPrismaJson(wrapEstimatePayload(null, null, {
+              saleRequest: input.data.saleRequest,
+              warningState: input.data.warningState,
+            }))
+          : undefined,
         cancelReason: input.data.cancelReason || null,
         createdBy: { connect: { id: req.auth!.sub } },
         submittedAt: new Date(),
@@ -189,6 +211,16 @@ export function createTourInstancesRouter() {
         warningDate: input.data.warningDate === undefined
           ? existing.warningDate
           : (input.data.warningDate ? new Date(input.data.warningDate) : null),
+        costEstimateJson: input.data.saleRequest || input.data.warningState
+          ? toPrismaJson(wrapEstimatePayload(
+              unwrapEstimatePayload(existing.costEstimateJson ?? undefined).estimate,
+              unwrapEstimatePayload(existing.costEstimateJson ?? undefined).assignedGuide,
+              {
+                saleRequest: input.data.saleRequest ?? unwrapEstimatePayload(existing.costEstimateJson ?? undefined).saleRequest,
+                warningState: input.data.warningState ?? unwrapEstimatePayload(existing.costEstimateJson ?? undefined).warningState,
+              },
+            ))
+          : undefined,
         cancelReason: input.data.cancelReason === undefined ? existing.cancelReason : (input.data.cancelReason || null),
       },
     });
@@ -231,7 +263,7 @@ export function createTourInstancesRouter() {
     res.json({ success: true, tourInstance: mapTourInstance(updated) });
   }));
 
-  router.post('/:id/assign-guide', requireRoles('coordinator', 'admin'), asyncHandler(async (req, res) => {
+  router.post('/:id/assign-guide', requireRoles('coordinator', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
     const input = assignGuideSchema.safeParse(req.body);
     if (!input.success) {
       throw badRequest('Invalid guide assignment payload');
@@ -247,9 +279,33 @@ export function createTourInstancesRouter() {
       include: tourInstanceInclude,
       where: { id: existing.id },
       data: {
-        costEstimateJson: toPrismaJson(wrapEstimatePayload(wrapped.estimate, input.data.assignedGuide)),
+        costEstimateJson: toPrismaJson(wrapEstimatePayload(wrapped.estimate, input.data.assignedGuide, {
+          saleRequest: wrapped.saleRequest,
+          warningState: wrapped.warningState,
+        })),
       },
     });
+
+    const assignedGuide = input.data.assignedGuide;
+    const guideEmail = assignedGuide?.email?.trim();
+    if (assignedGuide && guideEmail && input.data.guidePacket) {
+      await queueEmail(prisma, {
+        template: 'guide_assignment',
+        recipient: guideEmail,
+        subject: `Phân công HDV tour ${existing.code}`,
+        payload: {
+          tourCode: existing.code,
+          tourName: existing.programNameSnapshot,
+          tourDate: existing.departureDate.toISOString().slice(0, 10),
+          guideName: assignedGuide.name,
+          commonFileName: input.data.guidePacket.commonFileName,
+          commonFileContent: input.data.guidePacket.commonFileContent,
+          passengerFileName: input.data.guidePacket.passengerFileName,
+          passengerFileContent: input.data.guidePacket.passengerFileContent,
+        },
+        createdById: req.auth?.sub ?? null,
+      });
+    }
 
     res.json({ success: true, tourInstance: mapTourInstance(updated) });
   }));
@@ -273,7 +329,10 @@ export function createTourInstancesRouter() {
       where: { id: existing.id },
       data: {
         status: shouldSubmit ? 'CHO_DUYET_DU_TOAN' : existing.status,
-        costEstimateJson: toPrismaJson(wrapEstimatePayload(estimate, wrapped.assignedGuide)),
+        costEstimateJson: toPrismaJson(wrapEstimatePayload(estimate, wrapped.assignedGuide, {
+          saleRequest: wrapped.saleRequest,
+          warningState: wrapped.warningState,
+        })),
         estimatedAt: new Date(),
       },
     });

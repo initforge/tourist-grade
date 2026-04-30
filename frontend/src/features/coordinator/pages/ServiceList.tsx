@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Breadcrumb, message } from 'antd';
 import { Link } from 'react-router-dom';
-import { addServicePrice, createService, deleteService, patchService, type ServicePayload } from '@shared/lib/api/services';
+import { addServicePrice, createService, deleteService, patchService, patchServicePrice, type ServicePayload } from '@shared/lib/api/services';
 import { useAuthStore } from '@shared/store/useAuthStore';
 import { PageSearchInput } from '@shared/ui/PageSearchInput';
 import { useAppDataStore, type ServicePriceRow, type ServiceRow } from '@shared/store/useAppDataStore';
@@ -212,13 +212,13 @@ function StatusToggle({ value }: { value: ServiceStatus }) {
   );
 }
 
-function validateDraft(draft: ServiceDraft): DraftErrors {
+function validateDraft(draft: ServiceDraft, requirePrices = true): DraftErrors {
   const errors: DraftErrors = {};
   if (!draft.name.trim()) errors.name = 'Cần nhập tên dịch vụ';
   if (!draft.unit.trim()) errors.unit = 'Cần nhập đơn vị';
   if (!draft.description.trim()) errors.description = 'Cần nhập mô tả';
 
-  if (draft.category === 'Vé tham quan') {
+  if (requirePrices && draft.priceMode !== 'Báo giá' && draft.category === 'Vé tham quan') {
     if (draft.setup === 'Theo độ tuổi') {
       if (!draft.adultPrice.trim() || Number(draft.adultPrice) <= 0) errors.adultPrice = 'Cần nhập đơn giá người lớn';
       if (!draft.childPrice.trim() || Number(draft.childPrice) <= 0) errors.childPrice = 'Cần nhập đơn giá trẻ em';
@@ -228,7 +228,7 @@ function validateDraft(draft: ServiceDraft): DraftErrors {
   }
 
   if (draft.category === 'Các dịch vụ khác') {
-    if (!draft.generalPrice.trim() || Number(draft.generalPrice) <= 0) errors.generalPrice = 'Cần nhập đơn giá';
+    if (requirePrices && draft.priceMode !== 'Báo giá' && (!draft.generalPrice.trim() || Number(draft.generalPrice) <= 0)) errors.generalPrice = 'Cần nhập đơn giá';
     if (draft.formulaCount === 'Giá trị mặc định' && (!draft.formulaCountDefault.trim() || Number(draft.formulaCountDefault) <= 0)) {
       errors.formulaCountDefault = 'Cần nhập số lần mặc định';
     }
@@ -241,6 +241,8 @@ function validateDraft(draft: ServiceDraft): DraftErrors {
 }
 
 function buildPricesFromDraft(draft: ServiceDraft, createdBy: string, existingPrices: ServicePriceRow[] = []) {
+  if (draft.priceMode === 'Báo giá') return [];
+
   const effectiveDate = todayKey();
   if (draft.category === 'Vé tham quan' && draft.setup === 'Theo độ tuổi') {
     return [
@@ -379,7 +381,7 @@ export default function ServiceList() {
   };
 
   const saveDraft = () => {
-    const nextErrors = validateDraft(draft);
+    const nextErrors = validateDraft(draft, !editingServiceId);
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
       message.error('Cần nhập đầy đủ thông tin dịch vụ trước khi lưu');
@@ -399,7 +401,7 @@ export default function ServiceList() {
         unit: draft.unit.trim(),
         priceMode: toApiPriceMode(draft.priceMode),
         priceSetup: toApiPriceSetup(draft.setup),
-        status: toApiStatus(draft.status),
+        status: editingServiceId ? toApiStatus(draft.status) : 'ACTIVE',
         description: draft.description.trim(),
         supplierName: draft.supplierName.trim() || undefined,
         contactInfo: draft.contactInfo.trim() || undefined,
@@ -443,7 +445,7 @@ export default function ServiceList() {
       unit: draft.unit.trim(),
       priceMode: draft.priceMode,
       setup: draft.setup,
-      status: draft.status,
+      status: editingServiceId ? draft.status : 'Hoạt động',
       description: draft.description.trim(),
       supplierName: draft.supplierName.trim() || undefined,
       contactInfo: draft.contactInfo.trim() || undefined,
@@ -515,7 +517,11 @@ export default function ServiceList() {
     {
       void (async () => {
         try {
-          await addServicePrice(token, activePriceService.id, priceDraft);
+          if (activePriceRow) {
+            await patchServicePrice(token, activePriceService.id, activePriceRow.id, priceDraft);
+          } else {
+            await addServicePrice(token, activePriceService.id, priceDraft);
+          }
           await initializeProtected();
           setPriceEditor(null);
           message.success('Đã cập nhật bảng giá');
@@ -659,13 +665,15 @@ export default function ServiceList() {
                 <span>Thông tin liên hệ</span>
                 <input value={draft.contactInfo} onChange={event => updateDraft('contactInfo', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
               </label>
-              <label className="space-y-2 text-sm font-medium text-[#2A2421]">
-                <span>Trạng thái</span>
-                <select value={draft.status} onChange={event => updateDraft('status', event.target.value as ServiceStatus)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none bg-white">
-                  <option>Hoạt động</option>
-                  <option>Dừng hoạt động</option>
-                </select>
-              </label>
+              {editingService && (
+                <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                  <span>Trạng thái</span>
+                  <select value={draft.status} onChange={event => updateDraft('status', event.target.value as ServiceStatus)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none bg-white">
+                    <option>Hoạt động</option>
+                    <option>Dừng hoạt động</option>
+                  </select>
+                </label>
+              )}
               <label className="space-y-2 text-sm font-medium text-[#2A2421]">
                 <span>Hình thức giá</span>
                 <select value={draft.priceMode} onChange={event => updateDraft('priceMode', event.target.value as PriceMode)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none bg-white">
@@ -696,7 +704,7 @@ export default function ServiceList() {
                     <option>Theo độ tuổi</option>
                   </select>
                 </label>
-                {draft.setup === 'Theo độ tuổi' ? (
+                {!editingService && draft.priceMode !== 'Báo giá' && draft.setup === 'Theo độ tuổi' ? (
                   <>
                     <label className="space-y-2 text-sm font-medium text-[#2A2421]">
                       <span>Đơn giá người lớn</span>
@@ -709,23 +717,25 @@ export default function ServiceList() {
                       {renderFieldError('childPrice')}
                     </label>
                   </>
-                ) : (
+                ) : !editingService && draft.priceMode !== 'Báo giá' ? (
+                  <label className="space-y-2 text-sm font-medium text-[#2A2421] md:col-span-2">
+                    <span>Đơn giá</span>
+                    <input value={draft.generalPrice} onChange={event => updateDraft('generalPrice', event.target.value)} type="number" className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+                    {renderFieldError('generalPrice')}
+                  </label>
+                ) : null}
+              </div>
+            )}
+
+            {draft.category === 'Các dịch vụ khác' && (
+              <div className="grid grid-cols-1 gap-4 rounded-sm border border-stone-200 p-4 md:grid-cols-2">
+                {!editingService && draft.priceMode !== 'Báo giá' && (
                   <label className="space-y-2 text-sm font-medium text-[#2A2421] md:col-span-2">
                     <span>Đơn giá</span>
                     <input value={draft.generalPrice} onChange={event => updateDraft('generalPrice', event.target.value)} type="number" className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
                     {renderFieldError('generalPrice')}
                   </label>
                 )}
-              </div>
-            )}
-
-            {draft.category === 'Các dịch vụ khác' && (
-              <div className="grid grid-cols-1 gap-4 rounded-sm border border-stone-200 p-4 md:grid-cols-2">
-                <label className="space-y-2 text-sm font-medium text-[#2A2421] md:col-span-2">
-                  <span>Đơn giá</span>
-                  <input value={draft.generalPrice} onChange={event => updateDraft('generalPrice', event.target.value)} type="number" className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
-                  {renderFieldError('generalPrice')}
-                </label>
                 <label className="space-y-2 text-sm font-medium text-[#2A2421]">
                   <span>Công thức tính số lần</span>
                   <select value={draft.formulaCount} onChange={event => updateDraft('formulaCount', event.target.value as CountFormulaOption)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none bg-white">
@@ -755,11 +765,45 @@ export default function ServiceList() {
               </div>
             )}
 
-            {editingService && (
-              <div className="flex flex-wrap justify-end gap-3">
-                <button onClick={() => setPriceEditor({ serviceId: editingService.id })} className="border border-[#D4AF37] px-5 py-3 text-[10px] font-bold uppercase tracking-[0.24em] text-[#D4AF37]">
-                  Thêm mới bảng giá
-                </button>
+            {editingService && editingService.priceMode !== 'Báo giá' && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-stone-500">Bảng giá</p>
+                  <button onClick={() => setPriceEditor({ serviceId: editingService.id })} className="border border-[#D4AF37] px-5 py-3 text-[10px] font-bold uppercase tracking-[0.24em] text-[#D4AF37]">
+                    Thêm mới bảng giá
+                  </button>
+                </div>
+                <div className="overflow-x-auto border border-stone-200">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-stone-50">
+                      <tr>
+                        {['Đơn giá', 'Ngày hiệu lực', 'Ngày hết hiệu lực', 'Ghi chú', 'Người tạo', 'Thao tác'].map(header => (
+                          <th key={header} className="px-5 py-3 text-[10px] font-bold uppercase tracking-[0.24em] text-stone-500">{header}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {editingService.prices.map(price => (
+                        <tr key={price.id} className="border-t border-stone-100">
+                          <td className="px-5 py-4">{formatCurrency(price.unitPrice)}</td>
+                          <td className="px-5 py-4">{price.effectiveDate}</td>
+                          <td className="px-5 py-4">{price.endDate || 'Đang áp dụng'}</td>
+                          <td className="px-5 py-4">{price.note}</td>
+                          <td className="px-5 py-4">{price.createdBy}</td>
+                          <td className="px-5 py-4">
+                            <button
+                              onClick={() => setPriceEditor({ serviceId: editingService.id, priceId: price.id })}
+                              className="inline-flex h-9 w-9 items-center justify-center border border-stone-200 text-[#2A2421] hover:border-[#D4AF37] hover:text-[#D4AF37]"
+                              aria-label={`Sửa bảng giá ${price.note || price.id}`}
+                            >
+                              <span className="material-symbols-outlined text-base">edit</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
@@ -801,6 +845,7 @@ export default function ServiceList() {
 
             <Field label="Mô tả" value={selectedService.description} />
 
+            {selectedService.priceMode !== 'Báo giá' && (
             <div className="overflow-hidden border border-stone-200">
               <div className="border-b border-stone-200 bg-stone-50 px-5 py-3">
                 <p className="text-xs font-bold uppercase tracking-[0.24em] text-stone-500">Bảng giá</p>
@@ -828,6 +873,7 @@ export default function ServiceList() {
                 </table>
               </div>
             </div>
+            )}
           </div>
         </Modal>
       )}
@@ -860,6 +906,15 @@ function PriceEditorModal({
   const [effectiveDate, setEffectiveDate] = useState(price?.effectiveDate ?? todayKey());
   const [endDate, setEndDate] = useState(price?.endDate ?? '');
   const [note, setNote] = useState(price?.note ?? '');
+  const today = todayKey();
+  const effectiveDateError = !effectiveDate
+    ? 'Cần nhập ngày hiệu lực'
+    : effectiveDate < today
+      ? 'Ngày hiệu lực phải lớn hơn hoặc bằng ngày hiện tại'
+      : '';
+  const endDateError = endDate && endDate < effectiveDate
+    ? 'Ngày hết hiệu lực phải lớn hơn hoặc bằng ngày hiệu lực'
+    : '';
 
   return (
     <Modal title={price ? 'Chỉnh sửa bảng giá' : 'Thêm mới bảng giá'} subtitle={service.name} onClose={onClose}>
@@ -877,11 +932,31 @@ function PriceEditorModal({
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <label className="space-y-2 text-sm font-medium text-[#2A2421]">
             <span>Ngày hiệu lực</span>
-            <input value={effectiveDate} onChange={event => setEffectiveDate(event.target.value)} type="date" className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+            <input
+              value={effectiveDate}
+              min={today}
+              onChange={event => {
+                const nextDate = event.target.value;
+                setEffectiveDate(nextDate);
+                if (endDate && nextDate && nextDate > endDate) setEndDate('');
+              }}
+              type="date"
+              className="w-full border border-stone-200 px-4 py-3 text-sm outline-none"
+            />
+            {effectiveDateError && <p className="text-xs text-red-600">{effectiveDateError}</p>}
           </label>
           <label className="space-y-2 text-sm font-medium text-[#2A2421]">
             <span>Ngày hết hiệu lực</span>
-            <input value={endDate} onChange={event => setEndDate(event.target.value)} type="date" className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" placeholder="Có thể để trống" />
+            <input
+              value={endDate}
+              min={effectiveDate || today}
+              disabled={Boolean(effectiveDateError)}
+              onChange={event => setEndDate(event.target.value)}
+              type="date"
+              className="w-full border border-stone-200 px-4 py-3 text-sm outline-none disabled:bg-stone-100 disabled:text-stone-400"
+              placeholder="Có thể để trống"
+            />
+            {endDateError && <p className="text-xs text-red-600">{endDateError}</p>}
           </label>
         </div>
         <label className="space-y-2 text-sm font-medium text-[#2A2421] block">
@@ -896,8 +971,8 @@ function PriceEditorModal({
                 message.error('Đơn giá phải lớn hơn 0');
                 return;
               }
-              if (!effectiveDate) {
-                message.error('Cần nhập ngày hiệu lực');
+              if (effectiveDateError || endDateError) {
+                message.error(effectiveDateError || endDateError);
                 return;
               }
               onSave({

@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { asyncHandler, badRequest, notFound } from '../lib/http.js';
 import { mapService } from '../lib/mappers.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
-import { OPEN_ENDED_DATE, toRequiredDate } from '../lib/coordinator.js';
+import { toRequiredDate } from '../lib/coordinator.js';
 
 const priceRowSchema = z.object({
   unitPrice: z.number().positive(),
@@ -175,27 +176,20 @@ export function createServicesRouter() {
     }
 
     const effectiveDate = new Date(input.data.effectiveDate);
-    if (!input.data.endDate) {
-      await prisma.servicePrice.updateMany({
-        where: {
-          serviceId: service.id,
-          endDate: OPEN_ENDED_DATE,
-        },
+    const endDate = toRequiredDate(input.data.endDate);
+
+    const price = await prisma.$transaction(async (tx) => {
+      await reconcileServicePriceRanges(tx, service.prices, service.id, effectiveDate, endDate);
+      return tx.servicePrice.create({
         data: {
-          endDate: effectiveDate,
+          serviceId: service.id,
+          unitPrice: input.data.unitPrice,
+          note: input.data.note,
+          effectiveDate,
+          endDate,
+          createdByName: input.data.createdBy,
         },
       });
-    }
-
-    const price = await prisma.servicePrice.create({
-      data: {
-        serviceId: service.id,
-        unitPrice: input.data.unitPrice,
-        note: input.data.note,
-        effectiveDate,
-        endDate: toRequiredDate(input.data.endDate),
-        createdByName: input.data.createdBy,
-      },
     });
 
     res.status(201).json({
@@ -211,5 +205,129 @@ export function createServicesRouter() {
     });
   }));
 
+  router.patch('/:id/prices/:priceId', asyncHandler(async (req, res) => {
+    const input = priceSchema.safeParse(req.body);
+    if (!input.success) {
+      throw badRequest('Invalid price payload');
+    }
+
+    const service = await prisma.service.findFirst({
+      where: {
+        OR: [{ id: String(req.params.id) }, { code: String(req.params.id) }],
+      },
+      include: { prices: true },
+    });
+
+    if (!service) {
+      throw notFound('Service not found');
+    }
+
+    const existingPrice = service.prices.find((price) => price.id === String(req.params.priceId));
+    if (!existingPrice) {
+      throw notFound('Price not found');
+    }
+
+    const price = await prisma.servicePrice.update({
+      where: { id: existingPrice.id },
+      data: {
+        unitPrice: input.data.unitPrice,
+        note: input.data.note,
+        effectiveDate: new Date(input.data.effectiveDate),
+        endDate: toRequiredDate(input.data.endDate),
+        createdByName: input.data.createdBy,
+      },
+    });
+
+    res.json({
+      success: true,
+      price: {
+        id: price.id,
+        unitPrice: Number(price.unitPrice),
+        note: price.note ?? '',
+        effectiveDate: price.effectiveDate.toISOString().slice(0, 10),
+        endDate: price.endDate.getUTCFullYear() >= 9999 ? '' : price.endDate.toISOString().slice(0, 10),
+        createdBy: price.createdByName,
+      },
+    });
+  }));
+
   return router;
+}
+
+type ServicePriceRecord = Awaited<ReturnType<typeof prisma.service.findFirst>> extends infer _T
+  ? {
+      id: string;
+      unitPrice: Prisma.Decimal | number;
+      note: string | null;
+      effectiveDate: Date;
+      endDate: Date;
+      createdByName: string;
+    }
+  : never;
+
+function addUtcDays(date: Date, days: number) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
+}
+
+function dateTime(date: Date) {
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
+
+function rangesOverlap(oldStart: Date, oldEnd: Date, newStart: Date, newEnd: Date) {
+  return dateTime(oldStart) <= dateTime(newEnd) && dateTime(oldEnd) >= dateTime(newStart);
+}
+
+async function reconcileServicePriceRanges(
+  tx: Prisma.TransactionClient,
+  prices: ServicePriceRecord[],
+  serviceId: string,
+  newStart: Date,
+  newEnd: Date,
+) {
+  const beforeNewStart = addUtcDays(newStart, -1);
+  const afterNewEnd = addUtcDays(newEnd, 1);
+
+  for (const price of prices) {
+    const oldStart = price.effectiveDate;
+    const oldEnd = price.endDate;
+    if (!rangesOverlap(oldStart, oldEnd, newStart, newEnd)) continue;
+
+    if (dateTime(oldStart) >= dateTime(newStart) && dateTime(oldEnd) <= dateTime(newEnd)) {
+      await tx.servicePrice.deleteMany({ where: { id: price.id } });
+      continue;
+    }
+
+    if (dateTime(oldStart) < dateTime(newStart) && dateTime(oldEnd) >= dateTime(newStart) && dateTime(oldEnd) <= dateTime(newEnd)) {
+      await tx.servicePrice.updateMany({
+        where: { id: price.id },
+        data: { endDate: beforeNewStart },
+      });
+      continue;
+    }
+
+    if (dateTime(oldStart) >= dateTime(newStart) && dateTime(oldStart) <= dateTime(newEnd) && dateTime(oldEnd) > dateTime(newEnd)) {
+      await tx.servicePrice.updateMany({
+        where: { id: price.id },
+        data: { effectiveDate: afterNewEnd },
+      });
+      continue;
+    }
+
+    if (dateTime(oldStart) < dateTime(newStart) && dateTime(oldEnd) > dateTime(newEnd)) {
+      await tx.servicePrice.updateMany({
+        where: { id: price.id },
+        data: { endDate: beforeNewStart },
+      });
+      await tx.servicePrice.create({
+        data: {
+          serviceId,
+          unitPrice: price.unitPrice,
+          note: price.note,
+          effectiveDate: afterNewEnd,
+          endDate: oldEnd,
+          createdByName: price.createdByName,
+        },
+      });
+    }
+  }
 }

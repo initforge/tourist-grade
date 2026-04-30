@@ -175,13 +175,55 @@ describe('tour-instance routes', () => {
     expect(response.status).toBe(200);
     expect(prismaMock.tourInstance.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        costEstimateJson: {
+        costEstimateJson: expect.objectContaining({
           estimate: { totalCost: 18000000 },
           assignedGuide: { id: 'HDV001', name: 'Guide 1' },
-        },
+          saleRequest: null,
+          warningState: null,
+        }),
       }),
     }));
     expect(response.body.tourInstance.assignedGuide.name).toBe('Guide 1');
+  });
+
+  it('queues guide assignment email with separated tour and passenger files', async () => {
+    prismaMock.tourInstance.findFirst.mockResolvedValue(createInstanceFixture({
+      costEstimateJson: {
+        estimate: { totalCost: 18000000 },
+      },
+    }));
+    prismaMock.tourInstance.update.mockResolvedValue(createInstanceFixture({
+      costEstimateJson: {
+        estimate: { totalCost: 18000000 },
+        assignedGuide: { id: 'HDV001', name: 'Guide 1', email: 'guide@test.vn' },
+      },
+    }));
+
+    const response = await request(createTestApp())
+      .post('/REQ-TP001-2026-08-01/assign-guide')
+      .set('Authorization', 'Bearer token')
+      .send({
+        assignedGuide: { id: 'HDV001', name: 'Guide 1', email: 'guide@test.vn' },
+        guidePacket: {
+          commonFileName: 'REQ-TP001-thong-tin-lich-trinh.txt',
+          commonFileContent: 'THÔNG TIN TOUR\nNgày\tTiêu đề\tMô tả',
+          passengerFileName: 'REQ-TP001-danh-sach-khach.csv',
+          passengerFileContent: 'Thông tin booking,STT khách,Họ tên',
+        },
+      });
+
+    expect(response.status).toBe(200);
+    expect(prismaMock.emailOutbox.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        template: 'guide_assignment',
+        recipient: 'guide@test.vn',
+        payloadJson: expect.objectContaining({
+          commonFileName: 'REQ-TP001-thong-tin-lich-trinh.txt',
+          passengerFileName: 'REQ-TP001-danh-sach-khach.csv',
+          emailMessage: expect.stringContaining('File danh sách khách hàng'),
+        }),
+      }),
+    }));
   });
 
   it('marks submitted estimate as waiting for approval', async () => {
@@ -205,10 +247,12 @@ describe('tour-instance routes', () => {
     expect(prismaMock.tourInstance.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         status: 'CHO_DUYET_DU_TOAN',
-        costEstimateJson: {
+        costEstimateJson: expect.objectContaining({
           estimate: { totalCost: 19000000 },
           assignedGuide: null,
-        },
+          saleRequest: null,
+          warningState: null,
+        }),
       }),
     }));
     expect(response.body.tourInstance.status).toBe('cho_duyet_du_toan');

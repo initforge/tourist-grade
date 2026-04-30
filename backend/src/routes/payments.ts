@@ -56,7 +56,8 @@ export function createPaymentsRouter() {
     }
 
     const payload = (booking.payloadJson as { paymentRatio?: 'deposit' | 'full'; publicScheduleId?: string } | null) ?? {};
-    const checkoutBaseUrl = `http://localhost:8080/tours/${booking.tourInstance.program.slug}/book?scheduleId=${encodeURIComponent(payload.publicScheduleId ?? booking.tourInstance.code)}&bookingId=${booking.id}`;
+    const frontendOrigin = typeof req.headers.origin === 'string' ? req.headers.origin : env.CORS_ORIGIN;
+    const checkoutBaseUrl = `${frontendOrigin}/tours/${booking.tourInstance.program.slug}/book?scheduleId=${encodeURIComponent(payload.publicScheduleId ?? booking.tourInstance.code)}&bookingId=${booking.id}`;
     const remainingAmount = Number(booking.remainingAmount);
     const paidAmount = Number(booking.paidAmount);
     const payableAmount = payload.paymentRatio === 'deposit' && paidAmount === 0

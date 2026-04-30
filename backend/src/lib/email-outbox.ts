@@ -25,6 +25,7 @@ const templateTitles: Record<string, string> = {
   booking_refund_bill_updated: 'Cập nhật bill hoàn tiền',
   booking_updated: 'Thông tin đặt tour đã được cập nhật',
   wishlist_tour_reminder: 'Nhắc nhở tour yêu thích',
+  guide_assignment: 'Phân công hướng dẫn viên',
 };
 
 const maxInlineEmailValueLength = 40_000;
@@ -209,6 +210,13 @@ function buildEmailMessage(template: string, payload: Record<string, unknown>) {
     if (payload.voucherCode) lines.push(`Mã ưu đãi: ${valueToText(payload.voucherCode)}`);
     if (payload.discountValue) lines.push(`Giá trị ưu đãi: ${valueToText(payload.discountValue)}`);
     if (payload.tourUrl) lines.push(`Xem tour: ${valueToText(payload.tourUrl)}`);
+  } else if (template === 'guide_assignment') {
+    lines.push(`Anh/chị được phân công phụ trách tour ${tourName || valueToText(payload.tourCode, 'mới')}.`);
+    lines.push(`Hướng dẫn viên: ${valueToText(payload.guideName, 'HDV được phân công')}`);
+    if (payload.commonFileName) lines.push(`File thông tin chung và lịch trình: ${valueToText(payload.commonFileName)}`);
+    if (payload.commonFileContent) lines.push(valueToText(payload.commonFileContent));
+    if (payload.passengerFileName) lines.push(`File danh sách khách hàng: ${valueToText(payload.passengerFileName)}`);
+    if (payload.passengerFileContent) lines.push(valueToText(payload.passengerFileContent));
   } else {
     lines.push('Travela gửi thông báo mới liên quan đến đơn đặt tour của quý khách.');
   }

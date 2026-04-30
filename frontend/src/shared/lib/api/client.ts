@@ -1,6 +1,11 @@
 // Default to same-origin so static hosting (e.g. Cloudflare Pages) does not accidentally call localhost.
 // Local dev/docker should set VITE_API_BASE_URL explicitly when a real API is available.
-const API_BASE_URL = import.meta?.env?.VITE_API_BASE_URL ?? '';
+const configuredApiBaseUrl = import.meta?.env?.VITE_API_BASE_URL ?? '';
+const localApiBaseUrl =
+  typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
+    ? 'http://localhost:4000/api/v1'
+    : '';
+const API_BASE_URL = configuredApiBaseUrl || localApiBaseUrl;
 
 export class ApiError extends Error {
   status: number;

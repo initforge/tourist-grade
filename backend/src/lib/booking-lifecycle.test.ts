@@ -61,22 +61,25 @@ describe('booking lifecycle', () => {
         findMany: vi.fn().mockResolvedValue([
           {
             id: 'ready-instance',
-            minParticipants: 2,
             bookings: [
-              { status: 'CONFIRMED', passengers: [{ id: 'P1' }, { id: 'P2' }] },
+              {
+                status: 'CONFIRMED',
+                passengers: Array.from({ length: 10 }, (_, index) => ({ id: `P${index + 1}` })),
+              },
             ],
           },
           {
             id: 'pending-instance',
-            minParticipants: 2,
             bookings: [
-              { status: 'CONFIRMED', passengers: [{ id: 'P3' }] },
-              { status: 'PENDING', passengers: [{ id: 'P4' }] },
+              {
+                status: 'CONFIRMED',
+                passengers: Array.from({ length: 10 }, (_, index) => ({ id: `Q${index + 1}` })),
+              },
+              { status: 'PENDING', passengers: [{ id: 'Q11' }] },
             ],
           },
           {
             id: 'insufficient-instance',
-            minParticipants: 3,
             bookings: [
               { status: 'CONFIRMED', passengers: [{ id: 'P5' }, { id: 'P6' }] },
             ],

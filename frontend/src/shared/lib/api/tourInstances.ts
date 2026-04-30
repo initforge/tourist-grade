@@ -23,6 +23,8 @@ export interface TourInstanceMutationPayload {
   minParticipants: number;
   bookingDeadline: string;
   warningDate?: string;
+  saleRequest?: TourInstance['saleRequest'];
+  warningState?: TourInstance['warningState'];
   cancelReason?: string;
   createdAt?: string;
 }

@@ -7,10 +7,11 @@ import {
 } from './customer.js';
 
 export const UNPAID_BOOKING_TIMEOUT_MINUTES = 15;
-export const UNPAID_BOOKING_CANCEL_REASON = 'Không thanh toán đúng hạn';
+export const UNPAID_BOOKING_CANCEL_REASON = 'Quá hạn thanh toán giữ chỗ';
 export const CANCEL_REQUEST_AUTO_CONFIRM_HOURS = 24;
 export const AUTO_CANCEL_CONFIRM_ACTOR = 'Hệ thống';
 export const READY_FOR_OPERATIONS_STATUSES = ['DANG_MO_BAN'] satisfies TourInstanceStatus[];
+export const MIN_CONFIRMED_DEPARTURE_GUESTS = 10;
 
 export async function normalizeLegacyBookedStatuses(prisma: PrismaClient) {
   return prisma.booking.updateMany({
@@ -240,7 +241,7 @@ export async function promoteReadyTourInstances(prisma: PrismaClient, now = new 
 
       return relevantBookings.length > 0
         && allBookingsResolved
-        && confirmedGuestCount >= instance.minParticipants;
+        && confirmedGuestCount >= MIN_CONFIRMED_DEPARTURE_GUESTS;
     })
     .map((instance) => instance.id);
 
@@ -259,10 +260,50 @@ export async function promoteReadyTourInstances(prisma: PrismaClient, now = new 
   });
 }
 
+export async function markUnderfilledTourInstances(prisma: PrismaClient, now = new Date()) {
+  const candidates = await prisma.tourInstance.findMany({
+    where: {
+      status: { in: READY_FOR_OPERATIONS_STATUSES },
+      bookingDeadlineAt: { lte: now },
+    },
+    include: {
+      bookings: {
+        include: {
+          passengers: true,
+        },
+      },
+    },
+  });
+
+  const underfilledIds = candidates
+    .filter((instance) => {
+      const confirmedGuestCount = instance.bookings
+        .filter((booking) => booking.status === 'CONFIRMED' || booking.status === 'COMPLETED')
+        .reduce((sum, booking) => sum + booking.passengers.length, 0);
+      return confirmedGuestCount < MIN_CONFIRMED_DEPARTURE_GUESTS;
+    })
+    .map((instance) => instance.id);
+
+  if (underfilledIds.length === 0) {
+    return { count: 0 };
+  }
+
+  return prisma.tourInstance.updateMany({
+    where: {
+      id: { in: underfilledIds },
+      status: { in: READY_FOR_OPERATIONS_STATUSES },
+    },
+    data: {
+      status: 'CHUA_DU_KIEN' satisfies TourInstanceStatus,
+    },
+  });
+}
+
 export async function runBookingLifecycleJobs(prisma: PrismaClient, now = new Date()) {
   await expireUnpaidBookings(prisma, now);
   await expireOverdueDepositBookings(prisma, now);
   await autoConfirmOverdueCancelRequests(prisma, now);
+  await markUnderfilledTourInstances(prisma, now);
   await promoteReadyTourInstances(prisma, now);
   await completeFinishedTourBookings(prisma, now);
 }

@@ -26,7 +26,9 @@ const prismaMock = {
   },
   supplierServicePrice: {
     updateMany: vi.fn(),
+    deleteMany: vi.fn(),
     create: vi.fn(),
+    update: vi.fn(),
   },
   $transaction: vi.fn(),
 };
@@ -182,10 +184,10 @@ describe('suppliers routes', () => {
     expect(response.status).toBe(200);
     expect(prismaMock.supplierServicePrice.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
-        serviceVariantId: 'variant-1',
+        id: 'variant-1-price-1',
       }),
       data: {
-        toDate: new Date('2026-06-01T00:00:00.000Z'),
+        toDate: new Date('2026-05-31T00:00:00.000Z'),
       },
     }));
     expect(prismaMock.supplierServicePrice.create).toHaveBeenCalledWith(expect.objectContaining({
@@ -198,7 +200,20 @@ describe('suppliers routes', () => {
   });
 
   it('adds a new price row for one supplier service variant', async () => {
-    prismaMock.supplierServiceVariant.findFirst.mockResolvedValue({ id: 'variant-1', supplierId: 'SUP001' });
+    prismaMock.supplierServiceVariant.findFirst.mockResolvedValue({
+      id: 'variant-1',
+      supplierId: 'SUP001',
+      prices: [
+        {
+          id: 'variant-1-price-1',
+          fromDate: new Date('2026-01-01T00:00:00.000Z'),
+          toDate: new Date('9999-12-31T00:00:00.000Z'),
+          unitPrice: 8100000,
+          note: 'Khoi tao',
+          createdByName: 'Seeder',
+        },
+      ],
+    });
     prismaMock.supplierServicePrice.create.mockResolvedValue({
       id: 'price-2',
       fromDate: new Date('2026-07-01T00:00:00.000Z'),

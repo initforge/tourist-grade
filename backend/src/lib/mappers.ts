@@ -128,6 +128,8 @@ export function mapTourProgram(program: TourProgram) {
     tourType: formatTourType(program.tourType),
     lodgingStandard: publicContent['lodgingStandard'] ?? undefined,
     routeDescription: program.description ?? '',
+    priceIncludes: (publicContent['priceIncludes'] as string | undefined) ?? '',
+    priceExcludes: (publicContent['priceExcludes'] as string | undefined) ?? '',
     holiday: program.holidayLabel ?? undefined,
     selectedDates: (publicContent['selectedDates'] as string[] | undefined) ?? [],
     weekdays: (publicContent['weekdays'] as string[] | undefined) ?? [],
@@ -151,6 +153,9 @@ export function mapTourProgram(program: TourProgram) {
     submittedAt: (publicContent['submittedAt'] as string | undefined) ?? undefined,
     approvedAt: (publicContent['approvedAt'] as string | undefined) ?? undefined,
     rejectedAt: (publicContent['rejectedAt'] as string | undefined) ?? undefined,
+    coverageWarningStatus: (publicContent['coverageWarningStatus'] as string | undefined) ?? undefined,
+    coverageWarningDate: (publicContent['coverageWarningDate'] as string | undefined) ?? undefined,
+    coveragePreviousStatus: (publicContent['coveragePreviousStatus'] as string | undefined) ?? undefined,
   };
 }
 
@@ -174,6 +179,8 @@ export function mapTourInstance(instance: TourInstance & { program?: TourProgram
     minParticipants: instance.minParticipants,
     bookingDeadline: instance.bookingDeadlineAt.toISOString().slice(0, 10),
     costEstimate: wrappedEstimate.estimate ?? undefined,
+    saleRequest: wrappedEstimate.saleRequest ?? undefined,
+    warningState: wrappedEstimate.warningState ?? undefined,
     settlement: instance.settlementJson ?? undefined,
     assignedGuide: wrappedEstimate.assignedGuide ?? undefined,
     assignedCoordinatorId: instance.assignedCoordinatorId ?? undefined,
@@ -217,6 +224,7 @@ export function mapSupplier(
     address: supplier.address ?? '',
     establishedYear: supplier.establishedYear ? String(supplier.establishedYear) : '',
     description: supplier.description ?? '',
+    standards: Array.isArray(supplier.standardsJson) ? supplier.standardsJson : [],
     services: supplier.serviceVariants
       .filter((item) => !item.isMealService)
       .map(mapSupplierServiceLine),
