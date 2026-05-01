@@ -5,7 +5,7 @@
 Can co:
 
 - Docker Desktop dang mo
-- file `backend/.env`
+- file `backend/.env` hoac `backend/internal.local.env`
 
 Clone repo:
 
@@ -14,7 +14,7 @@ git clone https://github.com/initforge/tourist-grade.git
 cd tourist-grade
 ```
 
-Copy file `.env` vao dung vi tri:
+Neu khong dung file internal co san, copy file `.env` vao dung vi tri:
 
 ```text
 tourist-grade/backend/.env
@@ -26,15 +26,15 @@ Chay setup:
 powershell -ExecutionPolicy Bypass -File scripts/setup-local.ps1
 ```
 
-Script se build Docker, chay database/backend/frontend, mo Cloudflare tunnel, cap nhat `PAYOS_WEBHOOK_URL`, restart backend va confirm webhook PayOS.
+Script se sync PayOS, EmailJS va Cloudflare credentials tu `backend/internal.local.env` vao `backend/.env` neu co san. Sau do script build Docker, chay database/backend/frontend, mo Cloudflare tunnel, cap nhat `PAYOS_WEBHOOK_URL`, restart backend va confirm webhook PayOS.
 
-Script khong tu dong seed du lieu. Neu can du lieu mau, chay mot trong hai cach sau:
+Mac dinh script khong chay seed du lieu. Neu can du lieu mau, chay co chu dich bang option:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/setup-local.ps1 -RunSeed
 ```
 
-hoac:
+Hoac chay seed rieng:
 
 ```powershell
 docker compose exec backend npm run prisma:seed
@@ -66,7 +66,7 @@ Mat khau cho cac tai khoan seed:
 powershell -ExecutionPolicy Bypass -File scripts/setup-local.ps1
 ```
 
-Chay lai script se khong tu seed lai, nen se khong xoa du lieu hien co trong database.
+Chay lai script se sync lai credentials va webhook URL, nhung khong seed lai neu khong truyen `-RunSeed`, nen khong xoa du lieu hien co trong database.
 
 ## 4. Lenh huu ich
 

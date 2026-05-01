@@ -7,18 +7,23 @@ Travela la he thong dat tour va van hanh tour cho customer, sales, coordinator, 
 Can:
 
 - Docker Desktop
-- file `backend/.env`
+- file `backend/.env` hoac `backend/internal.local.env`
 
 ```powershell
 git clone https://github.com/initforge/tourist-grade.git
 cd tourist-grade
-# copy file .env vao: tourist-grade/backend/.env
 powershell -ExecutionPolicy Bypass -File scripts/setup-local.ps1
 ```
 
-Setup script khong tu dong seed du lieu.
+Setup script tu dong sync PayOS, EmailJS va Cloudflare credentials tu `backend/internal.local.env` vao `backend/.env` neu file internal co san. Mac dinh script khong chay seed du lieu.
 
-Khi can du lieu mau, chay thu cong:
+Khi can du lieu mau, chay co chu dich bang option:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup-local.ps1 -RunSeed
+```
+
+Hoac chay seed rieng:
 
 ```powershell
 docker compose exec backend npm run prisma:seed

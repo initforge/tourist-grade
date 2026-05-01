@@ -48,7 +48,16 @@ function Ensure-EnvFile {
   }
 
   $content = Get-Content $envPath -Raw
-  foreach ($key in @('PAYOS_CLIENT_ID', 'PAYOS_API_KEY', 'PAYOS_CHECKSUM_KEY')) {
+  foreach ($key in @(
+    'PAYOS_CLIENT_ID',
+    'PAYOS_API_KEY',
+    'PAYOS_CHECKSUM_KEY',
+    'EMAILJS_ENABLED',
+    'EMAILJS_SERVICE_ID',
+    'EMAILJS_TEMPLATE_ID',
+    'EMAILJS_PUBLIC_KEY',
+    'EMAILJS_PRIVATE_KEY'
+  )) {
     if ($content -notmatch "(?m)^$key=.+") {
       throw "backend\\.env is missing $key"
     }
@@ -98,6 +107,13 @@ function Sync-InternalEnvValues($envPath, $internalEnvPath) {
     'PAYOS_RETURN_URL',
     'PAYOS_CANCEL_URL',
     'PAYOS_WEBHOOK_URL',
+    'EMAILJS_ENABLED',
+    'EMAILJS_SERVICE_ID',
+    'EMAILJS_TEMPLATE_ID',
+    'EMAILJS_PUBLIC_KEY',
+    'EMAILJS_PRIVATE_KEY',
+    'EMAILJS_FROM_NAME',
+    'EMAILJS_REPLY_TO',
     'CLOUDFLARE_TUNNEL_ID',
     'CLOUDFLARE_TUNNEL_NAME',
     'CLOUDFLARE_TUNNEL_HOSTNAME',
@@ -484,7 +500,7 @@ $backendHealthUrl = Wait-BackendReady 300
 Write-Host "Backend health URL after schema sync: $backendHealthUrl" -ForegroundColor Green
 
 if ($RunSeed) {
-  Write-Step 'Run Prisma seed manually'
+  Write-Step 'Run Prisma seed because -RunSeed was provided'
   (Invoke-Docker @('compose', 'exec', '-T', 'backend', 'npm', 'run', 'prisma:seed')).Output | Out-Host
   $backendHealthUrl = Wait-BackendReady 300
   Write-Host "Backend health URL after seed: $backendHealthUrl" -ForegroundColor Green
@@ -559,9 +575,9 @@ Write-Host 'Frontend: http://localhost:8080' -ForegroundColor Green
 Write-Host 'Backend:  http://localhost:4000/health' -ForegroundColor Green
 Write-Host "Webhook:  $webhookUrl" -ForegroundColor Green
 if ($RunSeed) {
-  Write-Host 'Seed:     sample data was loaded into the current database' -ForegroundColor Yellow
+  Write-Host 'Seed:     sample data was loaded because -RunSeed was provided.' -ForegroundColor Yellow
 } else {
-  Write-Host 'Seed:     not run automatically. Use -RunSeed or docker compose exec backend npm run prisma:seed when needed.' -ForegroundColor Yellow
+  Write-Host 'Seed:     not run. Pass -RunSeed only when sample data is needed.' -ForegroundColor Yellow
 }
 Write-Host 'To stop the tunnel:' -ForegroundColor Yellow
 Write-Host "Stop-Process -Id $($process.Id)" -ForegroundColor Yellow
