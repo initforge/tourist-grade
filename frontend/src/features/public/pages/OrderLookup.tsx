@@ -57,7 +57,10 @@ export default function OrderLookup() {
     setError('');
 
     try {
-      const response = await createBookingPaymentLink(foundBooking.id);
+      const response = await createBookingPaymentLink(foundBooking.id, null, {
+        returnTo: 'lookup_detail',
+        lookupContact: contact.trim(),
+      });
       const checkoutUrl = response.paymentLink.checkoutUrl;
 
       if (checkoutUrl) {

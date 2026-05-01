@@ -31,6 +31,7 @@ const previewRowSchema = z.object({
 });
 
 const pricingConfigSchema = z.object({
+  expectedGuests: z.number().int().min(1).optional(),
   profitMargin: z.number(),
   taxRate: z.number(),
   otherCostFactor: z.number(),

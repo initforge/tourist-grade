@@ -42,6 +42,11 @@ export interface PaymentLinkResponse {
   };
 }
 
+export interface PaymentLinkOptions {
+  returnTo?: 'checkout' | 'booking_detail' | 'lookup_detail';
+  lookupContact?: string;
+}
+
 export async function createPublicBooking(payload: CreateBookingPayload, token?: string | null) {
   return apiRequest<{ success: boolean; booking: Booking }>('/bookings/public', {
     method: 'POST',
@@ -58,10 +63,11 @@ export async function validatePublicPromoCode(payload: PromoValidationPayload, t
   });
 }
 
-export async function createBookingPaymentLink(bookingId: string, token?: string | null) {
+export async function createBookingPaymentLink(bookingId: string, token?: string | null, options: PaymentLinkOptions = {}) {
   return apiRequest<PaymentLinkResponse>(`/payments/bookings/${bookingId}/payos-link`, {
     method: 'POST',
     token: token ?? undefined,
+    body: Object.keys(options).length > 0 ? JSON.stringify(options) : undefined,
   });
 }
 

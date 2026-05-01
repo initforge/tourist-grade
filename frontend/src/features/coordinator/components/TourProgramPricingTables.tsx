@@ -910,9 +910,9 @@ export default function TourProgramPricingTables({
   const attractionOptionsByGroup = useMemo(() => Object.fromEntries(
     attractionGroups.map(group => [
       group.id,
-      attractionOptions.filter(option => !group.spot || option.spots.includes(group.spot)),
+      attractionOptions.filter(option => sightseeingSpots.length === 0 || option.spots.some(spot => sightseeingSpots.includes(spot))),
     ]),
-  ) as Record<string, AttractionOption[]>, [attractionGroups, attractionOptions]);
+  ) as Record<string, AttractionOption[]>, [attractionGroups, attractionOptions, sightseeingSpots]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -967,11 +967,7 @@ export default function TourProgramPricingTables({
           const kept = current.attractions[group.id]?.filter(selection =>
             (attractionOptionsByGroup[group.id] ?? []).some(option => option.id === selection.optionId),
           ) ?? [];
-          normalized.attractions[group.id] = normalizeDefaults(
-            hideActionColumn && kept.length === 0 && (attractionOptionsByGroup[group.id] ?? []).length > 0
-              ? [{ optionId: attractionOptionsByGroup[group.id][0].id, isDefault: true }]
-              : kept,
-          );
+          normalized.attractions[group.id] = normalizeDefaults(kept);
         });
 
         const currentSerialized = JSON.stringify(current);
@@ -998,6 +994,14 @@ export default function TourProgramPricingTables({
 
   const defaultTransport = normalizeDefaults(pricingValue.transport).find(item => item.isDefault);
   const defaultFlight = normalizeDefaults(pricingValue.flight).find(item => item.isDefault);
+  const selectedTransportOptionIds = useMemo(
+    () => new Set(pricingValue.transport.map((row) => row.optionId)),
+    [pricingValue.transport],
+  );
+  const selectedHotelOptionIds = useMemo(
+    () => new Set(Object.values(pricingValue.hotels).flatMap((rows) => rows.map((row) => row.optionId))),
+    [pricingValue.hotels],
+  );
   const selectedMealOptionIds = useMemo(
     () => new Set(Object.values(pricingValue.meals).flatMap((rows) => rows.map((row) => row.optionId))),
     [pricingValue.meals],
@@ -1205,16 +1209,6 @@ export default function TourProgramPricingTables({
       }
     });
 
-    attractionGroups.forEach(group => {
-      if ((pricingValue.attractions[group.id] ?? []).length === 0) {
-        const selectableOptions = (attractionOptionsByGroup[group.id] ?? [])
-          .filter(option => !selectedAttractionOptionIds.has(option.id));
-        if (selectableOptions.length > 0) {
-          messages.push(`${group.label} chưa có vé tham quan.`);
-        }
-      }
-    });
-
     pricingValue.otherCosts.forEach(selection => {
       const option = otherOptions.find(item => item.id === selection.optionId);
       if (!option) return;
@@ -1249,7 +1243,7 @@ export default function TourProgramPricingTables({
   const pickerOptions = useMemo<PickerOption[]>(() => {
     if (!picker) return [];
     if (picker.kind === 'transport') {
-      return transportOptions.map(option => ({
+      return transportOptions.filter(option => !selectedTransportOptionIds.has(option.id)).map(option => ({
         id: option.id,
         title: option.supplierName,
         columns: [`Khu vực hoạt động: ${option.operatingArea}`, `Dịch vụ: ${option.serviceLabel}`],
@@ -1263,7 +1257,9 @@ export default function TourProgramPricingTables({
       }));
     }
     if (picker.kind === 'hotel') {
-      return (hotelOptionsByGroup[picker.groupId ?? ''] ?? []).map(option => ({
+      return (hotelOptionsByGroup[picker.groupId ?? ''] ?? [])
+        .filter(option => !selectedHotelOptionIds.has(option.id))
+        .map(option => ({
         id: option.id,
         title: option.supplierName,
         columns: [`Địa chỉ: ${option.address}`, `Tiêu chuẩn: ${option.standard}`],
@@ -1292,7 +1288,7 @@ export default function TourProgramPricingTables({
       title: option.serviceName,
       columns: [`Nhà cung cấp: ${option.supplierName}`],
     }));
-  }, [attractionOptionsByGroup, flightOptions, hotelOptionsByGroup, mealOptionsByGroup, otherOptions, picker, selectedAttractionOptionIds, selectedMealOptionIds, selectedOtherOptionIds, transportOptions]);
+  }, [attractionOptionsByGroup, flightOptions, hotelOptionsByGroup, mealOptionsByGroup, otherOptions, picker, selectedAttractionOptionIds, selectedHotelOptionIds, selectedMealOptionIds, selectedOtherOptionIds, selectedTransportOptionIds, transportOptions]);
 
   const appendSelections = (kind: PickerKind, selectedIds: string[], groupId?: string) => {
     updateValue(current => {
@@ -1719,18 +1715,14 @@ export default function TourProgramPricingTables({
           </thead>
           <tbody>
             {attractionGroups.map(group => {
-              const displayPrice = (pricingValue.attractions[group.id] ?? []).reduce((sum, selection) => {
-                const option = attractionOptionsByGroup[group.id]?.find(item => item.id === selection.optionId);
-                return sum + (option ? resolveApplicablePrice(option.adultPrices, addDays(firstDepartureDate, group.day - 1)) : 0);
-              }, 0);
               return (
                 <FragmentRows
                   key={group.id}
                   rows={[
                     <tr key={`${group.id}-header`} className="bg-gray-50">
                       <td className="border border-outline-variant/20 px-3 py-2 font-medium">{group.label}</td>
-                      <td className="border border-outline-variant/20 px-3 py-2">Điểm tham quan: {group.spot || '-'}</td>
-                      <td className="border border-outline-variant/20 px-3 py-2 text-right">Đơn giá áp dụng: {formatMoney(displayPrice)}</td>
+                      <td className="border border-outline-variant/20 px-3 py-2" />
+                      <td className="border border-outline-variant/20 px-3 py-2" />
                       {!hideActionColumn && (
                         <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50">
                           {sectionButton('Chọn dịch vụ +', () => openPicker('attraction', `Chọn vé tham quan - ${group.label}`, group.id), `Thêm vé tham quan cho ${group.label}`)}
@@ -1791,7 +1783,7 @@ export default function TourProgramPricingTables({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-[var(--color-surface)] text-left">
-              {['Nhà cung cấp', 'Tên dịch vụ', 'Đơn giá', 'Số lần', 'Ghi chú', 'Mặc định', ...(hideActionColumn ? [] : ['Thao tác'])].map(header => (
+              {['Nhà cung cấp', 'Tên dịch vụ', 'Đơn giá', 'Số lần', 'Ghi chú', ...(hideActionColumn ? [] : ['Thao tác'])].map(header => (
                 <th key={header} className="border border-outline-variant/20 px-3 py-2 font-medium">{header}</th>
               ))}
             </tr>
@@ -1856,15 +1848,6 @@ export default function TourProgramPricingTables({
                       className="w-full border border-outline-variant/30 px-3 py-2 outline-none"
                     />
                   </td>
-                  <td className="border border-outline-variant/20 px-3 py-2 text-center">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(option.isInsurance)}
-                      readOnly
-                      aria-label={`Mặc định ${option.serviceName}`}
-                      className="h-4 w-4 accent-[var(--color-secondary)]"
-                    />
-                  </td>
                   {!hideActionColumn && (
                     <td className="border border-outline-variant/20 px-3 py-2 text-center">
                       {!option.isInsurance && (
@@ -1877,7 +1860,7 @@ export default function TourProgramPricingTables({
             })}
             {!hideActionColumn && (
               <tr className="bg-gray-50">
-                <td className="border border-outline-variant/20 px-3 py-2" colSpan={6} />
+                <td className="border border-outline-variant/20 px-3 py-2" colSpan={5} />
                 <td className="border border-outline-variant/20 px-3 py-2 bg-blue-50">
                   {sectionButton('Chọn dịch vụ +', () => openPicker('other', 'Chọn chi phí khác'), 'Thêm chi phí khác')}
                 </td>

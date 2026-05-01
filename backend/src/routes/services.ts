@@ -200,7 +200,7 @@ export function createServicesRouter() {
     const endDate = toRequiredDate(input.data.endDate);
 
     const price = await prisma.$transaction(async (tx) => {
-      await reconcileServicePriceRanges(tx, service.prices, service.id, effectiveDate, endDate);
+      await reconcileServicePriceRanges(tx, service.prices, service.id, effectiveDate, endDate, input.data.note);
       return tx.servicePrice.create({
         data: {
           serviceId: service.id,
@@ -248,15 +248,25 @@ export function createServicesRouter() {
       throw notFound('Price not found');
     }
 
-    const price = await prisma.servicePrice.update({
-      where: { id: existingPrice.id },
-      data: {
-        unitPrice: input.data.unitPrice,
-        note: input.data.note,
-        effectiveDate: new Date(input.data.effectiveDate),
-        endDate: toRequiredDate(input.data.endDate),
-        createdByName: input.data.createdBy,
-      },
+    const effectiveDate = new Date(input.data.effectiveDate);
+    const endDate = toRequiredDate(input.data.endDate);
+    const remainingPrices = service.prices.filter((price) => price.id !== existingPrice.id);
+
+    const price = await prisma.$transaction(async (tx) => {
+      await tx.servicePrice.delete({ where: { id: existingPrice.id } });
+      await reconcileAdjacentServicePriceRanges(tx, remainingPrices, existingPrice, effectiveDate, endDate, input.data.note);
+      await reconcileServicePriceRanges(tx, remainingPrices, service.id, effectiveDate, endDate, input.data.note);
+      return tx.servicePrice.create({
+        data: {
+          id: existingPrice.id,
+          serviceId: service.id,
+          unitPrice: input.data.unitPrice,
+          note: input.data.note,
+          effectiveDate,
+          endDate,
+          createdByName: input.data.createdBy,
+        },
+      });
     });
 
     res.json({
@@ -310,17 +320,72 @@ function rangesOverlap(oldStart: Date, oldEnd: Date, newStart: Date, newEnd: Dat
   return dateTime(oldStart) <= dateTime(newEnd) && dateTime(oldEnd) >= dateTime(newStart);
 }
 
+function normalizePriceNote(note?: string | null) {
+  const normalized = (note ?? '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .trim()
+    .toLowerCase();
+  return normalized === 'khong co' ? '' : normalized;
+}
+
+async function reconcileAdjacentServicePriceRanges(
+  tx: Prisma.TransactionClient,
+  prices: ServicePriceRecord[],
+  previousPrice: ServicePriceRecord,
+  newStart: Date,
+  newEnd: Date,
+  newNote?: string | null,
+) {
+  const targetNote = normalizePriceNote(newNote);
+  const previousStart = previousPrice.effectiveDate;
+  const previousEnd = previousPrice.endDate;
+
+  if (dateTime(newStart) > dateTime(previousStart)) {
+    const oldPreviousEnd = addUtcDays(previousStart, -1);
+    const nextPreviousEnd = addUtcDays(newStart, -1);
+    const adjacentPrevious = prices.find((price) => (
+      normalizePriceNote(price.note) === targetNote
+      && dateTime(price.endDate) === dateTime(oldPreviousEnd)
+    ));
+    if (adjacentPrevious) {
+      await tx.servicePrice.updateMany({
+        where: { id: adjacentPrevious.id },
+        data: { endDate: nextPreviousEnd },
+      });
+    }
+  }
+
+  if (dateTime(newEnd) < dateTime(previousEnd)) {
+    const oldNextStart = addUtcDays(previousEnd, 1);
+    const nextStart = addUtcDays(newEnd, 1);
+    const adjacentNext = prices.find((price) => (
+      normalizePriceNote(price.note) === targetNote
+      && dateTime(price.effectiveDate) === dateTime(oldNextStart)
+    ));
+    if (adjacentNext) {
+      await tx.servicePrice.updateMany({
+        where: { id: adjacentNext.id },
+        data: { effectiveDate: nextStart },
+      });
+    }
+  }
+}
+
 async function reconcileServicePriceRanges(
   tx: Prisma.TransactionClient,
   prices: ServicePriceRecord[],
   serviceId: string,
   newStart: Date,
   newEnd: Date,
+  newNote?: string | null,
 ) {
   const beforeNewStart = addUtcDays(newStart, -1);
   const afterNewEnd = addUtcDays(newEnd, 1);
+  const targetNote = normalizePriceNote(newNote);
 
   for (const price of prices) {
+    if (normalizePriceNote(price.note) !== targetNote) continue;
     const oldStart = price.effectiveDate;
     const oldEnd = price.endDate;
     if (!rangesOverlap(oldStart, oldEnd, newStart, newEnd)) continue;

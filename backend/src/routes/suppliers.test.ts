@@ -25,6 +25,7 @@ const prismaMock = {
     deleteMany: vi.fn(),
   },
   supplierServicePrice: {
+    delete: vi.fn(),
     updateMany: vi.fn(),
     deleteMany: vi.fn(),
     create: vi.fn(),
@@ -243,5 +244,64 @@ describe('suppliers routes', () => {
       }),
     }));
     expect(response.body.price.toDate).toBe('');
+  });
+
+  it('reconciles related ranges when editing a supplier service variant price row', async () => {
+    prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => Promise<unknown>) => callback(prismaMock as never));
+    prismaMock.supplierServiceVariant.findFirst.mockResolvedValue({
+      id: 'variant-1',
+      supplierId: 'SUP001',
+      prices: [
+        {
+          id: 'variant-1-price-1',
+          fromDate: new Date('2026-01-01T00:00:00.000Z'),
+          toDate: new Date('2026-05-31T00:00:00.000Z'),
+          unitPrice: 8100000,
+          note: 'Khoi tao',
+          createdByName: 'Seeder',
+        },
+        {
+          id: 'variant-1-price-2',
+          fromDate: new Date('2026-06-01T00:00:00.000Z'),
+          toDate: new Date('9999-12-31T00:00:00.000Z'),
+          unitPrice: 9000000,
+          note: 'Gia moi',
+          createdByName: 'Coordinator',
+        },
+      ],
+    });
+    prismaMock.supplierServicePrice.create.mockResolvedValue({
+      id: 'variant-1-price-2',
+      fromDate: new Date('2026-07-01T00:00:00.000Z'),
+      toDate: new Date('9999-12-31T00:00:00.000Z'),
+      unitPrice: 9300000,
+      note: 'Sua gia',
+      createdByName: 'Coordinator',
+    });
+
+    const response = await request(createTestApp())
+      .patch('/SUP001/service-variants/variant-1/prices/variant-1-price-2')
+      .set('Authorization', 'Bearer token')
+      .send({
+        fromDate: '2026-07-01',
+        toDate: '',
+        unitPrice: 9300000,
+        note: 'Sua gia',
+        createdBy: 'Coordinator',
+      });
+
+    expect(response.status).toBe(200);
+    expect(prismaMock.supplierServicePrice.delete).toHaveBeenCalledWith({ where: { id: 'variant-1-price-2' } });
+    expect(prismaMock.supplierServicePrice.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'variant-1-price-1' },
+      data: { toDate: new Date('2026-06-30T00:00:00.000Z') },
+    }));
+    expect(prismaMock.supplierServicePrice.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        id: 'variant-1-price-2',
+        serviceVariantId: 'variant-1',
+        unitPrice: 9300000,
+      }),
+    }));
   });
 });

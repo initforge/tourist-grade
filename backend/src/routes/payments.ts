@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { expireOverdueDepositBookings, expireUnpaidBookings } from '../lib/booking-lifecycle.js';
 import { applySuccessfulPayOSTransaction, isPayOSCancelledStatus, isPayOSPaidStatus } from '../lib/payos-bookings.js';
 import { prisma } from '../lib/prisma.js';
@@ -19,6 +20,11 @@ function getPayOSWebhookCode(paymentData: unknown) {
   return (paymentData as { status?: unknown; code?: unknown } | null)?.code;
 }
 
+const paymentLinkRequestSchema = z.object({
+  returnTo: z.enum(['checkout', 'booking_detail', 'lookup_detail']).optional().default('checkout'),
+  lookupContact: z.string().optional().default(''),
+}).optional();
+
 export function createPaymentsRouter() {
   const router = Router();
 
@@ -27,6 +33,10 @@ export function createPaymentsRouter() {
     await expireOverdueDepositBookings(prisma);
 
     const bookingId = String(req.params.id);
+    const redirectInput = paymentLinkRequestSchema.safeParse(req.body ?? {});
+    if (!redirectInput.success) {
+      throw badRequest('Invalid payment redirect payload');
+    }
     const client = getPayOSClient();
     if (!client) {
       throw badRequest('PayOS has not been configured');
@@ -56,8 +66,18 @@ export function createPaymentsRouter() {
     }
 
     const payload = (booking.payloadJson as { paymentRatio?: 'deposit' | 'full'; publicScheduleId?: string } | null) ?? {};
-    const frontendOrigin = typeof req.headers.origin === 'string' ? req.headers.origin : env.CORS_ORIGIN;
+    const fallbackFrontendOrigin = env.CORS_ORIGINS[0] ?? env.CORS_ORIGIN.split(',')[0]?.trim() ?? 'http://localhost:8080';
+    const frontendOrigin = typeof req.headers.origin === 'string' ? req.headers.origin : fallbackFrontendOrigin;
     const checkoutBaseUrl = `${frontendOrigin}/tours/${booking.tourInstance.program.slug}/book?scheduleId=${encodeURIComponent(payload.publicScheduleId ?? booking.tourInstance.code)}&bookingId=${booking.id}`;
+    const detailBaseUrl = `${frontendOrigin}/customer/bookings/${booking.id}`;
+    const lookupContact = redirectInput.data?.lookupContact || booking.contactEmail || booking.contactPhone;
+    const lookupBaseUrl = `${frontendOrigin}/booking/lookup/${encodeURIComponent(booking.bookingCode)}?contact=${encodeURIComponent(lookupContact)}`;
+    const selectedReturnBaseUrl = redirectInput.data?.returnTo === 'booking_detail'
+      ? detailBaseUrl
+      : redirectInput.data?.returnTo === 'lookup_detail'
+        ? lookupBaseUrl
+        : checkoutBaseUrl;
+    const returnUrlSeparator = selectedReturnBaseUrl.includes('?') ? '&' : '?';
     const remainingAmount = Number(booking.remainingAmount);
     const paidAmount = Number(booking.paidAmount);
     const payableAmount = payload.paymentRatio === 'deposit' && paidAmount === 0
@@ -104,8 +124,8 @@ export function createPaymentsRouter() {
       orderCode,
       amount: payableAmount,
       description: buildPayOSDescription(booking.bookingCode),
-      cancelUrl: `${checkoutBaseUrl}&payos=cancel`,
-      returnUrl: `${checkoutBaseUrl}&payos=return`,
+      cancelUrl: `${selectedReturnBaseUrl}${returnUrlSeparator}payos=cancel`,
+      returnUrl: `${selectedReturnBaseUrl}${returnUrlSeparator}payos=return`,
       buyerName: booking.contactName,
       buyerEmail: booking.contactEmail,
       buyerPhone: booking.contactPhone,

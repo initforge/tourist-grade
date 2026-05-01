@@ -68,6 +68,7 @@ interface FormState {
   priceIncludes: string;
   priceExcludes: string;
   galleryImagesInput: string;
+  maxGuests: NumericFieldValue;
   selectedDates: string[];
   weekdays: string[];
   yearRoundStartDate: string;
@@ -110,6 +111,7 @@ const editablePriceLabels: Record<EditablePriceKey, string> = {
 const lodgingStandards: LodgingStandard[] = ['2 sao', '3 sao', '4 sao', '5 sao'];
 const YEAR_ROUND_START_ERROR = 'chương trình tour phải tạo ít nhất trước 1 tháng';
 const YEAR_ROUND_END_ERROR = 'Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu';
+const CANCELLATION_SCOPE_OCCASION = 'TOUR_CANCELLATION_SCOPE';
 const EMPTY_PRICING_VALUE: PricingTablesValue = {
   transport: [],
   flight: [],
@@ -285,6 +287,7 @@ function formFromProgram(program: TourProgram): FormState {
     priceIncludes: program?.priceIncludes ?? '',
     priceExcludes: program?.priceExcludes ?? '',
     galleryImagesInput: (program?.gallery?.length ? program.gallery : [program?.image].filter(Boolean) as string[]).join('\n'),
+    maxGuests: Math.max(1, program?.pricingConfig?.maxGuests ?? program?.pricingConfig?.expectedGuests ?? program?.pricingConfig?.minParticipants ?? 25),
     bookingDeadline: program?.bookingDeadline ?? 7,
     transport: program?.transport ?? 'xe',
     arrivalPoint: program?.arrivalPoint ?? '',
@@ -305,7 +308,7 @@ function pricingFromProgram(program: TourProgram): PricingConfigState {
     : 15;
 
   return {
-    expectedGuests: Math.max(1, program?.pricingConfig?.maxGuests ?? program?.pricingConfig?.minParticipants ?? 25),
+    expectedGuests: Math.max(1, program?.pricingConfig?.expectedGuests ?? program?.pricingConfig?.maxGuests ?? program?.pricingConfig?.minParticipants ?? 25),
     profitMargin: program?.pricingConfig?.profitMargin ?? 15,
     taxRate: program?.pricingConfig?.taxRate ?? 10,
     otherCostFactor: otherCostFactorPercent,
@@ -320,6 +323,58 @@ function parseGalleryImages(value: string) {
       .map(item => item.trim())
       .filter(Boolean),
   ));
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function parseCancellationWindows(specialDays: Array<{ occasion: string; startDate: string; endDate: string; note?: string }>) {
+  return specialDays
+    .filter(day => day.occasion === CANCELLATION_SCOPE_OCCASION)
+    .map((day) => {
+      try {
+        const meta = JSON.parse(day.note || '{}') as { provinces?: unknown };
+        return {
+          startDate: day.startDate.slice(0, 10),
+          endDate: day.endDate.slice(0, 10),
+          provinces: Array.isArray(meta.provinces) ? meta.provinces.filter((item): item is string => typeof item === 'string') : [],
+        };
+      } catch {
+        return {
+          startDate: day.startDate.slice(0, 10),
+          endDate: day.endDate.slice(0, 10),
+          provinces: [],
+        };
+      }
+    })
+    .filter(window => window.provinces.length > 0);
+}
+
+function isBlockedByCancellationWindow(
+  departurePoint: string,
+  sightseeingSpots: string[],
+  departureDate: string,
+  endDate: string,
+  cancellationWindows: ReturnType<typeof parseCancellationWindows>,
+) {
+  const normalizedDeparture = normalizeSearchText(departurePoint);
+  const normalizedSightseeing = sightseeingSpots.map(normalizeSearchText);
+
+  return cancellationWindows.some((window) => {
+    const overlaps = departureDate <= window.endDate && endDate >= window.startDate;
+    if (!overlaps) return false;
+
+    return window.provinces.some((province) => {
+      const normalizedProvince = normalizeSearchText(province);
+      return normalizedDeparture.includes(normalizedProvince)
+        || normalizedSightseeing.some(spot => spot.includes(normalizedProvince));
+    });
+  });
 }
 
 function pricingTablesFromProgram(program: TourProgram): PricingTablesValue {
@@ -383,7 +438,7 @@ export default function AdminTourProgramWizard({
       return [];
     }
 
-    return specialDays.map((day) => {
+    return specialDays.filter(day => day.occasion !== CANCELLATION_SCOPE_OCCASION).map((day) => {
       const start = new Date(day.startDate);
       const end = new Date(day.endDate);
       const durationDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
@@ -395,6 +450,7 @@ export default function AdminTourProgramWizard({
       };
     });
   }, [specialDays]);
+  const cancellationWindows = useMemo(() => parseCancellationWindows(specialDays), [specialDays]);
   const [step, setStep] = useState<WizardStep>(1);
   const [form, setForm] = useState<FormState>(() => initialProgram ? formFromProgram(initialProgram) : ({
     name: '',
@@ -412,6 +468,7 @@ export default function AdminTourProgramWizard({
     priceIncludes: '',
     priceExcludes: '',
     galleryImagesInput: '',
+    maxGuests: 25,
     selectedDates: [],
     weekdays: [],
     yearRoundStartDate: '',
@@ -656,6 +713,8 @@ export default function AdminTourProgramWizard({
     if (nextForm?.sightseeingSpots?.length === 0) nextErrors.sightseeingSpots = 'Vui lòng chọn ít nhất một điểm tham quan';
     if (nextNightCount > 0 && !nextForm?.lodgingStandard) nextErrors.lodgingStandard = 'Vui lòng chọn tiêu chuẩn lưu trú';
     if (!nextForm?.routeDescription?.trim()) nextErrors.routeDescription = 'Vui lòng nhập mô tả chương trình tour';
+    if (nextForm?.maxGuests === '') nextErrors.maxGuests = 'Vui lòng nhập số lượng khách tối đa';
+    if (nextForm?.maxGuests !== '' && Number(nextForm.maxGuests) <= 0) nextErrors.maxGuests = 'Số lượng khách tối đa phải lớn hơn 0';
     if (!nextForm?.tourType) nextErrors.tourType = 'Vui lòng chọn loại tour';
     if (nextForm?.departurePoint && nextForm?.sightseeingSpots?.includes(nextForm.departurePoint)) {
       nextErrors.departurePoint = 'Điểm khởi hành không được trùng với điểm tham quan';
@@ -729,7 +788,9 @@ export default function AdminTourProgramWizard({
 
   const validateStepThree = (): ValidationErrors => {
     const nextErrors: ValidationErrors = {};
-    if (pricingConfig.expectedGuests <= 0) nextErrors.expectedGuests = 'Số lượng khách tối đa phải lớn hơn 0';
+    const maxGuests = typeof form.maxGuests === 'number' ? form.maxGuests : 0;
+    if (pricingConfig.expectedGuests <= 0) nextErrors.expectedGuests = 'Số khách dự kiến phải lớn hơn 0';
+    if (maxGuests > 0 && pricingConfig.expectedGuests > maxGuests) nextErrors.expectedGuests = 'Số khách dự kiến phải bé hơn hoặc bằng Số lượng khách tối đa';
     if (pricingConfig.profitMargin < 0) nextErrors.profitMargin = 'Tỷ lệ lợi nhuận mong muốn không được âm';
     if (pricingConfig.taxRate < 0) nextErrors.taxRate = 'Thuế không được âm';
     if (pricingConfig.otherCostFactor < 0) nextErrors.otherCostFactor = 'Hệ số chi phí khác không được âm';
@@ -785,6 +846,24 @@ export default function AdminTourProgramWizard({
   const updatePricingConfig = <K extends keyof PricingConfigState>(key: K, value: PricingConfigState[K]) => {
     if (readOnly || isActiveProgramEdit) return;
     setPricingConfig(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleGalleryFiles = (files: FileList | null) => {
+    if (!files || readOnly || isActiveProgramEdit) return;
+    const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+    if (imageFiles.length === 0) {
+      message.error('Vui lòng chọn file ảnh minh họa hợp lệ');
+      return;
+    }
+
+    void Promise.all(imageFiles.map(file => new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ''));
+      reader.onerror = () => reject(reader.error ?? new Error('Không thể đọc file ảnh'));
+      reader.readAsDataURL(file);
+    })))
+      .then((dataUrls) => updateForm('galleryImagesInput', dataUrls.filter(Boolean).join('\n')))
+      .catch((error) => message.error(error instanceof Error ? error.message : 'Không thể tải ảnh minh họa'));
   };
 
   const updateDay = (idx: number, patch: Partial<DayForm>) => {
@@ -868,7 +947,8 @@ export default function AdminTourProgramWizard({
         sellPriceChild: actualPrices.child,
         sellPriceInfant: actualPrices.infant,
         minParticipants: DEFAULT_MIN_PARTICIPANTS,
-        maxGuests: pricingConfig.expectedGuests,
+        expectedGuests: pricingConfig.expectedGuests,
+        maxGuests: typeof form.maxGuests === 'number' ? form.maxGuests : pricingConfig.expectedGuests,
         guideUnitPrice: pricingConfig.guideUnitPrice,
       },
       draftPricingTables: pricingTableValue as TourProgramPricingTablesState,
@@ -1057,7 +1137,15 @@ export default function AdminTourProgramWizard({
     ? ((actualPrices.adult - pricingSummary.currentNetPrice) / pricingSummary.currentNetPrice) * 100
     : 0;
   const roundedActualProfitRate = Math.round(actualProfitRate);
-  const basePreviewRows = useMemo<PreviewRow[]>(() => expectedDepartureDates.map((departureDate, index) => {
+  const basePreviewRows = useMemo<PreviewRow[]>(() => expectedDepartureDates
+    .filter((departureDate) => !isBlockedByCancellationWindow(
+      form.departurePoint,
+      form.sightseeingSpots,
+      departureDate,
+      addDays(departureDate, Math.max(0, dayCount - 1)),
+      cancellationWindows,
+    ))
+    .map((departureDate, index) => {
     const departurePricing = pricingSummary.departurePricing[departureDate] ?? {
       adultNet: 0,
       childNet: 0,
@@ -1090,10 +1178,13 @@ export default function AdminTourProgramWizard({
       checked: true,
     };
   }), [
+    cancellationWindows,
     dayCount,
     existingTourInstances,
     expectedDepartureDates,
     form.bookingDeadline,
+    form.departurePoint,
+    form.sightseeingSpots,
     form?.tourType,
     pricingConfig.expectedGuests,
     pricingSummary.departurePricing,
@@ -1377,6 +1468,23 @@ export default function AdminTourProgramWizard({
 
                 <div>
                   <label className="text-[10px] uppercase tracking-widest text-primary/60 font-label block mb-1">
+                    Số lượng khách tối đa <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={form?.maxGuests}
+                    onChange={e => updateForm('maxGuests', e?.target?.value === '' ? '' : Math.max(1, parseInt(e?.target?.value, 10) || 1))}
+                    disabled={isActiveProgramEdit}
+                    className="w-full max-w-xs border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none"
+                  />
+                  {stepAttempted[1] && stepOneErrors.maxGuests && (
+                    <p className="text-xs text-red-500 mt-2">{stepOneErrors.maxGuests}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-primary/60 font-label block mb-1">
                     Mô tả <span className="text-red-500">*</span>
                   </label>
                   <textarea
@@ -1423,15 +1531,20 @@ export default function AdminTourProgramWizard({
                   <label className="text-[10px] uppercase tracking-widest text-primary/60 font-label block mb-1">
                     Ảnh minh họa tour
                   </label>
-                  <textarea
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
                     aria-label="Ảnh minh họa tour"
-                    value={form?.galleryImagesInput}
-                    onChange={e => updateForm('galleryImagesInput', e?.target?.value)}
+                    onChange={e => handleGalleryFiles(e.target.files)}
                     disabled={isActiveProgramEdit}
-                    rows={3}
-                    className="w-full border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none resize-none"
-                    placeholder="Mỗi dòng một URL ảnh. Ảnh đầu tiên dùng làm ảnh đại diện tour."
+                    className="block w-full max-w-xl border border-outline-variant/50 px-4 py-3 text-sm file:mr-4 file:border-0 file:bg-[var(--color-secondary)]/10 file:px-4 file:py-2 file:text-xs file:font-semibold file:text-[var(--color-secondary)] focus:border-[var(--color-secondary)] outline-none"
                   />
+                  <p className="mt-2 text-xs text-primary/45">
+                    {parseGalleryImages(form?.galleryImagesInput).length > 0
+                      ? `Đã chọn ${parseGalleryImages(form?.galleryImagesInput).length} ảnh. Ảnh đầu tiên dùng làm ảnh đại diện tour.`
+                      : 'Tải ảnh từ máy lên, có thể chọn nhiều ảnh.'}
+                  </p>
                 </div>
               </div>
             </section>
@@ -1962,7 +2075,7 @@ export default function AdminTourProgramWizard({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
                 {[
-                  { label: 'Số lượng khách tối đa', key: 'expectedGuests' as const, unit: 'khách' },
+                  { label: 'Số khách dự kiến', key: 'expectedGuests' as const, unit: 'khách' },
                   { label: 'Tỷ lệ lợi nhuận mong muốn (%)', key: 'profitMargin' as const, unit: '%' },
                   { label: 'Thuế (%)', key: 'taxRate' as const, unit: '%' },
                   { label: 'Hệ số chi phí khác (%)', key: 'otherCostFactor' as const, unit: '%' },
@@ -1979,6 +2092,9 @@ export default function AdminTourProgramWizard({
                       />
                       <span className="text-xs text-primary/40 shrink-0">{item.unit}</span>
                     </div>
+                    {stepAttempted[3] && item.key === 'expectedGuests' && stepThreeErrors.expectedGuests && (
+                      <p className="text-xs text-red-500 mt-2">{stepThreeErrors.expectedGuests}</p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -2106,10 +2222,10 @@ export default function AdminTourProgramWizard({
 
               <p className="text-sm font-medium text-primary mb-3">Preview danh sách tour</p>
               <div className="overflow-x-auto border border-outline-variant/30">
-                <table className="w-full min-w-[1320px]">
+                <table className="w-full min-w-[1220px]">
                   <thead>
                     <tr className="bg-[var(--color-surface)] border-b border-outline-variant/30">
-                      {['Mã tour', 'Ngày khởi hành', 'Ngày kết thúc', 'Loại ngày', 'Số khách tối đa', 'Giá vốn', 'Giá bán', 'Lợi nhuận', 'Hạn đặt tour', 'Cùng thời điểm', 'Tạo']?.map(header => (
+                      {['Mã tour', 'Ngày khởi hành', 'Ngày kết thúc', 'Loại ngày', 'Giá vốn', 'Giá bán', 'Lợi nhuận', 'Hạn đặt tour', 'Cùng thời điểm', 'Tạo']?.map(header => (
                         <th key={header} className="text-left text-[10px] uppercase tracking-widest text-primary/50 font-medium px-4 py-3 whitespace-nowrap">
                           {header}
                         </th>
@@ -2119,7 +2235,7 @@ export default function AdminTourProgramWizard({
                   <tbody>
                     {previewRows.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="px-4 py-8 text-sm text-primary/45">
+                        <td colSpan={10} className="px-4 py-8 text-sm text-primary/45">
                           Chưa có ngày dự kiến. Quay lại Thông tin chung để nhập khoảng thời gian hoặc chọn ngày mùa lễ.
                         </td>
                       </tr>
@@ -2129,7 +2245,6 @@ export default function AdminTourProgramWizard({
                         <td className="px-4 py-3 text-sm whitespace-nowrap">{formatDate(row?.departureDate)}</td>
                         <td className="px-4 py-3 text-sm whitespace-nowrap">{formatDate(row?.endDate)}</td>
                         <td className="px-4 py-3 text-sm whitespace-nowrap">{row?.dayType}</td>
-                        <td className="px-4 py-3 text-sm">{row?.expectedGuests}</td>
                         <td className="px-4 py-3 text-sm">{formatMoney(row?.costPerAdult)}</td>
                         <td className="px-4 py-3 text-sm">
                           <input

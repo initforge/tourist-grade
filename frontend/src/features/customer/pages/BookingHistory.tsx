@@ -60,7 +60,7 @@ export default function BookingHistory() {
     setPayBookingId(booking.id);
 
     try {
-      const response = await createBookingPaymentLink(booking.id, accessToken);
+      const response = await createBookingPaymentLink(booking.id, accessToken, { returnTo: 'booking_detail' });
       const checkoutUrl = response.paymentLink.checkoutUrl;
 
       if (checkoutUrl) {

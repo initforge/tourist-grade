@@ -81,6 +81,35 @@ function buildPassengers(counts: Counts, previous: Passenger[] = []) {
   return nextPassengers;
 }
 
+function buildPromoPreviewPassengers(counts: Counts): Passenger[] {
+  const adultPassengers = Array.from({ length: counts.adult }, (_, index) => ({
+    type: 'adult' as const,
+    name: `Khach nguoi lon ${index + 1}`,
+    dob: '1990-01-01',
+    gender: 'male' as const,
+    cccd: `001199000${String(index + 1).padStart(3, '0')}`,
+    nationality: 'Việt Nam',
+    singleRoomSupplement: 0,
+  }));
+  const childPassengers = Array.from({ length: counts.child }, (_, index) => ({
+    type: 'child' as const,
+    name: `Khach tre em ${index + 1}`,
+    dob: '2018-01-01',
+    gender: 'male' as const,
+    nationality: 'Việt Nam',
+    singleRoomSupplement: 0,
+  }));
+  const infantPassengers = Array.from({ length: counts.infant }, (_, index) => ({
+    type: 'infant' as const,
+    name: `Khach em be ${index + 1}`,
+    dob: '2025-01-01',
+    gender: 'male' as const,
+    nationality: 'Việt Nam',
+    singleRoomSupplement: 0,
+  }));
+  return [...adultPassengers, ...childPassengers, ...infantPassengers];
+}
+
 function StepChip({ active, complete, index, label }: { active: boolean; complete?: boolean; index: number; label: string }) {
   return (
     <div className="flex items-center gap-3">
@@ -267,10 +296,6 @@ export default function BookingCheckout() {
   const totalAfterDiscount = Math.max(subtotal - discountAmount, 0);
   const isDepositDisabled = Boolean(schedule && Math.ceil((new Date(schedule.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) <= 7);
   const payableAmount = paymentRatio === 'deposit' ? Math.ceil(totalAfterDiscount * 0.5) : totalAfterDiscount;
-
-  useEffect(() => {
-    clearDraftFromStorage();
-  }, []);
 
   const restoreDraft = useCallback((draft: Record<string, unknown>) => {
     const draftBooking = (draft.booking as Booking | null | undefined) ?? null;
@@ -674,7 +699,7 @@ export default function BookingCheckout() {
         tourSlug: tour.slug,
         scheduleId: schedule.id,
         promoCode,
-        passengers,
+        passengers: buildPromoPreviewPassengers(counts),
       }, accessToken);
 
       setDiscountAmount(response.promo.discountAmount);

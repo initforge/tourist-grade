@@ -127,7 +127,10 @@ export default function BookingDetail() {
     setIsPaying(true);
 
     try {
-      const response = await createBookingPaymentLink(booking.id, accessToken);
+      const response = await createBookingPaymentLink(booking.id, accessToken, {
+        returnTo: isPublicLookupView ? 'lookup_detail' : 'booking_detail',
+        lookupContact: isPublicLookupView ? lookupContact : undefined,
+      });
       const checkoutUrl = response.paymentLink.checkoutUrl;
 
       if (checkoutUrl) {

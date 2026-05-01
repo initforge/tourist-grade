@@ -644,7 +644,7 @@ export function createBookingsRouter() {
   router.post('/promo/validate', authenticateOptional, asyncHandler(async (req, res) => {
     const input = promoValidationSchema.safeParse(req.body);
     if (!input.success) {
-      throw badRequest('Invalid promo validation payload');
+      throw badRequest(bookingPayloadError(input.error.issues));
     }
 
     const program = await resolveProgramBySlug(input.data.tourSlug);

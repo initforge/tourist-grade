@@ -279,6 +279,24 @@ function getCancellationBlockReason(program: TourProgram, departureDate: string,
     : '';
 }
 
+function findReferencePreviewRow(program: TourProgram, departureDate: string) {
+  const rows = [...(program.draftPreviewRows ?? [])]
+    .filter(row => row.departureDate)
+    .sort((left, right) => left.departureDate.localeCompare(right.departureDate));
+  if (rows.length === 0) return undefined;
+
+  const exact = rows.find(row => row.departureDate === departureDate);
+  if (exact) return exact;
+
+  const sameMonth = rows.find(row => row.departureDate.slice(0, 7) === departureDate.slice(0, 7));
+  if (sameMonth) return sameMonth;
+
+  const next = rows.find(row => row.departureDate > departureDate);
+  if (next) return next;
+
+  return rows.at(-1);
+}
+
 function buildPreviewRows(
   program: TourProgram,
   instances: TourInstance[],
@@ -293,14 +311,15 @@ function buildPreviewRows(
 
   return dates.map((departureDate, index) => {
     const previousRow = rowsByDeparture.get(departureDate) ?? draftRowsByDeparture.get(departureDate);
+    const referenceRow = previousRow ?? findReferencePreviewRow(program, departureDate);
     const endDateKey = addDays(departureDate, Math.max(0, program.duration.days - 1));
     const conflictDetails = buildConflictDetails(instances, program.id, departureDate, endDateKey);
     const blockedReason = getCancellationBlockReason(program, departureDate, endDateKey, cancellationWindows);
-    const costPerAdult = previousRow?.costPerAdult ?? roundToThousand(program.pricingConfig.netPrice ?? 0);
-    const sellPrice = previousRow?.sellPrice ?? roundToThousand(program.pricingConfig.sellPriceAdult ?? 0);
-    const profitPercent = costPerAdult > 0
+    const costPerAdult = referenceRow?.costPerAdult ?? roundToThousand(program.pricingConfig.netPrice ?? 0);
+    const sellPrice = referenceRow?.sellPrice ?? roundToThousand(program.pricingConfig.sellPriceAdult ?? 0);
+    const profitPercent = referenceRow?.profitPercent ?? (costPerAdult > 0
       ? Number((((sellPrice - costPerAdult) / costPerAdult) * 100).toFixed(1))
-      : 0;
+      : 0);
 
     return {
       id: previousRow?.id ?? `T${String(index + 1).padStart(3, '0')}`,
@@ -315,7 +334,7 @@ function buildPreviewRows(
               return date.getDay() === 0 || date.getDay() === 6 ? 'Cuối tuần' : 'Ngày thường';
             })()
       ),
-      expectedGuests: previousRow?.expectedGuests ?? Math.max(1, program.pricingConfig.maxGuests ?? program.pricingConfig.minParticipants ?? 1),
+      expectedGuests: referenceRow?.expectedGuests ?? Math.max(1, program.pricingConfig.expectedGuests ?? program.pricingConfig.maxGuests ?? program.pricingConfig.minParticipants ?? 1),
       costPerAdult,
       sellPrice,
       profitPercent,

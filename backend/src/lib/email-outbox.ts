@@ -151,6 +151,38 @@ function buildPassengerSummary(payload: Record<string, unknown>) {
   return lines;
 }
 
+function escapeHtml(value: unknown) {
+  return valueToText(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildRoomSummary(payload: Record<string, unknown>) {
+  const rooms = payload.roomCounts;
+  if (!rooms || typeof rooms !== 'object') return '';
+  const roomCounts = rooms as Record<string, unknown>;
+  return [
+    `Phòng đơn: ${Number(roomCounts.single ?? 0)}`,
+    `Phòng đôi: ${Number(roomCounts.double ?? 0)}`,
+    `Phòng ba: ${Number(roomCounts.triple ?? 0)}`,
+  ].join(' | ');
+}
+
+function buildPassengerTableHtml(payload: Record<string, unknown>) {
+  const passengers = Array.isArray(payload.passengers) ? payload.passengers : [];
+  if (passengers.length === 0) return '';
+
+  const rows = passengers.map((rawPassenger, index) => {
+    const passenger = rawPassenger && typeof rawPassenger === 'object' ? rawPassenger as Record<string, unknown> : {};
+    return `<tr><td>${index + 1}</td><td>${escapeHtml(passenger.name ?? `Hành khách ${index + 1}`)}</td><td>${escapeHtml(passenger.type ?? 'khách')}</td><td>${escapeHtml(passenger.dateOfBirth)}</td><td>${escapeHtml(passenger.documentNumber)}</td></tr>`;
+  });
+
+  return `<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;margin-top:12px"><thead><tr><th>STT</th><th>Họ tên</th><th>Đối tượng</th><th>Ngày sinh</th><th>Giấy tờ</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+}
+
 function buildEmailMessage(template: string, payload: Record<string, unknown>) {
   const lines: string[] = [];
   const title = templateTitles[template] ?? 'Thông báo từ Travela';
@@ -177,6 +209,8 @@ function buildEmailMessage(template: string, payload: Record<string, unknown>) {
     lines.push('Đơn đặt tour của quý khách đã được xác nhận.');
     lines.push(`Người xác nhận: ${valueToText(payload.confirmedBy, 'Travela')}`);
     lines.push(`Thời điểm xác nhận: ${formatTime(payload.confirmedAt)}`);
+    const roomSummary = buildRoomSummary(payload);
+    if (roomSummary) lines.push(`Số phòng: ${roomSummary}`);
     lines.push(...buildPassengerSummary(payload));
   } else if (template === 'booking_cancel_requested') {
     lines.push('Travela đã ghi nhận yêu cầu hủy tour của quý khách.');
@@ -229,7 +263,12 @@ function buildEmailMessage(template: string, payload: Record<string, unknown>) {
 function buildTemplateParams(input: QueueEmailInput, subject: string, message: string, payload: Record<string, unknown>) {
   const contactName = valueToText(getNestedValue(payload, 'contact.name'));
   const recipientName = contactName || input.recipient;
-  const htmlMessage = message.split('\n').map((line) => line.trim()).join('<br>');
+  const passengerTableHtml = input.template === 'booking_confirmed' ? buildPassengerTableHtml(payload) : '';
+  const roomSummary = buildRoomSummary(payload);
+  const htmlMessage = [
+    message.split('\n').map((line) => line.trim()).join('<br>'),
+    passengerTableHtml,
+  ].filter(Boolean).join('<br>');
   const refundBillUrl = getSafeEmailUrl(payload.refundBillUrl);
   const amountSource = payload.amount ?? payload.totalAmount ?? payload.refundAmount ?? payload.paidAmount;
 
@@ -251,6 +290,10 @@ function buildTemplateParams(input: QueueEmailInput, subject: string, message: s
     body: message,
     text: message,
     html_message: htmlMessage,
+    passenger_table_html: passengerTableHtml,
+    room_summary: roomSummary,
+    has_passenger_table: Boolean(passengerTableHtml),
+    has_room_summary: hasValue(roomSummary),
     has_booking_code: hasValue(payload.bookingCode),
     has_tour_name: hasValue(payload.tourName),
     has_tour_date: hasValue(payload.tourDate),
@@ -258,6 +301,8 @@ function buildTemplateParams(input: QueueEmailInput, subject: string, message: s
     has_refund_amount: hasValue(payload.refundAmount),
     has_refund_bill_url: Boolean(refundBillUrl),
     has_refund_bill_note: hasValue(payload.refundBillUrl),
+    has_common_file: hasValue(payload.commonFileName) && hasValue(payload.commonFileContent),
+    has_passenger_file: hasValue(payload.passengerFileName) && hasValue(payload.passengerFileContent),
     booking_code: getBookingCode(payload),
     tour_name: getTourName(payload),
     tour_date: getTourDate(payload),
@@ -268,6 +313,10 @@ function buildTemplateParams(input: QueueEmailInput, subject: string, message: s
     payment_deadline: formatTime(payload.paymentWindowExpiresAt),
     refund_bill_url: refundBillUrl,
     refund_bill_note: getRefundBillNote(payload),
+    common_file_name: valueToText(payload.commonFileName),
+    common_file_content: valueToText(payload.commonFileContent),
+    passenger_file_name: valueToText(payload.passengerFileName),
+    passenger_file_content: valueToText(payload.passengerFileContent),
     template: input.template,
   };
 }

@@ -253,6 +253,7 @@ export interface CostCategory {
 }
 
 export interface PricingConfig {
+  expectedGuests?: number;
   profitMargin: number;
   taxRate: number;
   otherCostFactor: number;

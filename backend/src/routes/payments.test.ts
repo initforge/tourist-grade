@@ -159,6 +159,76 @@ describe('payments routes', () => {
     }));
   });
 
+  it('uses booking detail return URLs when payment starts from customer booking history', async () => {
+    prismaMock.booking.findUnique.mockResolvedValue({
+      id: 'B001',
+      bookingCode: 'BK-582910',
+      payloadJson: { paymentRatio: 'full' },
+      totalAmount: 9000000,
+      paidAmount: 4500000,
+      remainingAmount: 4500000,
+      contactName: 'Nguyen Van A',
+      contactEmail: 'nguyenvana@gmail.com',
+      contactPhone: '0988888888',
+      status: 'PENDING',
+      tourInstance: {
+        code: 'TI001',
+        program: {
+          slug: 'kham-pha-vinh-ha-long-du-thuyen-5-sao',
+        },
+      },
+    });
+    payosClientMock.createPaymentLink.mockResolvedValue({
+      checkoutUrl: 'https://pay.payos.vn/checkout/detail',
+      paymentLinkId: 'plink_detail',
+    });
+
+    const response = await request(createTestApp())
+      .post('/bookings/B001/payos-link')
+      .send({ returnTo: 'booking_detail' });
+
+    expect(response.status).toBe(200);
+    expect(payosClientMock.createPaymentLink).toHaveBeenCalledWith(expect.objectContaining({
+      returnUrl: 'http://localhost:8080/customer/bookings/B001?payos=return',
+      cancelUrl: 'http://localhost:8080/customer/bookings/B001?payos=cancel',
+    }));
+  });
+
+  it('uses lookup detail return URLs when payment starts from public lookup', async () => {
+    prismaMock.booking.findUnique.mockResolvedValue({
+      id: 'B010',
+      bookingCode: 'BK-509182',
+      payloadJson: { paymentRatio: 'full' },
+      totalAmount: 32000000,
+      paidAmount: 16000000,
+      remainingAmount: 16000000,
+      contactName: 'Cao Duc S',
+      contactEmail: 'caoducs@gmail.com',
+      contactPhone: '0988888888',
+      status: 'PENDING',
+      tourInstance: {
+        code: 'TI010',
+        program: {
+          slug: 'kham-pha-vinh-ha-long-du-thuyen-5-sao',
+        },
+      },
+    });
+    payosClientMock.createPaymentLink.mockResolvedValue({
+      checkoutUrl: 'https://pay.payos.vn/checkout/lookup',
+      paymentLinkId: 'plink_lookup',
+    });
+
+    const response = await request(createTestApp())
+      .post('/bookings/B010/payos-link')
+      .send({ returnTo: 'lookup_detail', lookupContact: 'caoducs@gmail.com' });
+
+    expect(response.status).toBe(200);
+    expect(payosClientMock.createPaymentLink).toHaveBeenCalledWith(expect.objectContaining({
+      returnUrl: 'http://localhost:8080/booking/lookup/BK-509182?contact=caoducs%40gmail.com&payos=return',
+      cancelUrl: 'http://localhost:8080/booking/lookup/BK-509182?contact=caoducs%40gmail.com&payos=cancel',
+    }));
+  });
+
   it('marks a payment as paid and updates booking balances from webhook data', async () => {
     payosClientMock.verifyPaymentWebhookData.mockReturnValue({
       orderCode: 123456789,

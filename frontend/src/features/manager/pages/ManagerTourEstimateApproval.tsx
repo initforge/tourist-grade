@@ -73,7 +73,6 @@ function ApproveConfirmPopup({ instanceName, onConfirm, onCancel }: { instanceNa
 export default function ManagerTourEstimateApproval() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [showReject, setShowReject] = useState(false);
   const [showRequestEdit, setShowRequestEdit] = useState(false);
   const [showApprove, setShowApprove] = useState(false);
   const token = useAuthStore(state => state.accessToken);
@@ -91,15 +90,6 @@ export default function ManagerTourEstimateApproval() {
       upsertTourInstance(response.tourInstance);
     }
     setShowApprove(false);
-    navigate('/manager/tours?tab=pending_estimate');
-  };
-  const handleReject = async (_reason: string) => {
-    if (!canReviewEstimate) return;
-    if (token && instance) {
-      const response = await updateTourInstanceCommand(token, instance.id, 'estimate/reject', { reason: _reason });
-      upsertTourInstance(response.tourInstance);
-    }
-    setShowReject(false);
     navigate('/manager/tours?tab=pending_estimate');
   };
   const handleRequestEdit = async (_reason: string) => {
@@ -148,11 +138,6 @@ export default function ManagerTourEstimateApproval() {
                 className="flex items-center gap-2 px-4 py-2.5 text-xs font-['Inter'] uppercase tracking-widest font-bold border border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/5 transition-colors">
                 <span className="material-symbols-outlined text-[16px]">edit_note</span>
                 Yêu cầu chỉnh sửa
-              </button>
-              <button onClick={() => setShowReject(true)}
-                className="flex items-center gap-2 px-4 py-2.5 text-xs font-['Inter'] uppercase tracking-widest font-bold border border-red-300 text-red-600 hover:bg-red-50 transition-colors">
-                <span className="material-symbols-outlined text-[16px]">block</span>
-                Từ chối
               </button>
               <button onClick={() => setShowApprove(true)}
                 className="flex items-center gap-2 px-5 py-2.5 text-xs font-['Inter'] uppercase tracking-widest font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors">
@@ -274,7 +259,6 @@ export default function ManagerTourEstimateApproval() {
         </div>
       </div>
 
-      {showReject && <ReasonPopup title="Từ chối dự toán" onConfirm={handleReject} onCancel={() => setShowReject(false)} />}
       {showRequestEdit && <ReasonPopup title="Yêu cầu chỉnh sửa" onConfirm={handleRequestEdit} onCancel={() => setShowRequestEdit(false)} />}
       {showApprove && <ApproveConfirmPopup instanceName={instance?.programName} onConfirm={handleApprove} onCancel={() => setShowApprove(false)} />}
     </div>

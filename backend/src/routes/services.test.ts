@@ -14,6 +14,7 @@ const prismaMock = {
     delete: vi.fn(),
   },
   servicePrice: {
+    delete: vi.fn(),
     updateMany: vi.fn(),
     deleteMany: vi.fn(),
     create: vi.fn(),
@@ -177,5 +178,112 @@ describe('services routes', () => {
       }),
     }));
     expect(response.body.price.endDate).toBe('');
+  });
+
+  it('only reconciles service price rows with the same age note', async () => {
+    prismaMock.service.findFirst.mockResolvedValue(createServiceFixture({
+      prices: [
+        {
+          id: 'PRICE-ADULT',
+          unitPrice: 350000,
+          note: 'Nguoi lon',
+          effectiveDate: new Date('2026-01-01T00:00:00.000Z'),
+          endDate: new Date('9999-12-31T00:00:00.000Z'),
+          createdByName: 'Seeder',
+        },
+        {
+          id: 'PRICE-CHILD',
+          unitPrice: 250000,
+          note: 'Tre em',
+          effectiveDate: new Date('2026-01-01T00:00:00.000Z'),
+          endDate: new Date('9999-12-31T00:00:00.000Z'),
+          createdByName: 'Seeder',
+        },
+      ],
+    }));
+    prismaMock.servicePrice.create.mockResolvedValue({
+      id: 'PRICE-NEW',
+      unitPrice: 390000,
+      note: 'Nguoi lon',
+      effectiveDate: new Date('2026-06-01T00:00:00.000Z'),
+      endDate: new Date('9999-12-31T00:00:00.000Z'),
+      createdByName: 'Coordinator',
+    });
+
+    const response = await request(createTestApp())
+      .post('/SV001/prices')
+      .set('Authorization', 'Bearer token')
+      .send({
+        unitPrice: 390000,
+        note: 'Nguoi lon',
+        effectiveDate: '2026-06-01',
+        endDate: '',
+        createdBy: 'Coordinator',
+      });
+
+    expect(response.status).toBe(201);
+    expect(prismaMock.servicePrice.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'PRICE-ADULT' },
+      data: { endDate: new Date('2026-05-31T00:00:00.000Z') },
+    }));
+    expect(prismaMock.servicePrice.updateMany).not.toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'PRICE-CHILD' },
+    }));
+  });
+
+  it('reconciles related ranges when editing an existing service price row', async () => {
+    prismaMock.service.findFirst.mockResolvedValue(createServiceFixture({
+      prices: [
+        {
+          id: 'PRICE-1',
+          unitPrice: 350000,
+          note: 'Nguoi lon',
+          effectiveDate: new Date('2026-01-01T00:00:00.000Z'),
+          endDate: new Date('2026-05-31T00:00:00.000Z'),
+          createdByName: 'Seeder',
+        },
+        {
+          id: 'PRICE-2',
+          unitPrice: 390000,
+          note: 'Nguoi lon',
+          effectiveDate: new Date('2026-06-01T00:00:00.000Z'),
+          endDate: new Date('9999-12-31T00:00:00.000Z'),
+          createdByName: 'Coordinator',
+        },
+      ],
+    }));
+    prismaMock.servicePrice.create.mockResolvedValue({
+      id: 'PRICE-2',
+      unitPrice: 410000,
+      note: 'Nguoi lon',
+      effectiveDate: new Date('2026-07-01T00:00:00.000Z'),
+      endDate: new Date('9999-12-31T00:00:00.000Z'),
+      createdByName: 'Coordinator',
+    });
+
+    const response = await request(createTestApp())
+      .patch('/SV001/prices/PRICE-2')
+      .set('Authorization', 'Bearer token')
+      .send({
+        unitPrice: 410000,
+        note: 'Nguoi lon',
+        effectiveDate: '2026-07-01',
+        endDate: '',
+        createdBy: 'Coordinator',
+      });
+
+    expect(response.status).toBe(200);
+    expect(prismaMock.servicePrice.delete).toHaveBeenCalledWith({ where: { id: 'PRICE-2' } });
+    expect(prismaMock.servicePrice.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'PRICE-1' },
+      data: { endDate: new Date('2026-06-30T00:00:00.000Z') },
+    }));
+    expect(prismaMock.servicePrice.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        id: 'PRICE-2',
+        serviceId: 'service-db-1',
+        unitPrice: 410000,
+      }),
+    }));
   });
 });

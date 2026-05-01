@@ -455,15 +455,25 @@ export function createSuppliersRouter() {
       throw notFound('Supplier price not found');
     }
 
-    const price = await prisma.supplierServicePrice.update({
-      where: { id: existingPrice.id },
-      data: {
-        unitPrice: input.data.unitPrice,
-        fromDate: new Date(input.data.fromDate),
-        toDate: toRequiredDate(input.data.toDate),
-        note: input.data.note,
-        createdByName: input.data.createdBy,
-      },
+    const fromDate = new Date(input.data.fromDate);
+    const toDate = toRequiredDate(input.data.toDate);
+    const remainingPrices = variant.prices.filter((price) => price.id !== existingPrice.id);
+
+    const price = await prisma.$transaction(async (tx) => {
+      await tx.supplierServicePrice.delete({ where: { id: existingPrice.id } });
+      await reconcileAdjacentSupplierPriceRanges(tx, remainingPrices, existingPrice, fromDate, toDate);
+      await reconcileSupplierPriceRanges(tx, remainingPrices, variant.id, fromDate, toDate);
+      return tx.supplierServicePrice.create({
+        data: {
+          id: existingPrice.id,
+          serviceVariantId: variant.id,
+          unitPrice: input.data.unitPrice,
+          fromDate,
+          toDate,
+          note: input.data.note,
+          createdByName: input.data.createdBy,
+        },
+      });
     });
 
     res.json({
@@ -553,6 +563,41 @@ async function reconcileSupplierPriceRanges(
           note: price.note,
           createdByName: price.createdByName,
         },
+      });
+    }
+  }
+}
+
+async function reconcileAdjacentSupplierPriceRanges(
+  tx: Prisma.TransactionClient,
+  prices: SupplierPriceRecord[],
+  previousPrice: SupplierPriceRecord,
+  newStart: Date,
+  newEnd: Date,
+) {
+  const previousStart = previousPrice.fromDate;
+  const previousEnd = previousPrice.toDate;
+
+  if (dateTime(newStart) > dateTime(previousStart)) {
+    const oldPreviousEnd = addUtcDays(previousStart, -1);
+    const nextPreviousEnd = addUtcDays(newStart, -1);
+    const adjacentPrevious = prices.find((price) => dateTime(price.toDate) === dateTime(oldPreviousEnd));
+    if (adjacentPrevious) {
+      await tx.supplierServicePrice.updateMany({
+        where: { id: adjacentPrevious.id },
+        data: { toDate: nextPreviousEnd },
+      });
+    }
+  }
+
+  if (dateTime(newEnd) < dateTime(previousEnd)) {
+    const oldNextStart = addUtcDays(previousEnd, 1);
+    const nextStart = addUtcDays(newEnd, 1);
+    const adjacentNext = prices.find((price) => dateTime(price.fromDate) === dateTime(oldNextStart));
+    if (adjacentNext) {
+      await tx.supplierServicePrice.updateMany({
+        where: { id: adjacentNext.id },
+        data: { fromDate: nextStart },
       });
     }
   }

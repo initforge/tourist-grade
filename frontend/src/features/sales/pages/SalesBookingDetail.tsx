@@ -521,7 +521,7 @@ export default function SalesBookingDetail() {
   const hasAssignedRooms = Object.values(parsedRoomCounts)?.some(count => count > 0);
   const canConfirm = booking.status === 'pending' && hasValidPassengerData && hasAssignedRooms && persistCount === 0;
   const isManagerTourCancellation = booking.cancellationSource === 'manager_tour_cancel';
-  const canRefund = booking.status === 'cancelled' && booking.refundStatus === 'pending' && !isManagerTourCancellation;
+  const canRefund = booking.status === 'cancelled' && booking.refundStatus === 'pending';
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
@@ -1004,7 +1004,7 @@ export default function SalesBookingDetail() {
             </section>
 
             {/* Refund Bill — editable after refund completed */}
-            {booking.refundStatus === 'refunded' && !isManagerTourCancellation && (
+            {booking.refundStatus === 'refunded' && (
               <section className="bg-white border border-emerald-200 p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-1 h-4 bg-emerald-500"></div>
@@ -1240,7 +1240,7 @@ export default function SalesBookingDetail() {
                   Hoàn tiền
                 </button>
               )}
-              {booking.refundStatus === 'refunded' && !isManagerTourCancellation && (
+              {booking.refundStatus === 'refunded' && (
                 <div className="w-full flex items-center justify-center gap-2 bg-emerald-100 text-emerald-700 py-3 text-xs font-['Inter'] uppercase tracking-widest font-bold border border-emerald-300">
                   <span className="material-symbols-outlined text-[16px]">check_circle</span>
                   Đã hoàn tiền
@@ -1265,7 +1265,7 @@ export default function SalesBookingDetail() {
             )}
 
             {/* Thông tin hoàn tiền — refunded only */}
-            {booking.refundStatus === 'refunded' && !isManagerTourCancellation && (
+            {booking.refundStatus === 'refunded' && (
               <section className="bg-white border border-emerald-200 p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-1 h-4 bg-emerald-500"></div>

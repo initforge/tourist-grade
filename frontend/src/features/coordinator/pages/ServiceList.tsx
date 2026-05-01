@@ -513,7 +513,7 @@ export default function ServiceList() {
     setEditingServiceId(null);
   };
 
-  const savePriceRow = (priceDraft: ServicePriceRow) => {
+  const savePriceRow = (priceDraft: ServicePriceRow | ServicePriceRow[]) => {
     const priceService = activePriceService;
     if (!priceService) return;
     if (!token) {
@@ -524,10 +524,13 @@ export default function ServiceList() {
     {
       void (async () => {
         try {
+          const priceDrafts = Array.isArray(priceDraft) ? priceDraft : [priceDraft];
           if (activePriceRow) {
-            await patchServicePrice(token, activePriceService.id, activePriceRow.id, priceDraft);
+            await patchServicePrice(token, priceService.id, activePriceRow.id, priceDrafts[0]);
           } else {
-            await addServicePrice(token, activePriceService.id, priceDraft);
+            for (const draft of priceDrafts) {
+              await addServicePrice(token, priceService.id, draft);
+            }
           }
           await initializeProtected();
           setPriceEditor(null);
@@ -541,14 +544,16 @@ export default function ServiceList() {
 
     const nextRows = serviceRows.map(service => {
       if (service.id !== priceService!.id) return service;
+      const localDraft = Array.isArray(priceDraft) ? priceDraft[0] : priceDraft;
+      if (!localDraft) return service;
       let prices = [...service.prices];
       if (activePriceRow) {
-        prices = prices.map(price => (price.id === activePriceRow.id ? { ...priceDraft, id: activePriceRow.id } : price));
+        prices = prices.map(price => (price.id === activePriceRow.id ? { ...localDraft, id: activePriceRow.id } : price));
       } else {
-        if (!priceDraft.endDate) {
-          prices = prices.map(price => (!price.endDate ? { ...price, endDate: priceDraft.effectiveDate } : price));
+        if (!localDraft.endDate) {
+          prices = prices.map(price => (!price.endDate ? { ...price, endDate: localDraft.effectiveDate } : price));
         }
-        prices = [...prices, { ...priceDraft, id: `PRICE-${Date.now()}` }];
+        prices = [...prices, { ...localDraft, id: `PRICE-${Date.now()}` }];
       }
       return { ...service, prices };
     });
@@ -910,10 +915,13 @@ function PriceEditorModal({
   service: ServiceRow;
   price?: ServicePriceRow;
   onClose: () => void;
-  onSave: (draft: ServicePriceRow) => void;
+  onSave: (draft: ServicePriceRow | ServicePriceRow[]) => void;
 }) {
   const currentUser = useAuthStore(state => state?.user?.name || 'Điều phối viên');
+  const isAgeBasedNewPrice = service.setup === 'Theo độ tuổi' && !price;
   const [unitPrice, setUnitPrice] = useState(String(price?.unitPrice ?? ''));
+  const [adultPrice, setAdultPrice] = useState('');
+  const [childPrice, setChildPrice] = useState('');
   const [effectiveDate, setEffectiveDate] = useState(price?.effectiveDate ?? todayKey());
   const [endDate, setEndDate] = useState(price?.endDate ?? '');
   const [note, setNote] = useState(price?.note ?? '');
@@ -931,10 +939,23 @@ function PriceEditorModal({
     <Modal title={price ? 'Chỉnh sửa bảng giá' : 'Thêm mới bảng giá'} subtitle={service.name} onClose={onClose}>
       <div className="space-y-5">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {isAgeBasedNewPrice ? (
+            <>
+              <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                <span>Đơn giá người lớn</span>
+                <input value={adultPrice} onChange={event => setAdultPrice(event.target.value)} type="number" className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+              </label>
+              <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                <span>Đơn giá trẻ em</span>
+                <input value={childPrice} onChange={event => setChildPrice(event.target.value)} type="number" className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+              </label>
+            </>
+          ) : (
           <label className="space-y-2 text-sm font-medium text-[#2A2421]">
             <span>Đơn giá</span>
             <input value={unitPrice} onChange={event => setUnitPrice(event.target.value)} type="number" className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
           </label>
+          )}
           <label className="space-y-2 text-sm font-medium text-[#2A2421]">
             <span>Người tạo</span>
             <input value={currentUser} readOnly className="w-full border border-stone-200 bg-stone-50 px-4 py-3 text-sm outline-none" />
@@ -978,12 +999,38 @@ function PriceEditorModal({
           <button onClick={onClose} className="flex-1 border border-[#2A2421] py-4 text-[10px] font-bold uppercase tracking-[0.24em] text-[#2A2421]">Hủy bỏ</button>
           <button
             onClick={() => {
-              if (!unitPrice.trim() || Number(unitPrice) <= 0) {
+              if (isAgeBasedNewPrice) {
+                if (!adultPrice.trim() || Number(adultPrice) <= 0 || !childPrice.trim() || Number(childPrice) <= 0) {
+                  message.error('Cần nhập đơn giá người lớn và đơn giá trẻ em lớn hơn 0');
+                  return;
+                }
+              } else if (!unitPrice.trim() || Number(unitPrice) <= 0) {
                 message.error('Đơn giá phải lớn hơn 0');
                 return;
               }
               if (effectiveDateError || endDateError) {
                 message.error(effectiveDateError || endDateError);
+                return;
+              }
+              if (isAgeBasedNewPrice) {
+                onSave([
+                  {
+                    id: '',
+                    unitPrice: Number(adultPrice || 0),
+                    effectiveDate,
+                    endDate,
+                    note: 'Người lớn',
+                    createdBy: currentUser,
+                  },
+                  {
+                    id: '',
+                    unitPrice: Number(childPrice || 0),
+                    effectiveDate,
+                    endDate,
+                    note: 'Trẻ em',
+                    createdBy: currentUser,
+                  },
+                ]);
                 return;
               }
               onSave({

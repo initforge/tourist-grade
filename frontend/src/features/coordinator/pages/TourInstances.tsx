@@ -61,73 +61,81 @@ function getGuestCount(bookings: Booking[]) {
   return bookings.reduce((sum, booking) => sum + booking.passengers.length, 0);
 }
 
-function csvCell(value: unknown) {
-  const text = String(value ?? '').replace(/\r?\n/g, '\n');
-  return `"${text.replace(/"/g, '""')}"`;
-}
-
 function getRoomSummary(booking: Booking) {
   const rooms = booking.roomCounts;
   if (!rooms) return 'Đơn 0 | Đôi 0 | Ba 0';
   return `Đơn ${rooms.single ?? 0} | Đôi ${rooms.double ?? 0} | Ba ${rooms.triple ?? 0}`;
 }
 
-function buildGuideCommonFile(instance: TourInstance, itineraryLines: string[], bookings: Booking[], guideName: string) {
-  const itineraryRows = itineraryLines.map((line) => {
-    const [day, title, description] = line.split('|');
-    return `${day}\t${title}\t${description}`;
-  });
-
-  return [
-    'THÔNG TIN TOUR',
-    '1. Thông tin Tour',
-    `Tour: ${instance.programName}`,
-    `Đoàn: ${instance.id}`,
-    `Thời gian: ${instance.departureDate}`,
-    `Số lượng: ${getGuestCount(bookings)} khách`,
-    `Điểm đón: ${instance.departurePoint}`,
-    `Khởi hành: ${instance.departureDate}`,
-    `Hướng dẫn viên: ${guideName}`,
-    '',
-    '2. Lịch trình chi tiết',
-    'Ngày\tTiêu đề\tMô tả',
-    ...itineraryRows,
-  ].join('\n');
+function escapeHtml(value: unknown) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
-function buildGuidePassengerFile(bookings: Booking[]) {
-  const rows = [['Thông tin booking', 'STT khách', 'Họ tên', 'Ngày sinh', 'Giới tính', 'Quốc tịch']];
+function buildHtmlDocument(title: string, body: string) {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:Arial,sans-serif;font-size:12pt;color:#1f2937}table{border-collapse:collapse;width:100%;margin-top:12px}th,td{border:1px solid #94a3b8;padding:8px;text-align:left;vertical-align:top}th{background:#e2e8f0}.section{margin-top:18px;font-weight:700}</style></head><body>${body}</body></html>`;
+}
 
-  bookings.forEach((booking) => {
-    const bookingInfo = [
-      `Mã booking: ${booking.bookingCode}`,
-      `Người đặt: ${booking.contactInfo.name}`,
-      `Liên hệ: ${booking.contactInfo.phone}`,
-      `Số phòng: ${getRoomSummary(booking)}`,
-      `Ghi chú: ${booking.contactInfo.note ?? '-'}`,
-    ].join('\n');
+function buildGuideCommonDocument(instance: TourInstance, itineraryLines: string[], bookings: Booking[], guideName: string) {
+  const itineraryRows = itineraryLines.map((line) => {
+    const [day, title, description] = line.split('|');
+    return `<tr><td>${escapeHtml(day)}</td><td>${escapeHtml(title)}</td><td>${escapeHtml(description)}</td></tr>`;
+  }).join('');
 
-    booking.passengers.forEach((passenger, index) => {
-      rows.push([
-        index === 0 ? bookingInfo : '',
-        String(index + 1),
-        passenger.name,
-        passenger.dob,
-        passenger.gender === 'male' ? 'Nam' : 'Nữ',
-        passenger.nationality ?? 'Việt Nam',
-      ]);
-    });
-  });
+  return buildHtmlDocument('Thông tin tour và lịch trình', [
+    '<h1>Thông tin tour</h1>',
+    '<table><tbody>',
+    `<tr><th>Tour</th><td>${escapeHtml(instance.programName)}</td></tr>`,
+    `<tr><th>Đoàn</th><td>${escapeHtml(instance.id)}</td></tr>`,
+    `<tr><th>Thời gian</th><td>${escapeHtml(formatDate(instance.departureDate))}</td></tr>`,
+    `<tr><th>Số lượng</th><td>${escapeHtml(getGuestCount(bookings))} khách</td></tr>`,
+    `<tr><th>Điểm đón</th><td>${escapeHtml(instance.departurePoint)}</td></tr>`,
+    `<tr><th>Hướng dẫn viên</th><td>${escapeHtml(guideName)}</td></tr>`,
+    '</tbody></table>',
+    '<div class="section">Lịch trình chi tiết</div>',
+    '<table><thead><tr><th>Ngày</th><th>Tiêu đề</th><th>Mô tả</th></tr></thead><tbody>',
+    itineraryRows || '<tr><td colspan="3">Chưa có lịch trình</td></tr>',
+    '</tbody></table>',
+  ].join(''));
+}
 
-  return rows.map((row) => row.map(csvCell).join(',')).join('\n');
+function buildGuidePassengerWorkbook(bookings: Booking[]) {
+  const bookingRows = bookings.flatMap((booking) => (
+    booking.passengers.map((passenger, index) => [
+      index === 0 ? booking.bookingCode : '',
+      index === 0 ? booking.contactInfo.name : '',
+      index === 0 ? booking.contactInfo.phone : '',
+      index === 0 ? getRoomSummary(booking) : '',
+      String(index + 1),
+      passenger.name,
+      passenger.dob,
+      passenger.gender === 'male' ? 'Nam' : 'Nữ',
+      passenger.nationality ?? 'Việt Nam',
+    ])
+  ));
+
+  const rows = bookingRows.map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('');
+
+  return buildHtmlDocument('Danh sách khách hàng', [
+    '<h1>Danh sách khách hàng</h1>',
+    '<table><thead><tr>',
+    '<th>Mã booking</th><th>Người đặt</th><th>Liên hệ</th><th>Số phòng</th><th>STT khách</th><th>Họ tên</th><th>Ngày sinh</th><th>Giới tính</th><th>Quốc tịch</th>',
+    '</tr></thead><tbody>',
+    rows || '<tr><td colspan="9">Chưa có khách hàng</td></tr>',
+    '</tbody></table>',
+  ].join(''));
 }
 
 function buildGuidePacketPayload(instance: TourInstance, itineraryLines: string[], bookings: Booking[], guideName: string) {
   return {
-    commonFileName: `${instance.id}-thong-tin-lich-trinh.txt`,
-    commonFileContent: buildGuideCommonFile(instance, itineraryLines, bookings, guideName),
-    passengerFileName: `${instance.id}-danh-sach-khach.csv`,
-    passengerFileContent: buildGuidePassengerFile(bookings),
+    commonFileName: `${instance.id}-thong-tin-lich-trinh.doc`,
+    commonFileContent: buildGuideCommonDocument(instance, itineraryLines, bookings, guideName),
+    passengerFileName: `${instance.id}-danh-sach-khach.xls`,
+    passengerFileContent: buildGuidePassengerWorkbook(bookings),
   };
 }
 

@@ -63,8 +63,9 @@ function ReadonlyPricingSection({ program }: { program: EditableProgram }) {
   const otherCostFactorPercent = program?.pricingConfig?.otherCostFactor > 1
     ? program.pricingConfig.otherCostFactor
     : Math.round(program.pricingConfig.otherCostFactor * 100);
-  const expectedGuests = Math.max(1, program?.pricingConfig?.maxGuests ?? program?.pricingConfig?.minParticipants ?? 1);
-  const guideUnitPrice = 400000;
+  const expectedGuests = Math.max(1, program?.pricingConfig?.expectedGuests ?? program?.pricingConfig?.maxGuests ?? program?.pricingConfig?.minParticipants ?? 1);
+  const maxGuests = Math.max(expectedGuests, program?.pricingConfig?.maxGuests ?? expectedGuests);
+  const guideUnitPrice = program?.pricingConfig?.guideUnitPrice ?? 0;
   const estimatedNetPrice = Math.round(
     (program?.pricingConfig?.sellPriceAdult ?? 0)
       / Math.max(1, (1 + (program?.pricingConfig?.profitMargin ?? 0) / 100) * (1 + (program?.pricingConfig?.taxRate ?? 0) / 100) * (1 + (otherCostFactorPercent / 100))),
@@ -78,6 +79,14 @@ function ReadonlyPricingSection({ program }: { program: EditableProgram }) {
       accommodationPoint: index < program.duration.nights ? (program.sightseeingSpots[index] ?? fallbackPoint) : '',
     }));
   }, [program]);
+  const pricingDepartureDates = useMemo(() => {
+    if (program?.tourType === 'mua_le' && (program?.selectedDates?.length ?? 0) > 0) {
+      return program.selectedDates ?? [];
+    }
+    const previewDates = (program?.draftPreviewRows ?? []).map(row => row.departureDate).filter(Boolean);
+    if (previewDates.length > 0) return previewDates;
+    return program?.selectedDates ?? [];
+  }, [program]);
 
   return (
     <fieldset disabled className="space-y-8 border-0 p-0 m-0">
@@ -90,10 +99,10 @@ function ReadonlyPricingSection({ program }: { program: EditableProgram }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
           {[
-            { label: 'Số lượng khách tối đa', value: expectedGuests, unit: 'khách' },
+            { label: 'Số khách dự kiến', value: expectedGuests, unit: 'khách' },
+            { label: 'Số lượng khách tối đa', value: maxGuests, unit: 'khách' },
             { label: 'Tỷ lệ lợi nhuận mong muốn (%)', value: program?.pricingConfig?.profitMargin ?? 0, unit: '%' },
             { label: 'Thuế (%)', value: program?.pricingConfig?.taxRate ?? 0, unit: '%' },
-            { label: 'Hệ số chi phí khác (%)', value: otherCostFactorPercent, unit: '%' },
           ].map(item => (
             <div key={item.label}>
               <label className="text-[10px] uppercase tracking-widest text-primary/60 font-label block mb-1">{item.label}</label>
@@ -121,8 +130,15 @@ function ReadonlyPricingSection({ program }: { program: EditableProgram }) {
             days={program?.duration?.days}
             nights={program?.duration?.nights}
             itinerary={pricingItinerary}
+            lodgingStandard={program?.lodgingStandard ?? ''}
+            sightseeingSpots={program?.sightseeingSpots}
+            departureDates={pricingDepartureDates}
+            expectedGuests={expectedGuests}
+            taxRate={program?.pricingConfig?.taxRate ?? 0}
+            otherCostFactor={otherCostFactorPercent}
             guideUnitPrice={guideUnitPrice}
             onGuideUnitPriceChange={() => undefined}
+            value={program?.draftPricingTables}
             hideActionColumn
           />
         </div>
