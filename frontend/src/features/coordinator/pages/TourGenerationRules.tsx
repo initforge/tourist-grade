@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { message } from 'antd';
 import { Link } from 'react-router-dom';
 import { Breadcrumb } from 'antd';
-import { type SpecialDay, type TourInstance, type TourProgram } from '@entities/tour-program/data/tourProgram';
+import { type SpecialDay, type TourInstance, type TourProgram, type TourProgramSelection } from '@entities/tour-program/data/tourProgram';
 import { createTourInstance, deleteTourInstance, patchTourInstance } from '@shared/lib/api/tourInstances';
 import { patchTourProgram } from '@shared/lib/api/tourPrograms';
-import { useAppDataStore } from '@shared/store/useAppDataStore';
+import { useAppDataStore, type ServiceRow, type SupplierRow, type SupplierServiceLine } from '@shared/store/useAppDataStore';
 import { useAuthStore } from '@shared/store/useAuthStore';
 import { PageSearchInput } from '@shared/ui/PageSearchInput';
 
@@ -78,6 +78,29 @@ type PendingApprovalGroup = {
   createdAt: string;
 };
 
+type PricingRuleContext = {
+  suppliers: SupplierRow[];
+  services: ServiceRow[];
+};
+
+type DatedPrice = {
+  startDate: string;
+  endDate?: string;
+  price: number;
+};
+
+type HotelGroup = {
+  id: string;
+  city: string;
+  nights: number;
+  startNight: number;
+};
+
+type DayGroup = {
+  id: string;
+  day: number;
+};
+
 const CANCELLATION_SCOPE_OCCASION = 'TOUR_CANCELLATION_SCOPE';
 const REQUEST_PIPELINE_STATUSES = new Set(['dang_mo_ban']);
 const REQUEST_STATUSES = new Set(['cho_duyet_ban', 'yeu_cau_chinh_sua', 'dang_mo_ban', 'tu_choi_ban']);
@@ -140,11 +163,12 @@ function normalizeSearchText(value: string) {
   return value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, match => (match === 'Đ' ? 'D' : 'd'))
     .toLowerCase();
 }
 
 function roundToThousand(value: number) {
-  return Math.round(value / 1000) * 1000;
+  return Math.ceil(value / 1000) * 1000;
 }
 
 function monthsBetween(start?: string, end?: string) {
@@ -279,22 +303,264 @@ function getCancellationBlockReason(program: TourProgram, departureDate: string,
     : '';
 }
 
-function findReferencePreviewRow(program: TourProgram, departureDate: string) {
-  const rows = [...(program.draftPreviewRows ?? [])]
-    .filter(row => row.departureDate)
-    .sort((left, right) => left.departureDate.localeCompare(right.departureDate));
-  if (rows.length === 0) return undefined;
+function normalizeLabel(value?: string | null) {
+  return normalizeSearchText(value ?? '');
+}
 
-  const exact = rows.find(row => row.departureDate === departureDate);
-  if (exact) return exact;
+function toFiniteNumber(value: unknown, fallback = 0) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
 
-  const sameMonth = rows.find(row => row.departureDate.slice(0, 7) === departureDate.slice(0, 7));
-  if (sameMonth) return sameMonth;
+function average(values: number[]) {
+  const validValues = values.filter(value => Number.isFinite(value));
+  if (validValues.length === 0) return 0;
+  return validValues.reduce((sum, value) => sum + value, 0) / validValues.length;
+}
 
-  const next = rows.find(row => row.departureDate > departureDate);
-  if (next) return next;
+function resolveApplicablePrice(prices: DatedPrice[], dateKey: string) {
+  const active = prices
+    .filter(price => price.startDate <= dateKey && (!price.endDate || price.endDate >= dateKey))
+    .sort((left, right) => right.startDate.localeCompare(left.startDate))[0];
+  if (active) return active.price;
 
-  return rows.at(-1);
+  const openEndedFallback = prices
+    .filter(price => price.startDate <= dateKey && !price.endDate)
+    .sort((left, right) => right.startDate.localeCompare(left.startDate))[0];
+  return openEndedFallback?.price ?? 0;
+}
+
+function normalizePricingSelections(rows?: TourProgramSelection[]) {
+  return Array.isArray(rows) ? rows : [];
+}
+
+function pickDefaultSelection(rows?: TourProgramSelection[]) {
+  const selections = normalizePricingSelections(rows);
+  return selections.find(selection => selection.isDefault) ?? selections[0];
+}
+
+function supplierLinePrices(line?: SupplierServiceLine): DatedPrice[] {
+  return (line?.prices ?? []).map(price => ({
+    startDate: price.fromDate,
+    endDate: price.toDate || undefined,
+    price: toFiniteNumber(price.unitPrice),
+  }));
+}
+
+function servicePrices(service?: ServiceRow, audience: 'adult' | 'child' = 'adult'): DatedPrice[] {
+  const setupLabel = normalizeLabel(service?.setup);
+  const ageBased = setupLabel.includes('theo do tuoi');
+  const rows = (service?.prices ?? []).filter((price) => {
+    if (!ageBased) return true;
+    const note = normalizeLabel(price.note);
+    if (audience === 'child') {
+      return note.includes('tre em');
+    }
+    return !note || note.includes('nguoi lon') || note.includes('khong co') || note.includes('gia chung');
+  });
+
+  return rows.map(price => ({
+    startDate: price.effectiveDate,
+    endDate: price.endDate || undefined,
+    price: toFiniteNumber(price.unitPrice),
+  }));
+}
+
+function allSupplierLines(supplier: SupplierRow) {
+  return [...supplier.services, ...supplier.mealServices];
+}
+
+function findSupplierLine(context: PricingRuleContext, optionId?: string) {
+  if (!optionId) return null;
+  for (const supplier of context.suppliers) {
+    const line = allSupplierLines(supplier).find(item => item.id === optionId || `${supplier.id}-${item.id}` === optionId);
+    if (line) return { supplier, line };
+  }
+  return null;
+}
+
+function findFlightLine(context: PricingRuleContext, optionId?: string) {
+  if (!optionId) return null;
+  const supplierId = optionId.endsWith('-flight') ? optionId.slice(0, -7) : '';
+  const supplier = context.suppliers.find(item => item.id === supplierId);
+  const sourceSuppliers = supplier ? [supplier] : context.suppliers;
+  for (const item of sourceSuppliers) {
+    const line = item.services.find((service) => {
+      const label = `${normalizeLabel(service.transportType)} ${normalizeLabel(service.name)}`;
+      return label.includes('may bay') || label.includes('ve');
+    });
+    if (line) return { supplier: item, line };
+  }
+  return null;
+}
+
+function findHotelRoomLine(supplier: SupplierRow | undefined, roomType: 'single' | 'double' | 'triple') {
+  const labels: Record<'single' | 'double' | 'triple', string[]> = {
+    single: ['don', 'single'],
+    double: ['doi', 'double'],
+    triple: ['ba', 'triple'],
+  };
+  return supplier?.services.find((service) => {
+    const name = normalizeLabel(service.name);
+    return labels[roomType].some(label => name.includes(label));
+  });
+}
+
+function getHotelGroups(program: TourProgram): HotelGroup[] {
+  const groups: HotelGroup[] = [];
+  let current: HotelGroup | null = null;
+
+  for (const day of program.itinerary.slice(0, Math.max(0, program.duration.nights))) {
+    if (!day.accommodationPoint) continue;
+    if (current && current.city === day.accommodationPoint) {
+      current.nights += 1;
+      continue;
+    }
+    if (current) groups.push(current);
+    current = {
+      id: `stay-${day.day}`,
+      city: day.accommodationPoint,
+      nights: 1,
+      startNight: day.day,
+    };
+  }
+
+  if (current) groups.push(current);
+  return groups;
+}
+
+function getMealGroups(program: TourProgram): DayGroup[] {
+  return program.itinerary.flatMap(day => day.meals.map(meal => ({
+    id: `meal-${day.day}-${meal}`,
+    day: day.day,
+  })));
+}
+
+function getAttractionGroups(program: TourProgram): DayGroup[] {
+  return program.itinerary.slice(0, Math.max(1, program.duration.days)).map(day => ({
+    id: `attraction-${day.day}`,
+    day: day.day,
+  }));
+}
+
+function resolveTransportCost(selection: TourProgramSelection | undefined, context: PricingRuleContext, departureDate: string) {
+  if (!selection) return 0;
+  if (selection.manualPrice != null) {
+    return toFiniteNumber(selection.manualPrice);
+  }
+
+  const selectedLine = findSupplierLine(context, selection.optionId);
+  return selectedLine ? resolveApplicablePrice(supplierLinePrices(selectedLine.line), departureDate) : 0;
+}
+
+function resolveFlightCost(selection: TourProgramSelection | undefined, context: PricingRuleContext, departureDate: string) {
+  if (!selection) return 0;
+  if (selection.manualPrice != null) {
+    return toFiniteNumber(selection.manualPrice);
+  }
+
+  const selectedLine = findFlightLine(context, selection.optionId);
+  return selectedLine ? resolveApplicablePrice(supplierLinePrices(selectedLine.line), departureDate) : 0;
+}
+
+function resolveHotelCost(program: TourProgram, context: PricingRuleContext, departureDate: string) {
+  return getHotelGroups(program).reduce((sum, group) => {
+    const selection = pickDefaultSelection(program.draftPricingTables?.hotels?.[group.id]);
+    const supplier = context.suppliers.find(item => item.id === selection?.optionId);
+    const doubleLine = findHotelRoomLine(supplier, 'double');
+    if (!doubleLine) return sum;
+
+    const nightlyDates = Array.from({ length: group.nights }, (_, index) => addDays(departureDate, group.startNight - 1 + index));
+    const doublePrice = roundToThousand(average(nightlyDates.map(date => resolveApplicablePrice(supplierLinePrices(doubleLine), date))));
+    return sum + doublePrice / 2;
+  }, 0);
+}
+
+function resolveMealCost(program: TourProgram, context: PricingRuleContext, departureDate: string) {
+  return getMealGroups(program).reduce((sum, group) => {
+    const selection = pickDefaultSelection(program.draftPricingTables?.meals?.[group.id]);
+    const selectedLine = findSupplierLine(context, selection?.optionId);
+    return sum + (selectedLine ? resolveApplicablePrice(supplierLinePrices(selectedLine.line), addDays(departureDate, group.day - 1)) : 0);
+  }, 0);
+}
+
+function resolveAttractionCost(program: TourProgram, context: PricingRuleContext, departureDate: string) {
+  return getAttractionGroups(program).reduce((sum, group) => {
+    const selections = normalizePricingSelections(program.draftPricingTables?.attractions?.[group.id]);
+    return sum + selections.reduce((groupSum, selection) => {
+      const service = context.services.find(item => item.id === selection.optionId);
+      return groupSum + resolveApplicablePrice(servicePrices(service, 'adult'), addDays(departureDate, group.day - 1));
+    }, 0);
+  }, 0);
+}
+
+function resolveOtherCost(program: TourProgram, context: PricingRuleContext, departureDate: string, expectedGuests: number) {
+  const days = Math.max(1, program.duration.days);
+
+  return normalizePricingSelections(program.draftPricingTables?.otherCosts).reduce((sum, selection) => {
+    const service = context.services.find(item => item.id === selection.optionId);
+    if (!service) return sum;
+
+    const priceMode = normalizeLabel(service.priceMode);
+    const formulaCount = normalizeLabel(service.formulaCount);
+    const formulaQuantity = normalizeLabel(service.formulaQuantity);
+    const isListedPrice = priceMode.includes('niem yet');
+    const listedPrice = isListedPrice
+      ? (
+        formulaCount.includes('theo ngay')
+          ? roundToThousand(average(Array.from({ length: days }, (_, index) =>
+            resolveApplicablePrice(servicePrices(service, 'adult'), addDays(departureDate, index)),
+          )))
+          : resolveApplicablePrice(servicePrices(service, 'adult'), departureDate)
+      )
+      : toFiniteNumber(selection.manualPrice);
+
+    const occurrences = formulaCount.includes('nhap tay')
+      ? toFiniteNumber(selection.occurrences)
+      : formulaCount.includes('theo ngay')
+        ? days
+        : Math.max(1, toFiniteNumber(service.formulaCountDefault, 1));
+    const quantity = formulaQuantity.includes('theo so nguoi')
+      ? Math.max(1, expectedGuests)
+      : Math.max(1, toFiniteNumber(service.formulaQuantityDefault, 1));
+    const total = listedPrice * Math.max(1, occurrences) * quantity;
+    const perGuest = formulaQuantity.includes('theo so nguoi')
+      ? listedPrice * Math.max(1, occurrences)
+      : total / Math.max(1, expectedGuests);
+
+    return sum + perGuest;
+  }, 0);
+}
+
+function calculateDepartureAdultNet(program: TourProgram, departureDate: string, context: PricingRuleContext) {
+  const expectedGuests = Math.max(
+    1,
+    toFiniteNumber(program.pricingConfig.expectedGuests, program.pricingConfig.maxGuests ?? program.pricingConfig.minParticipants ?? 1),
+  );
+  const transportCost = resolveTransportCost(pickDefaultSelection(program.draftPricingTables?.transport), context, departureDate);
+  const flightCost = program.transport === 'maybay'
+    ? resolveFlightCost(pickDefaultSelection(program.draftPricingTables?.flight), context, departureDate)
+    : 0;
+  const fixedCost = transportCost + toFiniteNumber(program.pricingConfig.guideUnitPrice);
+  const variableCost = flightCost
+    + resolveHotelCost(program, context, departureDate)
+    + resolveMealCost(program, context, departureDate)
+    + resolveAttractionCost(program, context, departureDate)
+    + resolveOtherCost(program, context, departureDate, expectedGuests);
+  const otherCostFactor = toFiniteNumber(program.pricingConfig.otherCostFactor);
+  const otherCostFactorPercent = otherCostFactor > 1 ? otherCostFactor : otherCostFactor * 100;
+  const netMultiplier = (1 + toFiniteNumber(program.pricingConfig.taxRate) / 100) * (1 + otherCostFactorPercent / 100);
+
+  return Math.round(((fixedCost / expectedGuests) + variableCost) * netMultiplier);
+}
+
+function resolveAppliedProfitRate(program: TourProgram) {
+  const netPrice = toFiniteNumber(program.pricingConfig.netPrice);
+  const sellPrice = toFiniteNumber(program.pricingConfig.sellPriceAdult);
+  if (netPrice > 0 && sellPrice > 0) {
+    return Math.round(((sellPrice - netPrice) / netPrice) * 100);
+  }
+  return toFiniteNumber(program.pricingConfig.profitMargin);
 }
 
 function buildPreviewRows(
@@ -304,28 +570,35 @@ function buildPreviewRows(
   endDate: string,
   existingRows: PreviewRow[] = [],
   cancellationWindows: CancellationWindow[] = [],
+  pricingContext: PricingRuleContext = { suppliers: [], services: [] },
 ) {
   const dates = buildDepartureDates(program, startDate, endDate);
   const rowsByDeparture = new Map(existingRows.map(row => [row.departureDate, row]));
   const draftRowsByDeparture = new Map((program.draftPreviewRows ?? []).map(row => [row.departureDate, row]));
+  const appliedProfitRate = resolveAppliedProfitRate(program);
 
   return dates.map((departureDate, index) => {
-    const previousRow = rowsByDeparture.get(departureDate) ?? draftRowsByDeparture.get(departureDate);
-    const referenceRow = previousRow ?? findReferencePreviewRow(program, departureDate);
+    const previousRow = rowsByDeparture.get(departureDate);
+    const fallbackRow = draftRowsByDeparture.get(departureDate);
     const endDateKey = addDays(departureDate, Math.max(0, program.duration.days - 1));
     const conflictDetails = buildConflictDetails(instances, program.id, departureDate, endDateKey);
     const blockedReason = getCancellationBlockReason(program, departureDate, endDateKey, cancellationWindows);
-    const costPerAdult = referenceRow?.costPerAdult ?? roundToThousand(program.pricingConfig.netPrice ?? 0);
-    const sellPrice = referenceRow?.sellPrice ?? roundToThousand(program.pricingConfig.sellPriceAdult ?? 0);
-    const profitPercent = referenceRow?.profitPercent ?? (costPerAdult > 0
+    const recalculatedCost = calculateDepartureAdultNet(program, departureDate, pricingContext);
+    const costPerAdult = previousRow?.costPerAdult
+      ?? (recalculatedCost > 0 ? roundToThousand(recalculatedCost) : fallbackRow?.costPerAdult)
+      ?? roundToThousand(program.pricingConfig.netPrice ?? 0);
+    const sellPrice = previousRow?.sellPrice
+      ?? (recalculatedCost > 0 ? roundToThousand(recalculatedCost * (1 + appliedProfitRate / 100)) : fallbackRow?.sellPrice)
+      ?? roundToThousand(program.pricingConfig.sellPriceAdult ?? 0);
+    const profitPercent = previousRow?.profitPercent ?? (costPerAdult > 0
       ? Number((((sellPrice - costPerAdult) / costPerAdult) * 100).toFixed(1))
       : 0);
 
     return {
-      id: previousRow?.id ?? `T${String(index + 1).padStart(3, '0')}`,
+      id: previousRow?.id ?? fallbackRow?.id ?? `T${String(index + 1).padStart(3, '0')}`,
       departureDate,
-      endDate: previousRow?.endDate ?? endDateKey,
-      dayType: previousRow?.dayType ?? (
+      endDate: previousRow?.endDate ?? fallbackRow?.endDate ?? endDateKey,
+      dayType: previousRow?.dayType ?? fallbackRow?.dayType ?? (
         program.tourType === 'mua_le'
           ? 'Mùa lễ'
           : (() => {
@@ -334,14 +607,14 @@ function buildPreviewRows(
               return date.getDay() === 0 || date.getDay() === 6 ? 'Cuối tuần' : 'Ngày thường';
             })()
       ),
-      expectedGuests: referenceRow?.expectedGuests ?? Math.max(1, program.pricingConfig.expectedGuests ?? program.pricingConfig.maxGuests ?? program.pricingConfig.minParticipants ?? 1),
+      expectedGuests: previousRow?.expectedGuests ?? fallbackRow?.expectedGuests ?? Math.max(1, program.pricingConfig.expectedGuests ?? program.pricingConfig.maxGuests ?? program.pricingConfig.minParticipants ?? 1),
       costPerAdult,
       sellPrice,
       profitPercent,
-      bookingDeadline: previousRow?.bookingDeadline ?? addDays(departureDate, -Math.max(0, program.bookingDeadline ?? 0)),
+      bookingDeadline: previousRow?.bookingDeadline ?? fallbackRow?.bookingDeadline ?? addDays(departureDate, -Math.max(0, program.bookingDeadline ?? 0)),
       conflictLabel: blockedReason || `${conflictDetails.length} chương trình trùng thời điểm`,
       conflictDetails: blockedReason ? [blockedReason, ...conflictDetails] : conflictDetails,
-      checked: blockedReason ? false : (previousRow?.checked ?? true),
+      checked: blockedReason ? false : (previousRow?.checked ?? fallbackRow?.checked ?? true),
       blockedReason,
     };
   });
@@ -361,11 +634,17 @@ function validateDateRange(startDate: string, endDate: string, minStartDate: str
   return { startError, endError };
 }
 
-function buildCreateEditor(row: ActiveProgramRow, instances: TourInstance[], todayPlusOneMonth: string, cancellationWindows: CancellationWindow[]): RuleEditorState {
+function buildCreateEditor(
+  row: ActiveProgramRow,
+  instances: TourInstance[],
+  todayPlusOneMonth: string,
+  cancellationWindows: CancellationWindow[],
+  pricingContext: PricingRuleContext,
+): RuleEditorState {
   const nextAfterFarthest = row.farthestRequested ? getNextDepartureAfter(row.program, row.farthestRequested.departureDate) : '';
   const startDate = maxDateKey(todayPlusOneMonth, nextAfterFarthest || todayPlusOneMonth);
   const endDate = buildDefaultEndDate(startDate, row.statusLabel, row.minimumCoverageMonths);
-  const rows = buildPreviewRows(row.program, instances, startDate, endDate, [], cancellationWindows);
+  const rows = buildPreviewRows(row.program, instances, startDate, endDate, [], cancellationWindows, pricingContext);
 
   return {
     mode: 'create',
@@ -387,7 +666,14 @@ function buildCreateEditor(row: ActiveProgramRow, instances: TourInstance[], tod
   };
 }
 
-function buildEditEditor(instance: TourInstance, program: TourProgram, instances: TourInstance[], todayPlusOneMonth: string, cancellationWindows: CancellationWindow[]): RuleEditorState {
+function buildEditEditor(
+  instance: TourInstance,
+  program: TourProgram,
+  instances: TourInstance[],
+  todayPlusOneMonth: string,
+  cancellationWindows: CancellationWindow[],
+  pricingContext: PricingRuleContext,
+): RuleEditorState {
   const startDate = instance.departureDate;
   const endDate = addMonthsToKey(startDate, 1);
   const rows = buildPreviewRows(program, instances, startDate, endDate, [{
@@ -405,7 +691,7 @@ function buildEditEditor(instance: TourInstance, program: TourProgram, instances
     conflictLabel: '0 chương trình trùng thời điểm',
     conflictDetails: [],
     checked: true,
-  }], cancellationWindows);
+  }], cancellationWindows, pricingContext);
 
   return {
     mode: 'edit',
@@ -431,7 +717,15 @@ function buildEditEditor(instance: TourInstance, program: TourProgram, instances
   };
 }
 
-function applyEditorDates(editor: RuleEditorState, instances: TourInstance[], program: TourProgram, nextStartDate: string, nextEndDate: string, cancellationWindows: CancellationWindow[]) {
+function applyEditorDates(
+  editor: RuleEditorState,
+  instances: TourInstance[],
+  program: TourProgram,
+  nextStartDate: string,
+  nextEndDate: string,
+  cancellationWindows: CancellationWindow[],
+  pricingContext: PricingRuleContext,
+) {
   const { startError, endError } = validateDateRange(nextStartDate, nextEndDate, editor.minStartDate);
   return {
     ...editor,
@@ -442,7 +736,7 @@ function applyEditorDates(editor: RuleEditorState, instances: TourInstance[], pr
       selectionError: '',
       rows: startError || endError || !nextStartDate || !nextEndDate
         ? []
-        : buildPreviewRows(program, instances, nextStartDate, nextEndDate, editor.rows, cancellationWindows),
+        : buildPreviewRows(program, instances, nextStartDate, nextEndDate, editor.rows, cancellationWindows, pricingContext),
   };
 }
 
@@ -481,11 +775,14 @@ export default function TourGenerationRules() {
   const tourPrograms = useAppDataStore(state => state.tourPrograms);
   const storeTourInstances = useAppDataStore(state => state.tourInstances);
   const specialDays = useAppDataStore(state => state.specialDays);
+  const suppliers = useAppDataStore(state => state.suppliers);
+  const services = useAppDataStore(state => state.services);
   const upsertTourProgram = useAppDataStore(state => state.upsertTourProgram);
   const setTourInstances = useAppDataStore(state => state.setTourInstances);
   const token = useAuthStore(state => state.accessToken);
   const todayPlusOneMonth = useMemo(() => toDateKey(addCalendarMonths(new Date(), 1)), []);
   const cancellationWindows = useMemo(() => parseCancellationWindows(specialDays), [specialDays]);
+  const pricingContext = useMemo(() => ({ suppliers, services }), [services, suppliers]);
   const warningSyncRef = useRef(new Set<string>());
   const [subTab, setSubTab] = useState<SubTab>('quy_tac');
   const [searchQuery, setSearchQuery] = useState('');
@@ -832,7 +1129,7 @@ export default function TourGenerationRules() {
                       </td>
                       <td className="px-5 py-4">
                         <button
-                          onClick={() => setEditor(buildCreateEditor(row, allInstances, todayPlusOneMonth, cancellationWindows))}
+                          onClick={() => setEditor(buildCreateEditor(row, allInstances, todayPlusOneMonth, cancellationWindows, pricingContext))}
                           className="px-4 py-2 bg-primary text-white text-[10px] font-bold uppercase tracking-wider hover:bg-[var(--color-secondary)] transition-colors"
                         >
                           Tạo tour
@@ -891,7 +1188,7 @@ export default function TourGenerationRules() {
                               <button
                                 onClick={() => {
                                   if (!program) return;
-                                  setEditor(buildEditEditor(instance, program, allInstances, todayPlusOneMonth, cancellationWindows));
+                                  setEditor(buildEditEditor(instance, program, allInstances, todayPlusOneMonth, cancellationWindows, pricingContext));
                                 }}
                                 className="px-3 py-1.5 bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-blue-700 transition-colors"
                               >
@@ -944,6 +1241,9 @@ export default function TourGenerationRules() {
                           allInstances,
                           viewModal.departureDate,
                           addMonthsToKey(viewModal.departureDate, 1),
+                          [],
+                          [],
+                          pricingContext,
                         )
                         : []
                       ).map(row => (
@@ -1046,7 +1346,7 @@ export default function TourGenerationRules() {
                           if (!current) return current;
                           const nextEndDate = current.endDate && nextStartDate > current.endDate ? '' : current.endDate;
                           const program = tourPrograms.find(item => item.id === current.programId);
-                          return program ? applyEditorDates(current, allInstances, program, nextStartDate, nextEndDate, cancellationWindows) : current;
+                          return program ? applyEditorDates(current, allInstances, program, nextStartDate, nextEndDate, cancellationWindows, pricingContext) : current;
                         });
                       }}
                       className="w-full border border-outline-variant/50 px-4 py-2.5 outline-none"
@@ -1064,7 +1364,7 @@ export default function TourGenerationRules() {
                         setEditor(current => {
                           if (!current) return current;
                           const program = tourPrograms.find(item => item.id === current.programId);
-                          return program ? applyEditorDates(current, allInstances, program, current.startDate, nextEndDate, cancellationWindows) : current;
+                          return program ? applyEditorDates(current, allInstances, program, current.startDate, nextEndDate, cancellationWindows, pricingContext) : current;
                         });
                       }}
                       className="w-full border border-outline-variant/50 px-4 py-2.5 outline-none"
