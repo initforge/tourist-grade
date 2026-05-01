@@ -57,19 +57,22 @@ Tài liệu này ghi batch feedback mới sau đợt fix trước. Feedback mớ
 - CO-01/CO-02/CO-03/CO-04: Đã cập nhật wizard/detail chương trình tour cho ảnh minh họa, số khách tối đa, tối thiểu mặc định 10, active-edit 3 tab, dữ liệu xem chi tiết/pricing, giá chung vé tham quan, lọc trùng dịch vụ khác, không reset tỷ lệ lợi nhuận/giá HDV, số đêm 0 không tính phụ thu phòng đơn.
 - CO-05: Đã giới hạn Quy tắc tour chỉ cho tour Quanh năm, sửa selectedDates theo loại tour, group request theo saleRequest.id, dùng preview pricing theo ngày, xóa warningDate khi đủ coverage, tạo unchecked preview ở trạng thái Từ chối bán và lọc phạm vi hủy.
 - CO-06/CO-10: Đã chỉnh dự toán loại booking hủy khỏi số người/phòng, không hiện bút giá cho dịch vụ Báo giá/vận chuyển, chặn chọn trùng chi phí khác, giữ hover nhà cung cấp ở tab read-only.
-- CO-07: Đã rà luồng email HDV ở code và giữ queue email theo guide_assignment. Chưa thể gửi email thật vì DB/BE thật không chạy được trên máy local.
+- CO-07: Đã test email thật tới `linhthaitu22@gmail.com`; hệ thống có queue `booking_created` nhưng EmailJS trả `426 Monthly request quota exceeded`, nên root cause chưa nhận email là hết quota EmailJS. Luồng HDV đã test bằng `guide_assignment` với domain `.test` để không đốt quota, email outbox có đủ file thông tin chung và danh sách khách.
 - CO-08/CO-09: Đã ép Vé tham quan luôn đơn vị Vé/giá niêm yết, ẩn trường đơn vị/hình thức giá; thêm khách sạn không tự điền sẵn đơn giá.
 - SA-01/SA-02/SA-03/SA-04: Đã sửa lifecycle hủy quá 24h về Đã xác nhận, deposit quá hạn trước 7 ngày hủy với refundStatus hoàn thành, manager cancel set lý do Bất khả kháng/người-thời điểm xác nhận/refund cần hoàn, đơn 0đ là đã hoàn, email booking/cancel/refund có payload chi tiết và bill.
-- MA-01/MA-02/MA-03: Đã thêm VoucherStatus UPCOMING, approve voucher tương lai -> Upcoming, parse tiền mặt 100.000/100,000 đúng 100000, bỏ duplicate optimistic row, duyệt dự toán có Từ chối/redirect/khóa xử lý lại, approve chương trình tạo tour Đang mở bán và lọc phạm vi hủy.
-- CU-01/CU-02/CU-03/CU-05/CU-06: Đã sửa gallery tràn/icon lịch trình, checkout draft modal Khôi phục/Đặt mới, xóa draft booking đã hủy, form hành khách gọn, bỏ số phòng card phải, lỗi email/tên cụ thể, tour list bỏ màu xanh AntD, banner một dòng/ảnh mới, destination cards dùng ảnh vùng miền, Đặt ngay vào detail, slot cho phép giảm sau khi lỗi vượt chỗ.
-- CU-04: Code hiện đã có hiển thị ảnh bill hoàn tiền trong chi tiết/tab hủy; cần DB thật để xác nhận dữ liệu bill production.
+- MA-01/MA-02/MA-03: Đã thêm VoucherStatus UPCOMING, approve voucher tương lai -> Upcoming, parse tiền mặt 100.000/100,000 đúng 100000, bỏ duplicate optimistic row, duyệt dự toán có Từ chối/redirect/khóa xử lý lại; sau request-edit direct URL không còn nút duyệt/từ chối và hiển thị lý do quản lý yêu cầu. Approve chương trình tạo tour Đang mở bán và lọc phạm vi hủy.
+- CU-01/CU-02/CU-03/CU-05/CU-06: Đã sửa gallery tràn/icon lịch trình, checkout draft modal Khôi phục/Đặt mới, xóa draft booking đã hủy, form hành khách gọn, bỏ số phòng card phải, lỗi email/tên cụ thể, tour list có hero ảnh thật, headline “Khám phá Việt Nam” một dòng, search giữa banner, destination cards dùng ảnh vùng miền, Đặt ngay vào detail, slot cho phép giảm sau khi lỗi vượt chỗ.
+- CU-04: Đã xác nhận trên DB local thật và browser customer `/customer/bookings` tab Đã hủy có `Xem bill hoàn tiền` cho booking có bill.
 
 ## Kiểm tra đã chạy
 
+- Docker stack thật: `travela-db` Postgres 5432 healthy, `travela-backend` 4000 healthy, `travela-frontend` 8080 running.
+- DB: `npm run prisma:push` và `npm run prisma:seed` đã chạy thành công sau khi bật lại Docker/Postgres; seed bổ sung `TI011` để URL feedback `scheduleId=TP001-TI011` chạy đúng.
 - BE: `npm test` trong `backend`: 13 file, 60 test passed.
 - BE: `npm run build` trong `backend`: passed.
-- BE: `npm run prisma:generate`: passed.
-- DB: `npm run prisma:push`: blocked do PostgreSQL `localhost:5432` không reachable (`P1001`).
-- FE: `npm run lint` trong `frontend`: passed, không còn warning.
+- FE: `npm run lint` trong `frontend`: passed.
 - FE: `npm run build` trong `frontend`: passed.
-- Browser FE với mock API tại `localhost:4000` và Vite `localhost:8000`: đã kiểm tra tour list -> detail, detail gallery/itinerary, landing hero/destination, checkout validation, apply promo UI, create draft, restore modal, xóa draft booking hủy, slot over-limit rồi giảm lại.
+- Docker build: `docker compose up -d --build backend frontend` passed; healthcheck backend OK, frontend 8080 trả 200.
+- API/DB E2E: tạo booking public `TP001-TI011`, sales confirm, voucher future -> Upcoming, active voucher chỉ áp dụng khi Active, manager request-edit dự toán, manager cancel tour tương lai, refund bill upload, guide assignment email outbox. Các email domain `.test` được `SENT` kèm `emailSkipped=true`; email thật tới `linhthaitu22@gmail.com` fail đúng root cause EmailJS quota 426.
+- Browser FE/BE/DB: đã kiểm tra `/tours` desktop/mobile không overflow, Đặt ngay vào detail; detail tour không tràn ảnh và thấy lịch `TP001 - TI011`; checkout tạo booking thật vào DB; coordinator active edit 3 tab `Bước 1 / 3`; tour rules chỉ hiển thị Quanh năm; dự toán TI009 có vận chuyển/khách sạn/ăn/tham quan/chi phí khác và loại booking hủy khỏi thống kê; services/suppliers add modal đúng trường; manager estimate direct URL sau request-edit bị khóa action; sales cancelled tab và customer cancelled bill hoạt động.
+- UTF/layout: scan code/seed không còn chuỗi seed tiếng Việt lỗi `?`; các pattern mojibake còn lại chỉ là test intentional cho normalizer/email-outbox.

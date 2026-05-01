@@ -1123,12 +1123,9 @@ export default function AdminTourProgramWizard({
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="font-serif text-3xl text-primary">{headerTitle}</h1>
-            <p className="text-xs text-primary/50 mt-1">Bước {step} / 4 - {
-              step === 1 ? 'Thông tin chung' :
-              step === 2 ? 'Lịch trình' :
-              step === 3 ? 'Giá và cấu hình' :
-              'Tour dự kiến'
-            }</p>
+            <p className="text-xs text-primary/50 mt-1">
+              Bước {step} / {visibleWizardSteps.length} - {visibleWizardSteps.find(item => item.value === step)?.label ?? 'Tour dự kiến'}
+            </p>
           </div>
           <div className="flex gap-3">
             {headerActions ?? (!readOnly && (
@@ -2021,11 +2018,13 @@ export default function AdminTourProgramWizard({
                 className="px-8 py-4 border border-outline-variant/60 text-primary font-sans uppercase tracking-[0.2em] text-[12px] hover:bg-surface transition-all">
                 Quay lại Lịch trình
               </button>
-              <button
-                onClick={() => navigateToStep(4)}
-                className="px-12 py-4 font-sans uppercase tracking-[0.2em] text-[12px] font-bold transition-all bg-primary text-surface hover:bg-[var(--color-secondary)]">
-                Tiếp theo: Tour dự kiến
-              </button>
+              {!isActiveProgramEdit && (
+                <button
+                  onClick={() => navigateToStep(4)}
+                  className="px-12 py-4 font-sans uppercase tracking-[0.2em] text-[12px] font-bold transition-all bg-primary text-surface hover:bg-[var(--color-secondary)]">
+                  Tiếp theo: Tour dự kiến
+                </button>
+              )}
             </div>
           </fieldset>
         )}

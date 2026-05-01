@@ -15,6 +15,14 @@ function fmtDate(iso: string) {
   return new Date(iso)?.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+function getEstimateReviewStatusLabel(status?: string) {
+  if (status === 'cho_duyet_du_toan') return 'Chờ duyệt dự toán';
+  if (status === 'cho_du_toan') return 'Yêu cầu chỉnh sửa';
+  if (status === 'san_sang_trien_khai') return 'Đã duyệt dự toán';
+  if (status === 'da_huy') return 'Đã từ chối';
+  return 'Không còn ở trạng thái chờ duyệt';
+}
+
 // ── Reason Popup ─────────────────────────────────────────────────────────────
 
 function ReasonPopup({ title, onConfirm, onCancel }: { title: string; onConfirm: (reason: string) => void; onCancel: () => void }) {
@@ -134,23 +142,37 @@ export default function ManagerTourEstimateApproval() {
             <p className="font-['Inter'] text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] font-bold">Duyệt dự toán tour</p>
             <h1 className="font-['Noto_Serif'] text-xl text-[#2A2421]">{id} - {instance?.programName}</h1>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setShowRequestEdit(true)} disabled={!canReviewEstimate}
-              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-['Inter'] uppercase tracking-widest font-bold border border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/5 transition-colors ${canReviewEstimate ? '' : 'opacity-45 cursor-not-allowed'}`}>
-              <span className="material-symbols-outlined text-[16px]">edit_note</span>
-              Yêu cầu chỉnh sửa
-            </button>
-            <button onClick={() => setShowReject(true)} disabled={!canReviewEstimate}
-              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-['Inter'] uppercase tracking-widest font-bold border border-red-300 text-red-600 hover:bg-red-50 transition-colors ${canReviewEstimate ? '' : 'opacity-45 cursor-not-allowed'}`}>
-              <span className="material-symbols-outlined text-[16px]">block</span>
-              Từ chối
-            </button>
-            <button onClick={() => setShowApprove(true)} disabled={!canReviewEstimate}
-              className={`flex items-center gap-2 px-5 py-2.5 text-xs font-['Inter'] uppercase tracking-widest font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors ${canReviewEstimate ? '' : 'opacity-45 cursor-not-allowed'}`}>
-              <span className="material-symbols-outlined text-[16px]">check</span>
-              Duyệt
-            </button>
-          </div>
+          {canReviewEstimate ? (
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={() => setShowRequestEdit(true)}
+                className="flex items-center gap-2 px-4 py-2.5 text-xs font-['Inter'] uppercase tracking-widest font-bold border border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/5 transition-colors">
+                <span className="material-symbols-outlined text-[16px]">edit_note</span>
+                Yêu cầu chỉnh sửa
+              </button>
+              <button onClick={() => setShowReject(true)}
+                className="flex items-center gap-2 px-4 py-2.5 text-xs font-['Inter'] uppercase tracking-widest font-bold border border-red-300 text-red-600 hover:bg-red-50 transition-colors">
+                <span className="material-symbols-outlined text-[16px]">block</span>
+                Từ chối
+              </button>
+              <button onClick={() => setShowApprove(true)}
+                className="flex items-center gap-2 px-5 py-2.5 text-xs font-['Inter'] uppercase tracking-widest font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors">
+                <span className="material-symbols-outlined text-[16px]">check</span>
+                Duyệt
+              </button>
+            </div>
+          ) : (
+            <div className="max-w-md text-right">
+              <span className="inline-flex items-center gap-2 rounded-full border border-[#D0C5AF]/50 bg-white px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-[#2A2421]/65">
+                <span className="material-symbols-outlined text-[14px]">lock</span>
+                {getEstimateReviewStatusLabel(instance?.status)}
+              </span>
+              {instance?.cancelReason && (
+                <p className="mt-2 text-xs text-[#2A2421]/60 line-clamp-2">
+                  Nội dung quản lý yêu cầu: {instance.cancelReason}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Tour Info */}
