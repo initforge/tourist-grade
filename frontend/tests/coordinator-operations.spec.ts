@@ -514,6 +514,37 @@ async function mockCoordinatorSession(page: Page, bootstrapPayload = buildBootst
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, service: created }) });
   });
 
+  await page.route('**/suppliers/*/service-variants/*/prices', async route => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback();
+      return;
+    }
+    const segments = getRouteSegments(route.request().url());
+    const supplierId = segments[segments.length - 4];
+    const serviceId = segments[segments.length - 2];
+    const payload = route.request().postDataJSON() as Record<string, unknown>;
+    const index = state.suppliers.findIndex(supplier => supplier.id === supplierId);
+    const price = {
+      id: String(payload.id || `${serviceId}-${Date.now()}`),
+      fromDate: String(payload.fromDate ?? payload.effectiveDate ?? ''),
+      toDate: String(payload.toDate ?? payload.endDate ?? ''),
+      unitPrice: Number(payload.unitPrice ?? 0),
+      note: String(payload.note ?? ''),
+      createdBy: String(payload.createdBy ?? ''),
+    };
+    if (index >= 0) {
+      const patchLine = (line: { id: string; prices: Array<Record<string, unknown>> }) => (
+        line.id === serviceId ? { ...line, prices: [...line.prices, price] } : line
+      );
+      state.suppliers[index] = {
+        ...state.suppliers[index],
+        services: state.suppliers[index].services.map(patchLine),
+        mealServices: state.suppliers[index].mealServices.map(patchLine),
+      };
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, price }) });
+  });
+
   await page.route('**/suppliers/*/prices', async route => {
     if (route.request().method() !== 'POST') {
       await route.fallback();
@@ -562,22 +593,22 @@ test('estimate inherits data from tour config and recalculates totals', async ({
   await expect(hotelRow.locator('input').nth(1)).toHaveValue('2');
 
   const transportRow = page.locator('tr').filter({ hasText: 'Xe vận chuyển' }).first();
-  await transportRow.locator('select').first().selectOption('Hoàng Gia Travel Bus');
-  await expect(transportRow.getByText('9.600.000 đ')).toBeVisible();
+  await expect(transportRow.getByText('Vận tải Việt Tourist')).toBeVisible();
+  await expect(transportRow.getByText('8.100.000 đ')).toBeVisible();
+  await expect(transportRow.locator('select')).toHaveCount(0);
+  await expect(transportRow.getByRole('button', { name: /Cập nhật bảng giá/i })).toHaveCount(0);
   await transportRow.locator('input').nth(2).fill('9000000');
   await expect(transportRow.getByText('9.000.000 đ')).toBeVisible();
 
-  const otherRow = page.locator('tr').filter({ hasText: 'Đạo cụ team building' }).first();
-  await otherRow.locator('input').nth(2).fill('650000');
-  await expect(otherRow.getByText('1.300.000 đ')).toBeVisible();
-  await expect(page.locator('tfoot').getByText('18.510.000 đ')).toBeVisible();
+  const insuranceRow = page.locator('tr').filter({ hasText: 'Bảo hiểm du lịch' }).first();
+  await expect(insuranceRow).toBeVisible();
+  await expect(page.locator('tfoot').getByText('15.540.000 đ')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Cập nhật giá lên hệ thống' }).click();
-  await expect(page.getByText(/Đã cập nhật .* bản ghi giá lên hệ thống/)).toBeVisible();
-
-  await page.goto('/coordinator/services');
-  await page.getByPlaceholder('Tìm theo mã dịch vụ, tên dịch vụ, phân loại...').fill('Đạo cụ team building');
-  await expect(page.getByText('Đạo cụ team building')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Cập nhật giá lên hệ thống' })).toHaveCount(0);
+  await expect(insuranceRow.getByRole('button', { name: /Cập nhật bảng giá/i })).toBeVisible();
+  await hotelRow.getByRole('button', { name: /Cập nhật bảng giá/i }).click();
+  await expect(page.getByText(/Giá hiện tại trong khoảng đã chọn/i)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Lưu bảng giá' })).toBeVisible();
 });
 
 test('tour assignment filters guides by required language and supports replacement flow', async ({ page }) => {
@@ -589,11 +620,9 @@ test('tour assignment filters guides by required language and supports replaceme
   await expect(page.getByText('HDV tiếng Nhật')).toBeVisible();
   await expect(page.getByText('HDV tiếng Anh')).toBeHidden();
 
-  const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'HDV tiếng Nhật' }).click();
   await page.getByRole('button', { name: 'Xác nhận điều phối' }).click();
-  const download = await downloadPromise;
-  expect(download.suggestedFilename()).toContain('.xls');
+  await expect(page.locator('tr').filter({ hasText: 'TI010' })).toContainText('Đã phân công');
 
   await expect(page.getByRole('button', { name: 'Thay đổi HDV' })).toBeVisible();
 
@@ -626,7 +655,8 @@ test('service screen validates new records and supports age pricing fields', asy
   await expect(page.getByText('Cần nhập tên dịch vụ')).toBeVisible();
 
   await page.getByLabel('Tên dịch vụ').fill('Vé test độ tuổi');
-  await page.getByLabel('Đơn vị').fill('vé');
+  await expect(page.getByLabel('Đơn vị')).toHaveCount(0);
+  await expect(page.getByLabel('Hình thức giá')).toHaveCount(0);
   await page.getByLabel('Mô tả').fill('Mô tả test');
   await page.getByLabel('Đơn giá người lớn').fill('250000');
   await page.getByLabel('Đơn giá trẻ em').fill('180000');
@@ -651,11 +681,10 @@ test('supplier screen blocks duplicate transport capacities and restaurant rows 
   await page.getByLabel('Số điện thoại').fill('0909000999');
   await page.getByLabel('Email').fill('xe@test.vn');
   await page.getByLabel('Địa chỉ').fill('Hà Nội');
+  await expect(page.getByRole('columnheader', { name: 'Đơn giá' })).toHaveCount(0);
   await page.getByText('Thêm dòng').click();
   await page.locator('input[type="number"]').nth(0).fill('16');
-  await page.locator('input[type="number"]').nth(1).fill('8100000');
-  await page.locator('input[type="number"]').nth(2).fill('16');
-  await page.locator('input[type="number"]').nth(3).fill('9000000');
+  await page.locator('input[type="number"]').nth(1).fill('16');
   await page.getByRole('button', { name: 'Lưu' }).click();
   await expect(page.getByText('Không được trùng số chỗ giữa các dịch vụ xe')).toBeVisible();
 

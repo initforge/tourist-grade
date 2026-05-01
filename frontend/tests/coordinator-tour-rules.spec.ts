@@ -560,11 +560,17 @@ test.describe('Coordinator tour rules', () => {
     await dialog.getByRole('button', { name: 'Gửi duyệt' }).click();
 
     await page.getByRole('button', { name: /Chờ duyệt bán/i }).click();
-    await expect(page.locator('tbody tr').filter({ hasText: 'REQ-TP-ENOUGH' }).first()).toBeVisible();
+    await expect(page.locator('tbody tr').filter({ hasText: 'YC-TP-ENOUGH' }).first()).toBeVisible();
   });
 
-  test('shows validation when every generated tour is unchecked before sending', async ({ page }) => {
+  test('creates unchecked preview rows as rejected-sale tours instead of blocking submit', async ({ page }) => {
     await openTourRules(page);
+    const createPayloads: Array<{ status?: string; saleRequest?: { unselectedRows?: number } }> = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/tour-instances')) {
+        createPayloads.push(request.postDataJSON() as { status?: string; saleRequest?: { unselectedRows?: number } });
+      }
+    });
 
     const warningRow = page.locator('tbody tr').filter({ hasText: 'Tour cảnh báo mở bán' }).first();
     await warningRow.getByRole('button', { name: 'Tạo tour' }).click();
@@ -577,7 +583,9 @@ test.describe('Coordinator tour rules', () => {
     }
 
     await dialog.getByRole('button', { name: 'Gửi duyệt' }).click();
-    await expect(dialog.getByText('Vui lòng chọn ít nhất một tour để gửi duyệt')).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(createPayloads.filter(payload => payload.status === 'tu_choi_ban').length).toBe(count);
+    expect(Math.max(...createPayloads.map(payload => payload.saleRequest?.unselectedRows ?? 0))).toBe(count);
   });
 
   test('does not show stop-business action in coordinator active program list', async ({ page }) => {

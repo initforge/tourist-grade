@@ -90,6 +90,18 @@ function toJsonInput(value: unknown) {
   return (value ?? {}) as Prisma.InputJsonValue;
 }
 
+async function resolveUniqueTourInstanceCode(baseCode: string) {
+  let code = baseCode;
+  let sequence = 2;
+
+  while (await prisma.tourInstance.findUnique({ where: { code }, select: { id: true } })) {
+    code = `${baseCode}-${sequence}`;
+    sequence += 1;
+  }
+
+  return code;
+}
+
 export function createTourInstancesRouter() {
   const router = Router();
 
@@ -123,10 +135,13 @@ export function createTourInstancesRouter() {
       throw notFound('Tour program not found');
     }
 
+    const baseCode = input.data.id ?? `REQ-${program.code}-${input.data.departureDate}`;
+    const uniqueCode = await resolveUniqueTourInstanceCode(baseCode);
+
     const created = await prisma.tourInstance.create({
       include: tourInstanceInclude,
       data: {
-        code: input.data.id ?? `REQ-${program.code}-${input.data.departureDate}`,
+        code: uniqueCode,
         program: { connect: { id: program.id } },
         programNameSnapshot: input.data.programName || program.name,
         departureDate: new Date(input.data.departureDate),

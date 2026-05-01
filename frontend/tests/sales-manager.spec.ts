@@ -127,8 +127,9 @@ test?.describe('Sales + Manager Verification', () => {
     await loginAsManager(page);
 
     const rows = page?.locator('tbody tr');
-    await expect(rows?.nth(0))?.toContainText('APPROVENOW');
+    await expect(rows?.nth(0))?.toContainText('PROMO10PCT');
     await expect(rows?.nth(1))?.toContainText('VIPONLY30');
+    await expect(rows?.nth(2))?.toContainText('APPROVENOW');
 
     await rows?.nth(0)?.getByRole('button', { name: 'Từ chối' })?.click();
     const modal = page?.getByRole('dialog');

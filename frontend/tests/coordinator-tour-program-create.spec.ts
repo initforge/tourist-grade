@@ -103,7 +103,7 @@ async function fillRequiredBaseInfo(page: Page) {
   await route.locator('select').nth(0).selectOption({ label: 'Hà Nội' });
   await addSightseeingSpot(route, 'Đà Nẵng');
   await route.getByLabel('Tiêu chuẩn lưu trú').selectOption({ label: '4 sao' });
-  await route.locator('textarea').fill('Mô tả kiểm thử cho chương trình tour điều phối.');
+  await route.getByLabel('Mô tả', { exact: true }).fill('Mô tả kiểm thử cho chương trình tour điều phối.');
 }
 
 async function fillBaseInfo(page: Page, { days, nights }: { days: number; nights: number }) {
@@ -118,7 +118,7 @@ async function fillBaseInfo(page: Page, { days, nights }: { days: number; nights
   if (nights > 0) {
     await route.getByLabel('Tiêu chuẩn lưu trú').selectOption({ label: '4 sao' });
   }
-  await route.locator('textarea').fill('Mo ta test dieu phoi.');
+  await route.getByLabel('Mô tả', { exact: true }).fill('Mo ta test dieu phoi.');
 }
 
 async function goToStep3(page: Page, config: { days: number; nights: number; withMeals?: boolean; withAccommodation?: boolean }) {
@@ -360,7 +360,7 @@ test.describe('Coordinator create tour program wizard', () => {
     await expect(page.getByText(/Ngày 1 chưa có vé tham quan/i)).toBeVisible();
   });
 
-  test('uses popup selectors for pricing rows and shows readonly projected-tour dates', async ({ page }) => {
+  test('uses popup selectors for pricing rows and keeps projected booking deadlines editable', async ({ page }) => {
     await openCreateWizard(page);
     await goToStep3(page, { days: 1, nights: 0, withMeals: true, withAccommodation: false });
 
@@ -385,7 +385,7 @@ test.describe('Coordinator create tour program wizard', () => {
     await page.getByRole('button', { name: /Tiếp theo: Tour dự kiến/i }).click();
 
     await expect(page.getByRole('heading', { name: /Tour dự kiến/i })).toBeVisible();
-    await expect(page.locator('table input[type="date"]')).toHaveCount(0);
+    await expect(page.locator('table input[type="date"]').first()).toBeEnabled();
     await expect(page.getByText(/Tóm tắt:/i)).toHaveCount(0);
   });
 

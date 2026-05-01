@@ -453,6 +453,17 @@ const emptyValue = (): PricingTablesValue => ({
   otherCosts: [],
 });
 
+function normalizePricingTablesValue(value?: Partial<PricingTablesValue> | null): PricingTablesValue {
+  return {
+    transport: Array.isArray(value?.transport) ? value.transport : [],
+    flight: Array.isArray(value?.flight) ? value.flight : [],
+    hotels: value?.hotels && typeof value.hotels === 'object' ? value.hotels : {},
+    meals: value?.meals && typeof value.meals === 'object' ? value.meals : {},
+    attractions: value?.attractions && typeof value.attractions === 'object' ? value.attractions : {},
+    otherCosts: Array.isArray(value?.otherCosts) ? value.otherCosts : [],
+  };
+}
+
 function parseLocalDate(value: string) {
   return new Date(`${value}T00:00:00`);
 }
@@ -675,7 +686,7 @@ export default function TourProgramPricingTables({
   const [picker, setPicker] = useState<PickerState | null>(null);
   const lastSummaryRef = useRef('');
   const lastValidationRef = useRef('');
-  const pricingValue = value ?? internalValue;
+  const pricingValue = useMemo(() => normalizePricingTablesValue(value ?? internalValue), [internalValue, value]);
   const firstDepartureDate = departureDates[0] ?? toDateKey(new Date());
   const allDepartureDates = departureDates.length > 0 ? departureDates : [firstDepartureDate];
   const transportOptions: TransportOption[] = (() => {

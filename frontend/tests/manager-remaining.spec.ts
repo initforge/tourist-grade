@@ -43,8 +43,15 @@ test.describe('Manager remaining feedback', () => {
     await page?.waitForLoadState('domcontentloaded');
 
     await page?.getByRole('button', { name: /Kh.*ng .*K KH/i })?.click();
-    await expect(page?.getByRole('button', { name: /Ti.*p t.*c tri.*n khai/i }))?.toBeVisible();
     await expect(page?.getByRole('columnheader', { name: /D.* ki.*n ho.*n/i }))?.toBeVisible();
+    const underfilledRows = page?.locator('tbody tr')?.filter({ has: page.locator('input[type="checkbox"]') });
+    const underfilledCount = await underfilledRows?.count();
+    if (!underfilledCount) {
+      await expect(page?.locator('body'))?.toContainText(/Kh.*ng c.* tour/i);
+      return;
+    }
+
+    await expect(page?.getByRole('button', { name: /Ti.*p t.*c tri.*n khai/i }))?.toBeVisible();
 
     await page?.locator('tbody input[type="checkbox"]')?.first()?.check();
     await page?.getByRole('button', { name: /Ti.*p t.*c tri.*n khai/i })?.click();

@@ -105,7 +105,7 @@ test.describe('Feedback hardening audit', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(appUrl('/tours'));
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('heading', { name: /Tour đang mở bán|Danh sách tour/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Khám phá Việt Nam|Tour đang mở bán|Danh sách tour/i })).toBeVisible();
     await expectNoBodyHorizontalOverflow(page);
     await expectImagesLoaded(page, 'img');
     await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => null);
@@ -241,9 +241,9 @@ test.describe('Feedback hardening audit', () => {
     const supplierDialog = page.getByRole('dialog');
     await expect(supplierDialog.getByText(/Dịch vụ vận chuyển/i)).toBeVisible();
     const transportTable = supplierDialog.locator('table').last();
+    await expect(transportTable.getByRole('columnheader', { name: /Đơn giá/i })).toHaveCount(0);
     await transportTable.locator('input').nth(0).fill('Xe 45 chỗ hardening');
     await transportTable.locator('input').nth(1).fill('45');
-    await transportTable.locator('input').nth(2).fill('12000000');
     await supplierDialog.getByRole('button', { name: /^Lưu$/i }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page.locator('body')).toContainText(/NCC vận chuyển hardening/i);

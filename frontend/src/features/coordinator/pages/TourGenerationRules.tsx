@@ -128,7 +128,7 @@ function maxDateKey(left: string, right: string) {
 }
 
 function formatDate(value?: string) {
-  const date = parseDateKey(value);
+  const date = parseDateKey(value?.includes('T') ? value.slice(0, 10) : value);
   return date ? date.toLocaleDateString('vi-VN') : '-';
 }
 
@@ -198,7 +198,7 @@ function buildDepartureDates(program: TourProgram, startDate: string, endDate: s
   const end = parseDateKey(endDate);
   if (!start || !end || end < start) return [];
 
-  if ((program.selectedDates?.length ?? 0) > 0) {
+  if (program.tourType === 'mua_le' && (program.selectedDates?.length ?? 0) > 0) {
     return [...(program.selectedDates ?? [])]
       .filter(date => date >= startDate && date <= endDate)
       .sort((left, right) => left.localeCompare(right));

@@ -161,9 +161,14 @@ test.describe('Coordinator live E2E against docker stack', () => {
 
     const startInput = dialog.locator('input[type="date"]').nth(0);
     const endInput = dialog.locator('input[type="date"]').nth(1);
-    await startInput.fill(await startInput.inputValue());
-    await endInput.fill(await endInput.inputValue());
+    const startValue = await startInput.inputValue();
+    const shortEnd = new Date(`${startValue}T00:00:00`);
+    shortEnd.setDate(shortEnd.getDate() + 7);
+    await startInput.fill(startValue);
+    await endInput.fill(shortEnd.toISOString().slice(0, 10));
+    await expect(dialog.locator('tbody tr').first()).toBeVisible();
     await dialog.getByRole('button', { name: /^Gửi duyệt$/i }).click();
+    await expect(dialog).toHaveCount(0);
 
     await page.getByRole('button', { name: /Chờ duyệt bán/i }).click();
     expect(await page.locator('tbody tr').count()).toBeGreaterThan(0);
@@ -274,7 +279,8 @@ test.describe('Coordinator live E2E against docker stack', () => {
     });
     await page.getByRole('button', { name: /Thêm dịch vụ/i }).click();
     await page.getByLabel(/Tên dịch vụ/i).fill(serviceName);
-    await page.getByLabel(/Đơn vị/i).fill('vé');
+    await expect(page.getByLabel(/Đơn vị/i)).toHaveCount(0);
+    await expect(page.getByLabel(/Hình thức giá/i)).toHaveCount(0);
     await page.getByLabel(/Mô tả/i).fill('Live service create');
     await page.getByLabel(/Đơn giá người lớn/i).fill('250000');
     await page.getByLabel(/Đơn giá trẻ em/i).fill('180000');
@@ -285,7 +291,9 @@ test.describe('Coordinator live E2E against docker stack', () => {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       const payload = await response.json();
-      return payload.data?.services?.some((service: { name: string }) => service.name === serviceName);
+      return payload.data?.services?.some((service: { name: string; unit?: string; priceMode?: string }) => (
+        service.name === serviceName && service.unit === 'Vé' && service.priceMode === 'Giá niêm yết'
+      ));
     }).toBe(true);
 
     await page.goto('/coordinator/suppliers');
@@ -297,6 +305,10 @@ test.describe('Coordinator live E2E against docker stack', () => {
     await page.getByLabel(/Email/i).fill('live-supplier@test.vn');
     await page.getByLabel(/Địa chỉ/i).fill('Hà Nội');
     await expect(page.getByLabel(/4 sao/i)).toBeChecked();
+    const hotelNumbers = page.getByRole('dialog').locator('input[type="number"]');
+    await hotelNumbers.nth(1).fill('900000');
+    await hotelNumbers.nth(3).fill('1200000');
+    await hotelNumbers.nth(5).fill('1500000');
     const supplierResponsePromise = page.waitForResponse((response) => (
       response.url() === 'http://localhost:4000/api/v1/suppliers'
       && response.request().method() === 'POST'

@@ -53,14 +53,6 @@ export function normalizeVoucherLifecycle(voucher: Voucher, today = voucherToday
     };
   }
 
-  if (voucher.status === 'pending_approval' && voucher.startDate <= today) {
-    return {
-      ...voucher,
-      status: 'rejected',
-      rejectionReason: voucher.rejectionReason ?? VOUCHER_OVERDUE_REJECTION_REASON,
-    };
-  }
-
   if (voucher.status === 'active' && voucher.startDate > today) {
     return { ...voucher, status: 'upcoming' };
   }

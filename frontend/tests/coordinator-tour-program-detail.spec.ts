@@ -344,7 +344,7 @@ async function fillBaseInfo(page: Page, { days, nights }: { days: number; nights
   if (nights > 0) {
     await route.getByLabel('Tiêu chuẩn lưu trú').selectOption({ label: '4 sao' });
   }
-  await route.locator('textarea').fill('Mô tả kiểm thử lưu và sửa chương trình tour.');
+  await route.getByLabel('Mô tả', { exact: true }).fill('Mô tả kiểm thử lưu và sửa chương trình tour.');
 
   const rules = await getDateRules(page);
   const tourType = tourTypeSection(page);

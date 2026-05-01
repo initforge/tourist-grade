@@ -19,6 +19,7 @@ const prismaMock = {
   },
   tourInstance: {
     findMany: vi.fn(),
+    findUnique: vi.fn(),
     findFirst: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -115,6 +116,7 @@ describe('tour-instance routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.user.findUnique.mockResolvedValue({ id: 'coordinator-1', status: 'ACTIVE' });
+    prismaMock.tourInstance.findUnique.mockResolvedValue(null);
     prismaMock.emailOutbox.create.mockResolvedValue({});
     prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => Promise<unknown>) => callback(prismaMock));
   });
@@ -152,6 +154,41 @@ describe('tour-instance routes', () => {
       }),
     }));
     expect(response.body.tourInstance.id).toBe('REQ-TP001-2026-08-01');
+  });
+
+  it('suffixes a regenerated tour code when the same program date already exists', async () => {
+    prismaMock.tourProgram.findFirst.mockResolvedValue({ id: 'program-db-1', code: 'TP001', name: 'Tour Da Nang' });
+    prismaMock.tourInstance.findUnique
+      .mockResolvedValueOnce({ id: 'cancelled-existing' })
+      .mockResolvedValueOnce(null);
+    prismaMock.tourInstance.create.mockResolvedValue(createInstanceFixture({ code: 'REQ-TP001-2026-08-01-2' }));
+
+    const response = await request(createTestApp())
+      .post('/')
+      .set('Authorization', 'Bearer token')
+      .send({
+        id: 'REQ-TP001-2026-08-01',
+        programId: 'TP001',
+        programName: 'Tour Da Nang',
+        departureDate: '2026-08-01',
+        status: 'cho_duyet_ban',
+        departurePoint: 'Ha Noi',
+        sightseeingSpots: ['Da Nang'],
+        transport: 'xe',
+        expectedGuests: 20,
+        priceAdult: 3100000,
+        priceChild: 2300000,
+        priceInfant: 0,
+        minParticipants: 10,
+        bookingDeadline: '2026-07-25',
+      });
+
+    expect(response.status).toBe(201);
+    expect(prismaMock.tourInstance.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        code: 'REQ-TP001-2026-08-01-2',
+      }),
+    }));
   });
 
   it('wraps estimate payload and assigned guide together when assigning guide', async () => {

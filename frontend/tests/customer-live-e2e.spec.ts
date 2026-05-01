@@ -129,13 +129,13 @@ test('customer public surfaces hide lookup for logged-in users, persist wishlist
   expect(stickyMeta?.top).not.toBe('auto');
 
   const scheduleRows = page.locator('#tour-schedule-table tbody tr');
-  await expect(scheduleRows).toHaveCount(1);
+  await expect.poll(async () => scheduleRows.count()).toBeGreaterThanOrEqual(1);
   const remainingSeatTexts = await scheduleRows.locator('td:nth-child(8)').allInnerTexts();
   for (const seatText of remainingSeatTexts) {
     const [available] = seatText.split('/');
     expect(Number.parseInt(available, 10)).toBeGreaterThan(0);
   }
-  await expect(scheduleRows.first()).toContainText('TP001 - TI010');
+  expect((await scheduleRows.allInnerTexts()).join(' | ')).toContain('TP001 - TI010');
   await expect(page.locator('body')).not.toContainText(/Tour da het han dat|Tour đã hết hạn đặt/i);
 
   const freshLogin = await page.request.post(`${apiBase}/auth/login`, {

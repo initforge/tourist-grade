@@ -129,13 +129,13 @@ test.describe('Coordinator remaining feedback', () => {
     await dialog.getByLabel(/Loại phương tiện/i).selectOption('Máy bay');
     await expect(dialog.getByText(/Dịch vụ vận chuyển/i)).toBeVisible();
     await expect(dialog.getByRole('columnheader', { name: /Tên dịch vụ/i })).toBeVisible();
-    await expect(dialog.getByRole('columnheader', { name: /Đơn giá/i }).first()).toBeVisible();
+    await expect(dialog.getByRole('columnheader', { name: /Đơn giá/i })).toHaveCount(0);
     await expect(dialog.getByRole('button', { name: /Thêm dòng/i })).toHaveCount(0);
 
     await dialog.getByLabel(/Phân loại/i).selectOption('Khách sạn');
     await expect(dialog.getByText(/Dịch vụ lưu trú cố định/i)).toBeVisible();
     await expect(dialog.getByRole('columnheader', { name: /Đơn giá/i }).first()).toBeVisible();
-    await dialog.getByRole('checkbox').check();
+    await dialog.getByRole('checkbox', { name: /Có dịch vụ ăn kèm/i }).check();
     await expect(dialog.getByText('Dịch vụ ăn kèm', { exact: true })).toBeVisible();
     await expect(dialog.getByRole('button', { name: /Thêm dòng/i })).toBeVisible();
     await dialog.getByLabel(/Phân loại/i).selectOption('Nhà hàng');

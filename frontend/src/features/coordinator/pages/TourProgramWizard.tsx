@@ -323,7 +323,15 @@ function parseGalleryImages(value: string) {
 }
 
 function pricingTablesFromProgram(program: TourProgram): PricingTablesValue {
-  return program?.draftPricingTables ?? EMPTY_PRICING_VALUE;
+  const value = (program?.draftPricingTables ?? {}) as Partial<PricingTablesValue>;
+  return {
+    transport: Array.isArray(value.transport) ? value.transport : [],
+    flight: Array.isArray(value.flight) ? value.flight : [],
+    hotels: value.hotels && typeof value.hotels === 'object' ? value.hotels : {},
+    meals: value.meals && typeof value.meals === 'object' ? value.meals : {},
+    attractions: value.attractions && typeof value.attractions === 'object' ? value.attractions : {},
+    otherCosts: Array.isArray(value.otherCosts) ? value.otherCosts : [],
+  };
 }
 
 function manualPricingFromProgram(program: TourProgram): TourProgramManualPricingState {
@@ -482,7 +490,7 @@ export default function AdminTourProgramWizard({
   );
 
   useEffect(() => {
-    if (!singleSightseeingSpot || nightCount <= 0 || readOnly) {
+    if (!singleSightseeingSpot || nightCount <= 0 || readOnly || isActiveProgramEdit) {
       return;
     }
 
@@ -497,11 +505,11 @@ export default function AdminTourProgramWizard({
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [nightCount, readOnly, singleSightseeingSpot]);
+  }, [isActiveProgramEdit, nightCount, readOnly, singleSightseeingSpot]);
 
   const updateForm = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     if (readOnly) return;
-    if (isActiveProgramEdit && !['routeDescription', 'priceIncludes', 'priceExcludes', 'bookingDeadline', 'galleryImagesInput'].includes(key)) return;
+    if (isActiveProgramEdit && !['routeDescription', 'priceIncludes', 'priceExcludes', 'bookingDeadline'].includes(key)) return;
     setForm(prev => {
       const next = { ...prev, [key]: value };
       if (key === 'days') {
@@ -577,7 +585,7 @@ export default function AdminTourProgramWizard({
   };
 
   useEffect(() => {
-    if (readOnly) return;
+    if (readOnly || isActiveProgramEdit) return;
     const timer = window.setTimeout(() => {
       setForm(prev => {
         let changed = false;
@@ -607,10 +615,10 @@ export default function AdminTourProgramWizard({
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [airportSightseeingSpots, readOnly, shouldShowTransportSelector]);
+  }, [airportSightseeingSpots, isActiveProgramEdit, readOnly, shouldShowTransportSelector]);
 
   useEffect(() => {
-    if (!enforceCreateRules || readOnly) return;
+    if (!enforceCreateRules || readOnly || isActiveProgramEdit) return;
     if (form?.holiday && !availableHolidays.some(holiday => holiday.name === form.holiday)) {
       const timer = window.setTimeout(() => {
         setForm(prev => ({
@@ -622,7 +630,7 @@ export default function AdminTourProgramWizard({
 
       return () => window.clearTimeout(timer);
     }
-  }, [availableHolidays, enforceCreateRules, form?.holiday, readOnly]);
+  }, [availableHolidays, enforceCreateRules, form?.holiday, isActiveProgramEdit, readOnly]);
 
   useEffect(() => {
     if (!validationToast) return;
@@ -876,14 +884,27 @@ export default function AdminTourProgramWizard({
     };
   };
 
+  const buildActiveProgramPatch = (program: TourProgram): Partial<TourProgram> => ({
+    routeDescription: program.routeDescription,
+    priceIncludes: program.priceIncludes,
+    priceExcludes: program.priceExcludes,
+    bookingDeadline: program.bookingDeadline,
+    itinerary: (initialProgram?.itinerary ?? program.itinerary).map((day, index) => ({
+      ...day,
+      description: form.itinerary[index]?.description ?? day.description,
+    })),
+    updatedAt: program.updatedAt,
+  });
+
   const persistProgram = async (mode: 'draft' | 'submit') => {
     if (readOnly || !token) return;
 
     const program = buildPersistedProgram(mode);
+    const payload = isActiveProgramEdit ? buildActiveProgramPatch(program) : program;
 
     try {
       const draftResponse = initialProgram?.id
-        ? await patchTourProgram(token, initialProgram.id, program)
+        ? await patchTourProgram(token, initialProgram.id, payload)
         : await createTourProgram(token, program);
 
       let persistedProgram = draftResponse.tourProgram;
@@ -973,7 +994,7 @@ export default function AdminTourProgramWizard({
     [expectedYearRoundSelectedDates, form?.tourType, form.selectedDates, readOnly, yearRoundDepartureDates],
   );
   const handleHolidayCalendarWheel = (event: WheelEvent<HTMLDivElement>) => {
-    if (readOnly || Math.abs(event.deltaY) < 8) return;
+    if (readOnly || isActiveProgramEdit || Math.abs(event.deltaY) < 8) return;
     event.preventDefault();
     setHolidayMonthAnchor(toDateKey(addMonths(displayMonth, event.deltaY > 0 ? 1 : -1)));
   };
@@ -984,7 +1005,7 @@ export default function AdminTourProgramWizard({
       return;
     }
 
-    if (readOnly) {
+    if (readOnly || isActiveProgramEdit) {
       yearRoundGeneratedDatesRef.current = yearRoundDepartureDates;
       return;
     }
@@ -1012,7 +1033,7 @@ export default function AdminTourProgramWizard({
         ? current
         : { ...current, selectedDates: nextSelectedDates };
     });
-  }, [form?.tourType, readOnly, yearRoundDepartureDates]);
+  }, [form?.tourType, isActiveProgramEdit, readOnly, yearRoundDepartureDates]);
 
   const suggestedAdultPrice = roundToThousand(
     pricingSummary.currentNetPrice
@@ -1134,14 +1155,16 @@ export default function AdminTourProgramWizard({
                   onClick={handleSaveDraft}
                   className="px-6 py-2.5 border border-outline-variant/50 text-primary font-sans uppercase tracking-wider text-[11px] hover:bg-surface transition-colors"
                 >
-                  Lưu nháp
+                  {isActiveProgramEdit ? 'Lưu thay đổi' : 'Lưu nháp'}
                 </button>
-                <button
-                  onClick={handleSubmitForApproval}
-                  className="px-6 py-2.5 bg-emerald-600 text-white font-sans uppercase tracking-wider text-[11px] hover:bg-emerald-700 transition-colors"
-                >
-                  Gửi phê duyệt
-                </button>
+                {!isActiveProgramEdit && (
+                  <button
+                    onClick={handleSubmitForApproval}
+                    className="px-6 py-2.5 bg-emerald-600 text-white font-sans uppercase tracking-wider text-[11px] hover:bg-emerald-700 transition-colors"
+                  >
+                    Gửi phê duyệt
+                  </button>
+                )}
               </>
             ))}
           </div>
@@ -1201,6 +1224,7 @@ export default function AdminTourProgramWizard({
                     max={30}
                     value={form?.days}
                     onChange={e => updateForm('days', e?.target?.value === '' ? '' : Math.max(1, parseInt(e?.target?.value, 10) || 1))}
+                    disabled={isActiveProgramEdit}
                     className="w-full border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none"
                   />
                   {stepAttempted[1] && stepOneErrors.days && (
@@ -1217,6 +1241,7 @@ export default function AdminTourProgramWizard({
                     max={29}
                     value={form?.nights}
                     onChange={e => updateForm('nights', e?.target?.value === '' ? '' : Math.max(0, parseInt(e?.target?.value, 10) || 0))}
+                    disabled={isActiveProgramEdit}
                     className="w-full border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none"
                   />
                   {stepAttempted[1] && stepOneErrors.nights && (
@@ -1244,6 +1269,7 @@ export default function AdminTourProgramWizard({
                   <input
                     value={form?.name}
                     onChange={e => updateForm('name', e?.target?.value)}
+                    disabled={isActiveProgramEdit}
                     className="w-full border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none"
                     placeholder="VD: Khám Phá Vịnh Hạ Long - Du Thuyền 5 Sao"
                   />
@@ -1260,6 +1286,7 @@ export default function AdminTourProgramWizard({
                     <select
                       value={form?.departurePoint}
                       onChange={e => updateForm('departurePoint', e?.target?.value)}
+                      disabled={isActiveProgramEdit}
                       className="w-full border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none"
                     >
                       <option value="">Chọn tỉnh/thành</option>
@@ -1280,8 +1307,10 @@ export default function AdminTourProgramWizard({
                         {form?.sightseeingSpots?.map(spot => (
                           <span key={spot} className="inline-flex items-center gap-1 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] text-xs px-2 py-1">
                             {spot}
-                            <button type="button" onClick={() => updateForm('sightseeingSpots', form?.sightseeingSpots?.filter(s => s !== spot))}
-                              className="hover:text-red-500">×</button>
+                            {!isActiveProgramEdit && (
+                              <button type="button" onClick={() => updateForm('sightseeingSpots', form?.sightseeingSpots?.filter(s => s !== spot))}
+                                className="hover:text-red-500">×</button>
+                            )}
                           </span>
                         ))}
                         <select
@@ -1291,6 +1320,7 @@ export default function AdminTourProgramWizard({
                               updateForm('sightseeingSpots', [...form.sightseeingSpots, e?.target?.value]);
                             }
                           }}
+                          disabled={isActiveProgramEdit}
                           className="text-xs border-none outline-none bg-transparent text-primary/40 min-w-[80px]"
                         >
                           <option value="">+ Thêm</option>
@@ -1315,6 +1345,7 @@ export default function AdminTourProgramWizard({
                     aria-label="Tiêu chuẩn lưu trú"
                     value={form?.lodgingStandard}
                     onChange={e => updateForm('lodgingStandard', e?.target?.value as LodgingStandard | '')}
+                    disabled={isActiveProgramEdit}
                     className="w-full max-w-sm border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none"
                   >
                     <option value="">Chọn tiêu chuẩn lưu trú</option>
@@ -1396,6 +1427,7 @@ export default function AdminTourProgramWizard({
                     aria-label="Ảnh minh họa tour"
                     value={form?.galleryImagesInput}
                     onChange={e => updateForm('galleryImagesInput', e?.target?.value)}
+                    disabled={isActiveProgramEdit}
                     rows={3}
                     className="w-full border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none resize-none"
                     placeholder="Mỗi dòng một URL ảnh. Ảnh đầu tiên dùng làm ảnh đại diện tour."
@@ -1419,6 +1451,7 @@ export default function AdminTourProgramWizard({
                   }`}>
                     <input type="radio" name="transport" checked={form.transport === t}
                       onChange={() => updateForm('transport', t)}
+                      disabled={isActiveProgramEdit}
                       className="accent-[var(--color-secondary)]" />
                     <span className="text-sm font-medium">
                       {t === 'xe' ? 'Xe du lịch' : 'Máy bay'}
@@ -1437,7 +1470,7 @@ export default function AdminTourProgramWizard({
                   <select
                     value={form?.arrivalPoint}
                     onChange={e => updateForm('arrivalPoint', e?.target?.value)}
-                    disabled={airportSightseeingSpots.length === 1}
+                    disabled={airportSightseeingSpots.length === 1 || isActiveProgramEdit}
                     className="w-full border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none max-w-sm"
                   >
                     <option value="">Chọn điểm đến</option>
@@ -1473,6 +1506,7 @@ export default function AdminTourProgramWizard({
                   }`}>
                     <input type="radio" name="tourType" checked={form.tourType === t?.key}
                       onChange={() => updateForm('tourType', t?.key)}
+                      disabled={isActiveProgramEdit}
                       className="accent-[var(--color-secondary)]" />
                     <span className="text-sm font-medium">{t?.label}</span>
                   </label>
@@ -1496,6 +1530,7 @@ export default function AdminTourProgramWizard({
                           setHolidayMonthAnchor(toDateKey(startOfMonth(new Date(nextHoliday?.date))));
                         }
                       }}
+                      disabled={isActiveProgramEdit}
                       className="w-full border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none max-w-sm"
                     >
                       <option value="">Chọn dịp lễ</option>
@@ -1517,6 +1552,7 @@ export default function AdminTourProgramWizard({
                         <button
                           type="button"
                           onClick={() => setHolidayMonthAnchor(toDateKey(addMonths(displayMonth, -1)))}
+                          disabled={isActiveProgramEdit}
                           className="w-9 h-9 border border-outline-variant/40 flex items-center justify-center text-primary/60 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
                           aria-label="Tháng trước"
                         >
@@ -1531,6 +1567,7 @@ export default function AdminTourProgramWizard({
                         <button
                           type="button"
                           onClick={() => setHolidayMonthAnchor(toDateKey(addMonths(displayMonth, 1)))}
+                          disabled={isActiveProgramEdit}
                           className="w-9 h-9 border border-outline-variant/40 flex items-center justify-center text-primary/60 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
                           aria-label="Tháng sau"
                         >
@@ -1558,7 +1595,7 @@ export default function AdminTourProgramWizard({
                             <button
                               key={dateKey}
                               type="button"
-                              disabled={!isSelectable}
+                              disabled={!isSelectable || isActiveProgramEdit}
                               onClick={() => {
                                 const next = isSelected
                                   ? form?.selectedDates?.filter(item => item !== dateKey)
@@ -1599,14 +1636,16 @@ export default function AdminTourProgramWizard({
                           {expectedDepartureDates?.map(dateKey => (
                             <span key={dateKey} className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-outline-variant/25 text-sm text-primary">
                               {formatDate(dateKey)}
-                              <button
-                                type="button"
-                                onClick={() => updateForm('selectedDates', form?.selectedDates?.filter(item => item !== dateKey))}
-                                className="text-primary/35 hover:text-red-500"
-                                aria-label={`Bỏ ${dateKey}`}
-                              >
-                                ×
-                              </button>
+                              {!isActiveProgramEdit && (
+                                <button
+                                  type="button"
+                                  onClick={() => updateForm('selectedDates', form?.selectedDates?.filter(item => item !== dateKey))}
+                                  className="text-primary/35 hover:text-red-500"
+                                  aria-label={`Bỏ ${dateKey}`}
+                                >
+                                  ×
+                                </button>
+                              )}
                             </span>
                           ))}
                         </div>
@@ -1629,6 +1668,7 @@ export default function AdminTourProgramWizard({
                         value={form?.yearRoundStartDate}
                         onChange={e => updateForm('yearRoundStartDate', e?.target?.value)}
                         min={minimumYearRoundStartDate}
+                        disabled={isActiveProgramEdit}
                         className="w-full border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none"
                       />
                       {((form?.yearRoundStartDate && stepOneErrors.yearRoundStartDate) || (stepAttempted[1] && stepOneErrors.yearRoundStartDate)) && (
@@ -1645,7 +1685,7 @@ export default function AdminTourProgramWizard({
                         value={form?.yearRoundEndDate}
                         onChange={e => updateForm('yearRoundEndDate', e?.target?.value)}
                         min={form?.yearRoundStartDate || undefined}
-                        disabled={!form?.yearRoundStartDate || !!stepOneErrors.yearRoundStartDate}
+                        disabled={isActiveProgramEdit || !form?.yearRoundStartDate || !!stepOneErrors.yearRoundStartDate}
                         className="w-full border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none"
                       />
                       {((form?.yearRoundEndDate && stepOneErrors.yearRoundEndDate) || (stepAttempted[1] && stepOneErrors.yearRoundEndDate)) && (
@@ -1661,6 +1701,7 @@ export default function AdminTourProgramWizard({
                       <button
                         type="button"
                         onClick={() => updateForm('weekdays', WEEKDAYS?.map(w => w?.value))}
+                        disabled={isActiveProgramEdit}
                         className="px-3 py-1.5 text-xs border border-outline-variant/50 hover:border-[var(--color-secondary)] transition-colors"
                       >
                         Chọn tất cả
@@ -1668,6 +1709,7 @@ export default function AdminTourProgramWizard({
                       <button
                         type="button"
                         onClick={() => updateForm('weekdays', [])}
+                        disabled={isActiveProgramEdit}
                         className="px-3 py-1.5 text-xs border border-outline-variant/50 hover:border-[var(--color-secondary)] transition-colors"
                       >
                         Bỏ chọn
@@ -1684,6 +1726,7 @@ export default function AdminTourProgramWizard({
                                   : [...form.weekdays, w?.value];
                                 updateForm('weekdays', next);
                               }}
+                              disabled={isActiveProgramEdit}
                               className={`w-10 h-10 border text-xs font-medium transition-colors ${
                                 selected
                                   ? 'bg-[var(--color-secondary)] text-white border-[var(--color-secondary)]'
@@ -1712,6 +1755,7 @@ export default function AdminTourProgramWizard({
                         max={12}
                         value={form?.coverageMonths}
                         onChange={e => updateForm('coverageMonths', parseInt(e?.target?.value) || 1)}
+                        disabled={isActiveProgramEdit}
                         className="w-24 border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none"
                       />
                       <span className="text-sm text-primary/60">tháng</span>
@@ -1742,14 +1786,16 @@ export default function AdminTourProgramWizard({
                                       <p className="text-sm font-medium text-primary">{formatDate(dateKey)}</p>
                                       <p className="text-xs text-primary/45">{getDayType('quanh_nam', '', dateKey)}</p>
                                     </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => updateForm('selectedDates', form?.selectedDates?.filter((item) => item !== dateKey))}
-                                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-outline-variant/35 text-primary/55 transition-colors hover:border-red-300 hover:text-red-500"
-                                      aria-label={`Xóa ngày ${dateKey}`}
-                                    >
-                                      ×
-                                    </button>
+                                    {!isActiveProgramEdit && (
+                                      <button
+                                        type="button"
+                                        onClick={() => updateForm('selectedDates', form?.selectedDates?.filter((item) => item !== dateKey))}
+                                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-outline-variant/35 text-primary/55 transition-colors hover:border-red-300 hover:text-red-500"
+                                        aria-label={`Xóa ngày ${dateKey}`}
+                                      >
+                                        ×
+                                      </button>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -1809,6 +1855,7 @@ export default function AdminTourProgramWizard({
                       <input
                         value={day?.title}
                         onChange={e => updateDay(idx, { title: e?.target?.value })}
+                        disabled={isActiveProgramEdit}
                         className="w-full border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none max-w-xl"
                         placeholder="VD: Hà Nội - Vịnh Hạ Long"
                       />
@@ -1823,6 +1870,7 @@ export default function AdminTourProgramWizard({
                           const selected = day?.meals?.includes(m);
                           return (
                             <button key={m} type="button" onClick={() => toggleMeal(idx, m)}
+                              disabled={isActiveProgramEdit}
                               className={`flex items-center gap-2 px-4 py-2 border text-sm font-medium transition-colors ${
                                 selected
                                   ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/5 text-[var(--color-secondary)]'
@@ -1848,6 +1896,7 @@ export default function AdminTourProgramWizard({
                         <select
                           value={day?.accommodationPoint}
                           onChange={e => updateDay(idx, { accommodationPoint: e?.target?.value })}
+                          disabled={isActiveProgramEdit}
                           className="w-full max-w-sm border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none"
                         >
                           <option value="">Chọn một điểm tham quan</option>
@@ -1903,6 +1952,7 @@ export default function AdminTourProgramWizard({
               </section>
             )}
 
+            <fieldset disabled={isActiveProgramEdit} className="space-y-8 border-0 p-0 m-0">
             <section className="bg-white border border-outline-variant/30 p-6">
               <h2 className="font-headline text-lg text-primary mb-1 flex items-center gap-3">
                 <span className="material-symbols-outlined text-secondary">payments</span>
@@ -2012,6 +2062,7 @@ export default function AdminTourProgramWizard({
                 </div>
               </div>
             </section>
+            </fieldset>
 
             <div className="flex justify-between">
               <button onClick={() => setStep(2)}
