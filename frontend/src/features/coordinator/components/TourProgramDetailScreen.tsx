@@ -63,7 +63,7 @@ function ReadonlyPricingSection({ program }: { program: EditableProgram }) {
   const otherCostFactorPercent = program?.pricingConfig?.otherCostFactor > 1
     ? program.pricingConfig.otherCostFactor
     : Math.round(program.pricingConfig.otherCostFactor * 100);
-  const expectedGuests = Math.max(1, program?.pricingConfig?.minParticipants ?? 1);
+  const expectedGuests = Math.max(1, program?.pricingConfig?.maxGuests ?? program?.pricingConfig?.minParticipants ?? 1);
   const guideUnitPrice = 400000;
   const estimatedNetPrice = Math.round(
     (program?.pricingConfig?.sellPriceAdult ?? 0)
@@ -90,7 +90,7 @@ function ReadonlyPricingSection({ program }: { program: EditableProgram }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
           {[
-            { label: 'Số lượng khách dự kiến', value: expectedGuests, unit: 'khách' },
+            { label: 'Số lượng khách tối đa', value: expectedGuests, unit: 'khách' },
             { label: 'Tỷ lệ lợi nhuận mong muốn (%)', value: program?.pricingConfig?.profitMargin ?? 0, unit: '%' },
             { label: 'Thuế (%)', value: program?.pricingConfig?.taxRate ?? 0, unit: '%' },
             { label: 'Hệ số chi phí khác (%)', value: otherCostFactorPercent, unit: '%' },
@@ -135,7 +135,7 @@ function ReadonlyPricingSection({ program }: { program: EditableProgram }) {
             { label: 'Giá bán (Người lớn)', value: program?.pricingConfig?.sellPriceAdult ?? 0 },
             { label: 'Giá trẻ em', value: program?.pricingConfig?.sellPriceChild ?? 0 },
             { label: 'Giá trẻ sơ sinh', value: program?.pricingConfig?.sellPriceInfant ?? 0 },
-            { label: 'Phụ phí phòng đơn', value: Math.round((program?.pricingConfig?.sellPriceAdult ?? 0) * 0.28) },
+            { label: 'Phụ phí phòng đơn', value: program.duration.nights > 0 ? Math.round((program?.pricingConfig?.sellPriceAdult ?? 0) * 0.28) : 0 },
             { label: 'Giá net', value: estimatedNetPrice },
           ].map(item => (
             <div key={item.label} className="flex items-center gap-3 min-w-0">

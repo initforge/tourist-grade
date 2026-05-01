@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { CostCategory, CostItem } from '@entities/tour-program/data/tourProgram';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
 import { useAuthStore } from '@shared/store/useAuthStore';
@@ -64,6 +64,7 @@ function ApproveConfirmPopup({ instanceName, onConfirm, onCancel }: { instanceNa
 
 export default function ManagerTourEstimateApproval() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [showReject, setShowReject] = useState(false);
   const [showRequestEdit, setShowRequestEdit] = useState(false);
   const [showApprove, setShowApprove] = useState(false);
@@ -73,27 +74,34 @@ export default function ManagerTourEstimateApproval() {
 
   const instance = tourInstances?.find(i => i.id === id);
   const estimate = instance?.costEstimate;
+  const canReviewEstimate = instance?.status === 'cho_duyet_du_toan';
 
   const handleApprove = async () => {
+    if (!canReviewEstimate) return;
     if (token && instance) {
       const response = await updateTourInstanceCommand(token, instance.id, 'estimate/approve');
       upsertTourInstance(response.tourInstance);
     }
     setShowApprove(false);
+    navigate('/manager/tours?tab=pending_estimate');
   };
   const handleReject = async (_reason: string) => {
+    if (!canReviewEstimate) return;
     if (token && instance) {
       const response = await updateTourInstanceCommand(token, instance.id, 'estimate/reject', { reason: _reason });
       upsertTourInstance(response.tourInstance);
     }
     setShowReject(false);
+    navigate('/manager/tours?tab=pending_estimate');
   };
   const handleRequestEdit = async (_reason: string) => {
+    if (!canReviewEstimate) return;
     if (token && instance) {
       const response = await updateTourInstanceCommand(token, instance.id, 'estimate/request-edit', { reason: _reason });
       upsertTourInstance(response.tourInstance);
     }
     setShowRequestEdit(false);
+    navigate('/manager/tours?tab=pending_estimate');
   };
 
   if (!instance) {
@@ -127,18 +135,18 @@ export default function ManagerTourEstimateApproval() {
             <h1 className="font-['Noto_Serif'] text-xl text-[#2A2421]">{id} - {instance?.programName}</h1>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setShowRequestEdit(true)}
-              className="flex items-center gap-2 px-4 py-2.5 text-xs font-['Inter'] uppercase tracking-widest font-bold border border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/5 transition-colors">
+            <button onClick={() => setShowRequestEdit(true)} disabled={!canReviewEstimate}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-['Inter'] uppercase tracking-widest font-bold border border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/5 transition-colors ${canReviewEstimate ? '' : 'opacity-45 cursor-not-allowed'}`}>
               <span className="material-symbols-outlined text-[16px]">edit_note</span>
               Yêu cầu chỉnh sửa
             </button>
-            <button onClick={() => setShowReject(true)}
-              className="flex items-center gap-2 px-4 py-2.5 text-xs font-['Inter'] uppercase tracking-widest font-bold border border-red-300 text-red-600 hover:bg-red-50 transition-colors">
+            <button onClick={() => setShowReject(true)} disabled={!canReviewEstimate}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-['Inter'] uppercase tracking-widest font-bold border border-red-300 text-red-600 hover:bg-red-50 transition-colors ${canReviewEstimate ? '' : 'opacity-45 cursor-not-allowed'}`}>
               <span className="material-symbols-outlined text-[16px]">block</span>
               Từ chối
             </button>
-            <button onClick={() => setShowApprove(true)}
-              className="flex items-center gap-2 px-5 py-2.5 text-xs font-['Inter'] uppercase tracking-widest font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors">
+            <button onClick={() => setShowApprove(true)} disabled={!canReviewEstimate}
+              className={`flex items-center gap-2 px-5 py-2.5 text-xs font-['Inter'] uppercase tracking-widest font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors ${canReviewEstimate ? '' : 'opacity-45 cursor-not-allowed'}`}>
               <span className="material-symbols-outlined text-[16px]">check</span>
               Duyệt
             </button>

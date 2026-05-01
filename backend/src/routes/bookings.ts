@@ -31,7 +31,7 @@ const phonePattern = /^(0|\+84)\d{9,10}$/;
 
 const passengerSchema = z.object({
   type: z.enum(['adult', 'child', 'infant']),
-  name: z.string().trim().min(1),
+  name: z.string().trim().min(2),
   dob: z.string().optional().default(''),
   gender: z.enum(['male', 'female']),
   cccd: z.string().optional(),
@@ -45,6 +45,24 @@ const bookingContactSchema = z.object({
   email: z.string().trim().email(),
   note: z.string().optional().default(''),
 });
+
+function bookingPayloadError(issues: z.ZodIssue[]) {
+  const issue = issues[0];
+  const path = issue?.path.join('.');
+  if (path === 'contact.email') {
+    return 'Email không đúng định dạng';
+  }
+  if (path === 'contact.name') {
+    return 'Họ tên người đặt phải có ít nhất 2 ký tự';
+  }
+  if (path?.startsWith('passengers.') && path.endsWith('.name')) {
+    return 'Họ tên hành khách phải có ít nhất 2 ký tự';
+  }
+  if (path?.startsWith('passengers.')) {
+    return 'Thông tin hành khách không hợp lệ';
+  }
+  return issue?.message || 'Thông tin đặt tour không hợp lệ';
+}
 
 const roomCountsSchema = z.object({
   single: z.number().int().min(0),
@@ -656,7 +674,7 @@ export function createBookingsRouter() {
   router.post('/public', authenticateOptional, asyncHandler(async (req: AuthenticatedRequest, res) => {
     const input = createBookingSchema.safeParse(req.body);
     if (!input.success) {
-      throw badRequest('Invalid booking payload');
+      throw badRequest(bookingPayloadError(input.error.issues));
     }
 
     const program = await resolveProgramBySlug(input.data.tourSlug);
@@ -726,7 +744,7 @@ export function createBookingsRouter() {
 
     const input = updateCheckoutSchema.safeParse(req.body);
     if (!input.success) {
-      throw badRequest('Invalid booking update payload');
+      throw badRequest(bookingPayloadError(input.error.issues));
     }
 
     const booking = await findBookingByIdOrCode(String(req.params.id));
@@ -858,7 +876,7 @@ export function createBookingsRouter() {
         where: { id: booking.id },
         data: {
           status: 'PENDING_CANCEL',
-          refundStatus: paidAmount > 0 ? 'PENDING' : 'NOT_REQUIRED',
+          refundStatus: refundAmount > 0 ? 'PENDING' : 'REFUNDED',
           cancellationReason: input.data.cancellationReason || 'Khach hang gui yeu cau huy',
           cancelledAt: new Date(),
           bankInfoJson: toNullableJsonInput(input.data.bankInfo ?? booking.bankInfoJson),

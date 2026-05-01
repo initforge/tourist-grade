@@ -11,6 +11,12 @@ function formatDuration(days: number, nights: number) {
   return `${days} Ngày / ${nights} Đêm`;
 }
 
+const regionImages: Record<string, string> = {
+  north: 'https://images.unsplash.com/photo-1528127269322-539801943592?q=80&w=1200&auto=format&fit=crop',
+  central: 'https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?q=80&w=1200&auto=format&fit=crop',
+  south: 'https://images.unsplash.com/photo-1583417319070-4a69db38a482?q=80&w=1200&auto=format&fit=crop',
+};
+
 export default function Landing() {
   const navigate = useNavigate();
   const publicTours = useAppDataStore((state) => state.publicTours);
@@ -51,7 +57,7 @@ export default function Landing() {
       <section className="public-hero-banner flex items-center">
         <img
           className="absolute inset-0 w-full h-full object-cover"
-          src={heroTour?.image ?? 'https://images.unsplash.com/photo-1528127269322-539801943592?q=80&w=1400'}
+          src="https://images.unsplash.com/photo-1528127269322-539801943592?q=80&w=1800&auto=format&fit=crop"
           alt={heroTour?.title ?? 'Du lịch Việt Nam'}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-primary/25 via-primary/15 to-surface/95" />
@@ -63,7 +69,7 @@ export default function Landing() {
               Tour nội địa cao cấp
               <span className="w-10 h-px bg-white/70" />
             </span>
-            <h1 className="font-headline text-4xl md:text-5xl lg:text-6xl text-white tracking-tighter drop-shadow-sm">
+            <h1 className="font-headline whitespace-nowrap text-[2rem] md:text-5xl lg:text-6xl text-white tracking-tighter drop-shadow-sm">
               Khám phá Việt Nam cùng Travela
             </h1>
           </div>
@@ -149,23 +155,19 @@ export default function Landing() {
           </div>
           <div className="grid gap-6 lg:grid-cols-3">
             {regionGroups.map((region) => (
-              <div key={region.key} className="border border-outline-variant/60 bg-surface p-5">
-                <div className="flex items-center justify-between gap-4 mb-4">
-                  <h3 className="font-headline text-2xl text-primary">{region.label}</h3>
-                  <Link to={`/tours?region=${region.key}`} className="text-[10px] uppercase tracking-[0.18em] font-bold text-secondary">Xem</Link>
+              <Link key={region.key} to={`/tours?region=${region.key}`} className="group relative block aspect-[16/10] overflow-hidden border border-outline-variant/60 bg-surface">
+                <img src={regionImages[region.key]} alt={region.label} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                <div className="absolute inset-0 bg-gradient-to-t from-primary/70 via-primary/20 to-transparent" />
+                <div className="absolute bottom-5 left-5 right-5 flex items-end justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-white/75">Tour theo điểm đến</p>
+                    <h3 className="mt-1 font-headline text-3xl text-white">{region.label}</h3>
+                  </div>
+                  <span className="inline-flex h-10 w-10 items-center justify-center border border-white/60 text-white transition-colors group-hover:bg-white group-hover:text-primary">
+                    <span className="material-symbols-outlined text-lg">arrow_forward</span>
+                  </span>
                 </div>
-                <div className="space-y-3">
-                  {(region.tours.length > 0 ? region.tours : publicTours.slice(0, 2)).map((tour) => (
-                    <Link key={`${region.key}-${tour.id}`} to={`/tours/${tour.slug}`} className="grid grid-cols-[88px_minmax(0,1fr)] gap-3 bg-white p-3 hover:shadow-md transition-shadow">
-                      <img src={tour.image} alt={tour.title} className="h-16 w-full object-cover" />
-                      <div className="min-w-0">
-                        <p className="line-clamp-2 text-sm font-semibold text-primary">{tour.title}</p>
-                        <p className="mt-1 text-xs text-primary/55">{formatCurrency(tour.price.adult)}</p>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
+              </Link>
             ))}
           </div>
         </div>

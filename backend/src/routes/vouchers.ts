@@ -35,16 +35,17 @@ function parseVoucherValue(value: string | number | undefined) {
     return undefined;
   }
 
-  const numeric = Number(value.replace(/[^\d.]/g, ''));
+  const numeric = Number(value.replace(/\D/g, ''));
   return Number.isFinite(numeric) ? numeric : undefined;
 }
 
 function toVoucherStatus(status: string | undefined) {
-  if (!status || status === 'upcoming') {
+  if (!status) {
     return undefined;
   }
 
-  return status.toUpperCase() as 'DRAFT' | 'PENDING_APPROVAL' | 'REJECTED' | 'ACTIVE' | 'INACTIVE';
+  if (status === 'pending_approval') return 'PENDING_APPROVAL';
+  return status.toUpperCase() as 'DRAFT' | 'PENDING_APPROVAL' | 'REJECTED' | 'UPCOMING' | 'ACTIVE' | 'INACTIVE';
 }
 
 function getVoucherApprovalDeadlineCutoff(now = new Date()) {
@@ -224,10 +225,12 @@ export function createVouchersRouter() {
       throw notFound('Voucher not found');
     }
 
+    const nowKey = new Date().toISOString().slice(0, 10);
+    const startKey = existing.startsAt.toISOString().slice(0, 10);
     const voucher = await prisma.voucher.update({
       where: { id },
       data: {
-        status: 'ACTIVE',
+        status: startKey > nowKey ? 'UPCOMING' : 'ACTIVE',
         approvedById: req.auth!.sub,
         rejectedById: null,
         rejectionReason: null,

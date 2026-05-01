@@ -34,6 +34,7 @@ type EditablePriceKey = 'adult' | 'child' | 'infant' | 'singleSupplement';
 type NumericFieldValue = number | '';
 type FormTourType = TourType | '';
 type ValidationErrors = Partial<Record<string, string>>;
+const DEFAULT_MIN_PARTICIPANTS = 10;
 
 type WizardProps = {
   initialProgram?: TourProgram;
@@ -66,6 +67,7 @@ interface FormState {
   holiday: string;
   priceIncludes: string;
   priceExcludes: string;
+  galleryImagesInput: string;
   selectedDates: string[];
   weekdays: string[];
   yearRoundStartDate: string;
@@ -282,6 +284,7 @@ function formFromProgram(program: TourProgram): FormState {
     routeDescription: program?.routeDescription ?? '',
     priceIncludes: program?.priceIncludes ?? '',
     priceExcludes: program?.priceExcludes ?? '',
+    galleryImagesInput: (program?.gallery?.length ? program.gallery : [program?.image].filter(Boolean) as string[]).join('\n'),
     bookingDeadline: program?.bookingDeadline ?? 7,
     transport: program?.transport ?? 'xe',
     arrivalPoint: program?.arrivalPoint ?? '',
@@ -302,12 +305,21 @@ function pricingFromProgram(program: TourProgram): PricingConfigState {
     : 15;
 
   return {
-    expectedGuests: Math.max(1, program?.pricingConfig?.minParticipants ?? 25),
+    expectedGuests: Math.max(1, program?.pricingConfig?.maxGuests ?? program?.pricingConfig?.minParticipants ?? 25),
     profitMargin: program?.pricingConfig?.profitMargin ?? 15,
     taxRate: program?.pricingConfig?.taxRate ?? 10,
     otherCostFactor: otherCostFactorPercent,
     guideUnitPrice: program?.pricingConfig?.guideUnitPrice ?? 0,
   };
+}
+
+function parseGalleryImages(value: string) {
+  return Array.from(new Set(
+    value
+      .split(/\r?\n|,/)
+      .map(item => item.trim())
+      .filter(Boolean),
+  ));
 }
 
 function pricingTablesFromProgram(program: TourProgram): PricingTablesValue {
@@ -339,6 +351,7 @@ export default function AdminTourProgramWizard({
   readOnly = false,
   headerTitle = 'Thêm mới chương trình tour',
   headerActions,
+  persistMode = 'create',
 }: WizardProps) {
   const navigate = useNavigate();
   const upsertTourProgram = useAppDataStore(state => state.upsertTourProgram);
@@ -348,6 +361,13 @@ export default function AdminTourProgramWizard({
   const provinces = useAppDataStore(state => state.provinces);
   const token = useAuthStore(state => state.accessToken);
   const enforceCreateRules = !initialProgram && !readOnly;
+  const isActiveProgramEdit = persistMode === 'edit' && initialProgram?.status === 'active';
+  const visibleWizardSteps = ([
+    { value: 1, label: 'Thông tin chung' },
+    { value: 2, label: 'Lịch trình' },
+    { value: 3, label: 'Giá & Cấu hình' },
+    ...(!isActiveProgramEdit ? [{ value: 4 as WizardStep, label: 'Tour dự kiến' }] : []),
+  ] as { value: WizardStep; label: string }[]);
   const minimumYearRoundStartDate = useMemo(() => toDateKey(addCalendarMonths(new Date(), 1)), []);
   const minimumHolidayStartDate = useMemo(() => toDateKey(addCalendarDays(new Date(), 15)), []);
   const holidayOptions = useMemo(() => {
@@ -383,6 +403,7 @@ export default function AdminTourProgramWizard({
     holiday: '',
     priceIncludes: '',
     priceExcludes: '',
+    galleryImagesInput: '',
     selectedDates: [],
     weekdays: [],
     yearRoundStartDate: '',
@@ -480,6 +501,7 @@ export default function AdminTourProgramWizard({
 
   const updateForm = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     if (readOnly) return;
+    if (isActiveProgramEdit && !['routeDescription', 'priceIncludes', 'priceExcludes', 'bookingDeadline', 'galleryImagesInput'].includes(key)) return;
     setForm(prev => {
       const next = { ...prev, [key]: value };
       if (key === 'days') {
@@ -699,7 +721,7 @@ export default function AdminTourProgramWizard({
 
   const validateStepThree = (): ValidationErrors => {
     const nextErrors: ValidationErrors = {};
-    if (pricingConfig.expectedGuests <= 0) nextErrors.expectedGuests = 'Số lượng khách dự kiến phải lớn hơn 0';
+    if (pricingConfig.expectedGuests <= 0) nextErrors.expectedGuests = 'Số lượng khách tối đa phải lớn hơn 0';
     if (pricingConfig.profitMargin < 0) nextErrors.profitMargin = 'Tỷ lệ lợi nhuận mong muốn không được âm';
     if (pricingConfig.taxRate < 0) nextErrors.taxRate = 'Thuế không được âm';
     if (pricingConfig.otherCostFactor < 0) nextErrors.otherCostFactor = 'Hệ số chi phí khác không được âm';
@@ -731,6 +753,7 @@ export default function AdminTourProgramWizard({
   };
 
   const navigateToStep = (targetStep: WizardStep) => {
+    if (isActiveProgramEdit && targetStep > 3) return;
     if (readOnly || targetStep <= step || initialProgram) {
       setStep(targetStep);
       return;
@@ -752,20 +775,24 @@ export default function AdminTourProgramWizard({
   };
 
   const updatePricingConfig = <K extends keyof PricingConfigState>(key: K, value: PricingConfigState[K]) => {
-    if (readOnly) return;
+    if (readOnly || isActiveProgramEdit) return;
     setPricingConfig(prev => ({ ...prev, [key]: value }));
   };
 
   const updateDay = (idx: number, patch: Partial<DayForm>) => {
     if (readOnly) return;
+    const nextPatch = isActiveProgramEdit
+      ? ('description' in patch ? { description: patch.description } : {})
+      : patch;
+    if (Object.keys(nextPatch).length === 0) return;
     setForm(prev => ({
       ...prev,
-      itinerary: prev?.itinerary?.map((d, i) => i === idx ? { ...d, ...patch } : d),
+      itinerary: prev?.itinerary?.map((d, i) => i === idx ? { ...d, ...nextPatch } : d),
     }));
   };
 
   const toggleMeal = (idx: number, meal: DayForm['meals'][0]) => {
-    if (readOnly) return;
+    if (readOnly || isActiveProgramEdit) return;
     setForm(prev => ({
       ...prev,
       itinerary: prev?.itinerary?.map((d, i) => {
@@ -789,6 +816,7 @@ export default function AdminTourProgramWizard({
 
   const buildPersistedProgram = (mode: 'draft' | 'submit'): TourProgram => {
     const now = new Date().toISOString();
+    const galleryImages = parseGalleryImages(form.galleryImagesInput);
 
     return {
       id: buildProgramId(),
@@ -803,8 +831,10 @@ export default function AdminTourProgramWizard({
       routeDescription: form.routeDescription.trim(),
       priceIncludes: form.priceIncludes.trim(),
       priceExcludes: form.priceExcludes.trim(),
+      image: galleryImages[0],
+      gallery: galleryImages,
       holiday: form.tourType === 'mua_le' ? form.holiday || undefined : undefined,
-      selectedDates: form.selectedDates,
+      selectedDates: form.tourType === 'mua_le' ? form.selectedDates : [],
       weekdays: form.tourType === 'quanh_nam' ? form.weekdays : [],
       yearRoundStartDate: form.tourType === 'quanh_nam' ? form.yearRoundStartDate || undefined : undefined,
       yearRoundEndDate: form.tourType === 'quanh_nam' ? form.yearRoundEndDate || undefined : undefined,
@@ -822,14 +852,15 @@ export default function AdminTourProgramWizard({
         accommodationPoint: day.accommodationPoint || undefined,
       })),
       pricingConfig: {
-        profitMargin: roundedActualProfitRate,
+        profitMargin: pricingConfig.profitMargin,
         taxRate: pricingConfig.taxRate,
         otherCostFactor: pricingConfig.otherCostFactor / 100,
         netPrice: pricingSummary.currentNetPrice,
         sellPriceAdult: actualPrices.adult,
         sellPriceChild: actualPrices.child,
         sellPriceInfant: actualPrices.infant,
-        minParticipants: pricingConfig.expectedGuests,
+        minParticipants: DEFAULT_MIN_PARTICIPANTS,
+        maxGuests: pricingConfig.expectedGuests,
         guideUnitPrice: pricingConfig.guideUnitPrice,
       },
       draftPricingTables: pricingTableValue as TourProgramPricingTablesState,
@@ -993,13 +1024,13 @@ export default function AdminTourProgramWizard({
     adult: suggestedAdultPrice,
     child: suggestedChildPrice,
     infant: suggestedInfantPrice,
-    singleSupplement: pricingSummary.currentSingleSupplement,
+    singleSupplement: nightCount > 0 ? pricingSummary.currentSingleSupplement : 0,
   };
   const actualPrices: Record<EditablePriceKey, number> = {
     adult: manualPricing.adult ? pricingOverrides.adult : suggestedPrices.adult,
     child: manualPricing.child ? pricingOverrides.child : suggestedPrices.child,
     infant: manualPricing.infant ? pricingOverrides.infant : suggestedPrices.infant,
-    singleSupplement: manualPricing.singleSupplement ? pricingOverrides.singleSupplement : suggestedPrices.singleSupplement,
+    singleSupplement: nightCount > 0 && manualPricing.singleSupplement ? pricingOverrides.singleSupplement : suggestedPrices.singleSupplement,
   };
   const actualProfitRate = pricingSummary.currentNetPrice > 0
     ? ((actualPrices.adult - pricingSummary.currentNetPrice) / pricingSummary.currentNetPrice) * 100
@@ -1051,6 +1082,7 @@ export default function AdminTourProgramWizard({
 
   const previewRows = useMemo(() => basePreviewRows.map(row => ({
     ...row,
+    ...(previewEdits[row.id] ?? {}),
     checked: previewEdits[row.id]?.checked ?? row.checked,
   })), [basePreviewRows, previewEdits]);
 
@@ -1069,7 +1101,7 @@ export default function AdminTourProgramWizard({
   };
 
   const toggleManualPrice = (key: EditablePriceKey) => {
-    if (readOnly) return;
+    if (readOnly || isActiveProgramEdit) return;
     setManualPricing(prev => {
       if (prev[key]) {
         return { ...prev, [key]: false };
@@ -1126,12 +1158,7 @@ export default function AdminTourProgramWizard({
 
         <div className="flex items-center gap-0 relative mb-10">
           <div className="absolute top-4 left-0 w-full h-[2px] bg-outline-variant/30 -z-10" />
-          {([
-            { value: 1, label: 'Thông tin chung' },
-            { value: 2, label: 'Lịch trình' },
-            { value: 3, label: 'Giá & Cấu hình' },
-            { value: 4, label: 'Tour dự kiến' },
-          ] as { value: WizardStep; label: string }[])?.map(item => (
+          {visibleWizardSteps.map(item => (
             <button key={item.value} type="button" onClick={() => navigateToStep(item.value)} className="flex flex-col items-center gap-2 flex-1">
               <span className={`w-9 h-9 flex items-center justify-center text-sm font-bold border-2 transition-all bg-[var(--color-background)] ${
                 step >= item.value
@@ -1362,6 +1389,20 @@ export default function AdminTourProgramWizard({
                       className="w-full border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none resize-none"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-primary/60 font-label block mb-1">
+                    Ảnh minh họa tour
+                  </label>
+                  <textarea
+                    aria-label="Ảnh minh họa tour"
+                    value={form?.galleryImagesInput}
+                    onChange={e => updateForm('galleryImagesInput', e?.target?.value)}
+                    rows={3}
+                    className="w-full border border-outline-variant/50 px-4 py-3 text-sm focus:border-[var(--color-secondary)] outline-none resize-none"
+                    placeholder="Mỗi dòng một URL ảnh. Ảnh đầu tiên dùng làm ảnh đại diện tour."
+                  />
                 </div>
               </div>
             </section>
@@ -1874,7 +1915,7 @@ export default function AdminTourProgramWizard({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
                 {[
-                  { label: 'Số lượng khách dự kiến', key: 'expectedGuests' as const, unit: 'khách' },
+                  { label: 'Số lượng khách tối đa', key: 'expectedGuests' as const, unit: 'khách' },
                   { label: 'Tỷ lệ lợi nhuận mong muốn (%)', key: 'profitMargin' as const, unit: '%' },
                   { label: 'Thuế (%)', key: 'taxRate' as const, unit: '%' },
                   { label: 'Hệ số chi phí khác (%)', key: 'otherCostFactor' as const, unit: '%' },
@@ -1915,7 +1956,7 @@ export default function AdminTourProgramWizard({
                   guideUnitPrice={pricingConfig?.guideUnitPrice}
                   onGuideUnitPriceChange={value => updatePricingConfig('guideUnitPrice', value)}
                   value={pricingTableValue}
-                  onChange={setPricingTableValue}
+                  onChange={isActiveProgramEdit ? undefined : setPricingTableValue}
                   onSummaryChange={setPricingSummary}
                   onValidationChange={setPricingValidation}
                 />
@@ -1932,6 +1973,7 @@ export default function AdminTourProgramWizard({
                       <button
                         type="button"
                         onClick={() => toggleManualPrice(key)}
+                        disabled={isActiveProgramEdit}
                         className="text-secondary hover:text-primary"
                         aria-label={manualPricing[key] ? `Tự động ${editablePriceLabels[key]}` : `Sửa ${editablePriceLabels[key]}`}
                       >
@@ -1943,7 +1985,11 @@ export default function AdminTourProgramWizard({
                         <input
                           type="number"
                           value={pricingOverrides[key]}
-                          onChange={e => setPricingOverrides(prev => ({ ...prev, [key]: parseInt(e?.target?.value) || 0 }))}
+                          onChange={e => {
+                            if (isActiveProgramEdit) return;
+                            setPricingOverrides(prev => ({ ...prev, [key]: parseInt(e?.target?.value) || 0 }));
+                          }}
+                          disabled={isActiveProgramEdit}
                           className="w-full border border-outline-variant/50 px-3 py-2 text-sm text-right outline-none"
                         />
                         <p className="text-[10px] text-primary/40">Gợi ý: {formatMoney(suggestedPrices[key])}</p>
@@ -2013,7 +2059,7 @@ export default function AdminTourProgramWizard({
                 <table className="w-full min-w-[1320px]">
                   <thead>
                     <tr className="bg-[var(--color-surface)] border-b border-outline-variant/30">
-                      {['Mã tour', 'Ngày khởi hành', 'Ngày kết thúc', 'Loại ngày', 'Số khách dự kiến', 'Giá vốn', 'Giá bán', 'Lợi nhuận', 'Hạn đặt tour', 'Cùng thời điểm', 'Tạo']?.map(header => (
+                      {['Mã tour', 'Ngày khởi hành', 'Ngày kết thúc', 'Loại ngày', 'Số khách tối đa', 'Giá vốn', 'Giá bán', 'Lợi nhuận', 'Hạn đặt tour', 'Cùng thời điểm', 'Tạo']?.map(header => (
                         <th key={header} className="text-left text-[10px] uppercase tracking-widest text-primary/50 font-medium px-4 py-3 whitespace-nowrap">
                           {header}
                         </th>
@@ -2035,9 +2081,34 @@ export default function AdminTourProgramWizard({
                         <td className="px-4 py-3 text-sm whitespace-nowrap">{row?.dayType}</td>
                         <td className="px-4 py-3 text-sm">{row?.expectedGuests}</td>
                         <td className="px-4 py-3 text-sm">{formatMoney(row?.costPerAdult)}</td>
-                        <td className="px-4 py-3 text-sm">{formatMoney(row?.sellPrice)}</td>
+                        <td className="px-4 py-3 text-sm">
+                          <input
+                            type="number"
+                            min={0}
+                            value={row?.sellPrice}
+                            onChange={(event) => {
+                              const sellPrice = Number(event.target.value) || 0;
+                              setPreviewRow(row.id, {
+                                sellPrice,
+                                profitPercent: row.costPerAdult > 0
+                                  ? Number((((sellPrice - row.costPerAdult) / row.costPerAdult) * 100).toFixed(1))
+                                  : 0,
+                              });
+                            }}
+                            className="w-28 border border-outline-variant/40 px-2 py-1.5 text-right text-sm outline-none focus:border-[var(--color-secondary)]"
+                            aria-label={`Giá bán ${row?.id}`}
+                          />
+                        </td>
                         <td className="px-4 py-3 text-sm">{row?.profitPercent}%</td>
-                        <td className="px-4 py-3 text-sm whitespace-nowrap">{formatDate(row?.bookingDeadline)}</td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">
+                          <input
+                            type="date"
+                            value={row?.bookingDeadline}
+                            onChange={(event) => setPreviewRow(row.id, { bookingDeadline: event.target.value })}
+                            className="border border-outline-variant/40 px-2 py-1.5 text-sm outline-none focus:border-[var(--color-secondary)]"
+                            aria-label={`Hạn đặt tour ${row?.id}`}
+                          />
+                        </td>
                         <td className="px-4 py-3 text-xs">
                           {row?.conflictDetails?.length > 0 ? (
                             <div className="group relative inline-block">

@@ -60,7 +60,7 @@ export default function BookingDetail() {
     }
 
     let cancelled = false;
-    setIsLoadingBooking(!booking);
+    setIsLoadingBooking(true);
     setBookingError('');
 
     void getBookingDetail(id, accessToken)

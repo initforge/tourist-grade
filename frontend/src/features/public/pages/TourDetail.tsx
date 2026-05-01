@@ -149,7 +149,10 @@ export default function TourDetail() {
   const activeAdultPrice = activeSchedule?.priceAdult ?? tour.price.adult;
   const galleryImages = Array.from(new Set([tour.image, ...tour.gallery].filter(Boolean)));
   const safeGalleryImages = galleryImages.length > 0 ? galleryImages : [FALLBACK_TOUR_IMAGE];
-  const secondaryImages = galleryImages.slice(1, 4);
+  const secondaryImages = Array.from({ length: 4 }, (_, index) => ({
+    src: safeGalleryImages[(index + 1) % safeGalleryImages.length],
+    galleryIndex: (index + 1) % safeGalleryImages.length,
+  }));
   const reviewItems = tour.reviews ?? [];
   const useFallbackImage = (event: React.SyntheticEvent<HTMLImageElement>) => {
     if (event.currentTarget.src !== FALLBACK_TOUR_IMAGE) {
@@ -241,7 +244,7 @@ export default function TourDetail() {
     <div className="public-page">
       <main className="public-container public-hero pb-16 md:pb-20">
         <section className="mb-5 md:mb-6">
-          <div className="grid gap-3 lg:grid-cols-2 lg:h-[460px]">
+          <div className="grid gap-3 lg:grid-cols-2 lg:h-[460px] overflow-hidden rounded-sm">
             <button type="button" onClick={() => setActiveImageIndex(0)} className="public-media-frame relative aspect-[16/11] md:aspect-[16/10] lg:aspect-auto lg:h-full group text-left overflow-hidden rounded-sm">
               <img alt={tour.title} className="w-full h-full object-cover" src={safeGalleryImages[0]} onError={useFallbackImage} />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all" />
@@ -250,15 +253,15 @@ export default function TourDetail() {
               </div>
             </button>
 
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-2 lg:h-full auto-rows-fr">
-              {(secondaryImages.length > 0 ? secondaryImages : [safeGalleryImages[0]]).map((image, imageIndex) => (
+            <div className="grid h-full min-h-0 grid-cols-2 grid-rows-2 gap-3 overflow-hidden">
+              {secondaryImages.map((image, imageIndex) => (
                 <button
-                  key={`${image}-${imageIndex}`}
+                  key={`${image.src}-${imageIndex}`}
                   type="button"
-                  onClick={() => setActiveImageIndex(imageIndex + 1)}
-                  className={`public-media-frame overflow-hidden rounded-sm ${imageIndex === 0 ? 'aspect-[16/10] md:col-span-2 lg:aspect-auto' : 'aspect-[4/3] lg:aspect-auto'}`}
+                  onClick={() => setActiveImageIndex(image.galleryIndex)}
+                  className="public-media-frame min-h-0 overflow-hidden rounded-sm"
                 >
-                  <img alt={`${tour.title} ${imageIndex + 2}`} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" src={image} onError={useFallbackImage} />
+                  <img alt={`${tour.title} ${imageIndex + 2}`} className="h-full w-full object-cover grayscale transition-all duration-500 hover:scale-105 hover:grayscale-0" src={image.src} onError={useFallbackImage} />
                 </button>
               ))}
             </div>
@@ -390,13 +393,13 @@ export default function TourDetail() {
                         <button
                           type="button"
                           onClick={() => toggleItineraryDay(day.day)}
-                          className="w-full flex items-center justify-between gap-4 text-left"
+                          className="w-full flex items-start justify-between gap-4 text-left"
                         >
                           <h4 className="font-headline text-base md:text-lg font-bold leading-snug text-primary tracking-wide">
                             Ngày {String(day.day).padStart(2, '0')}: {day.title.toUpperCase()}
                             {meals && <span className="font-sans text-sm font-semibold normal-case"> (Ăn {meals})</span>}
                           </h4>
-                          <span className={`material-symbols-outlined shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-full bg-sky-50 text-sky-600 leading-none transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}>
+                          <span className={`material-symbols-outlined mt-0.5 shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-surface)] text-[var(--color-secondary)] leading-none transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}>
                             keyboard_arrow_down
                           </span>
                         </button>

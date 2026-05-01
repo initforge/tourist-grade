@@ -68,6 +68,16 @@ type CancellationWindow = {
   provinces: string[];
 };
 
+type PendingApprovalGroup = {
+  id: string;
+  code: string;
+  programName: string;
+  program?: TourProgram;
+  instances: TourInstance[];
+  nearestDeparture: string;
+  createdAt: string;
+};
+
 const CANCELLATION_SCOPE_OCCASION = 'TOUR_CANCELLATION_SCOPE';
 const REQUEST_PIPELINE_STATUSES = new Set(['dang_mo_ban']);
 const REQUEST_STATUSES = new Set(['cho_duyet_ban', 'yeu_cau_chinh_sua', 'dang_mo_ban', 'tu_choi_ban']);
@@ -161,7 +171,7 @@ function getNextDepartureAfter(program: TourProgram, afterDate?: string) {
   const anchor = parseDateKey(afterDate);
   if (!anchor) return '';
 
-  if ((program.selectedDates?.length ?? 0) > 0) {
+  if (program.tourType === 'mua_le' && (program.selectedDates?.length ?? 0) > 0) {
     const futureHolidayDate = [...(program.selectedDates ?? [])]
       .sort((left, right) => left.localeCompare(right))
       .find(date => date > (afterDate ?? ''));
@@ -279,9 +289,10 @@ function buildPreviewRows(
 ) {
   const dates = buildDepartureDates(program, startDate, endDate);
   const rowsByDeparture = new Map(existingRows.map(row => [row.departureDate, row]));
+  const draftRowsByDeparture = new Map((program.draftPreviewRows ?? []).map(row => [row.departureDate, row]));
 
   return dates.map((departureDate, index) => {
-    const previousRow = rowsByDeparture.get(departureDate);
+    const previousRow = rowsByDeparture.get(departureDate) ?? draftRowsByDeparture.get(departureDate);
     const endDateKey = addDays(departureDate, Math.max(0, program.duration.days - 1));
     const conflictDetails = buildConflictDetails(instances, program.id, departureDate, endDateKey);
     const blockedReason = getCancellationBlockReason(program, departureDate, endDateKey, cancellationWindows);
@@ -304,7 +315,7 @@ function buildPreviewRows(
               return date.getDay() === 0 || date.getDay() === 6 ? 'Cuối tuần' : 'Ngày thường';
             })()
       ),
-      expectedGuests: previousRow?.expectedGuests ?? Math.max(1, program.pricingConfig.minParticipants ?? 1),
+      expectedGuests: previousRow?.expectedGuests ?? Math.max(1, program.pricingConfig.maxGuests ?? program.pricingConfig.minParticipants ?? 1),
       costPerAdult,
       sellPrice,
       profitPercent,
@@ -478,7 +489,7 @@ export default function TourGenerationRules() {
     const todayKey = toDateKey(new Date());
 
     return tourPrograms
-      .filter(program => program.status === 'active')
+      .filter(program => program.status === 'active' && program.tourType === 'quanh_nam')
       .map(program => {
         const requestRows = allInstances
           .filter(instance => instance.programId === program.id && REQUEST_STATUSES.has(instance.status) && instance.departureDate >= todayKey)
@@ -540,6 +551,36 @@ export default function TourGenerationRules() {
     [localRequests],
   );
 
+  const pendingApprovalGroups = useMemo<PendingApprovalGroup[]>(() => {
+    const groups = new Map<string, PendingApprovalGroup>();
+    pendingApprovalItems.forEach((instance) => {
+      const program = tourPrograms.find(item => item.id === instance.programId);
+      const groupId = instance.saleRequest?.id ?? instance.id;
+      const existing = groups.get(groupId);
+      const createdAt = instance.saleRequest?.createdAt ?? instance.createdAt;
+      if (!existing) {
+        groups.set(groupId, {
+          id: groupId,
+          code: instance.saleRequest?.code ?? instance.id,
+          programName: instance.programName,
+          program,
+          instances: [instance],
+          nearestDeparture: instance.departureDate,
+          createdAt,
+        });
+        return;
+      }
+      existing.instances.push(instance);
+      if (instance.departureDate < existing.nearestDeparture) {
+        existing.nearestDeparture = instance.departureDate;
+      }
+      if (createdAt < existing.createdAt) {
+        existing.createdAt = createdAt;
+      }
+    });
+    return [...groups.values()].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  }, [pendingApprovalItems, tourPrograms]);
+
   const filteredActivePrograms = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase();
     if (!keyword) return activePrograms;
@@ -552,20 +593,20 @@ export default function TourGenerationRules() {
     ].join(' ').toLowerCase().includes(keyword));
   }, [activePrograms, searchQuery]);
 
-  const filteredPendingApprovalInstances = useMemo(() => {
+  const filteredPendingApprovalGroups = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase();
-    if (!keyword) return pendingApprovalItems;
-    return pendingApprovalItems.filter(instance => {
-      const program = tourPrograms.find(item => item.id === instance.programId);
+    if (!keyword) return pendingApprovalGroups;
+    return pendingApprovalGroups.filter(group => {
       return [
-        instance.id,
-        instance.programName,
-        instance.departureDate,
-        instance.createdAt,
-        program?.tourType,
+        group.id,
+        group.code,
+        group.programName,
+        group.nearestDeparture,
+        group.createdAt,
+        group.program?.tourType,
       ].join(' ').toLowerCase().includes(keyword);
     });
-  }, [pendingApprovalItems, searchQuery, tourPrograms]);
+  }, [pendingApprovalGroups, searchQuery]);
 
   const selectedCount = editor?.rows.filter(row => row.checked && !row.blockedReason).length ?? 0;
   const blockedCount = editor?.rows.filter(row => row.blockedReason).length ?? 0;
@@ -591,7 +632,7 @@ export default function TourGenerationRules() {
         coveragePreviousStatus: currentStatus,
         coverageWarningDate: shouldSetWarningDate
           ? (row.program.coverageWarningDate ?? toDateKey(new Date()))
-          : row.program.coverageWarningDate,
+          : null,
       };
 
       void patchTourProgram(token, row.program.id, payload)
@@ -706,9 +747,9 @@ export default function TourGenerationRules() {
             }`}
           >
             Chờ duyệt bán
-            {pendingApprovalItems.length > 0 && (
+            {pendingApprovalGroups.length > 0 && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-mono">
-                {pendingApprovalItems.length}
+                {pendingApprovalGroups.length}
               </span>
             )}
           </button>
@@ -788,7 +829,7 @@ export default function TourGenerationRules() {
 
         {subTab === 'cho_duyet_ban' && (
           <div className="bg-white border-x border-b border-outline-variant/30 overflow-hidden">
-            {filteredPendingApprovalInstances.length === 0 ? (
+            {filteredPendingApprovalGroups.length === 0 ? (
               <div className="py-20 text-center">
                 <span className="material-symbols-outlined text-5xl text-primary/10 block mb-3">inbox</span>
                 <p className="text-sm text-primary/40">Không có tour nào chờ duyệt bán</p>
@@ -806,12 +847,13 @@ export default function TourGenerationRules() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredPendingApprovalInstances.map((instance, index) => {
-                      const program = tourPrograms.find(item => item.id === instance.programId);
+                    {filteredPendingApprovalGroups.map((group, index) => {
+                      const instance = group.instances[0];
+                      const program = group.program;
                       return (
-                        <tr key={instance.id} className={`border-b border-outline-variant/20 last:border-0 ${index % 2 === 0 ? 'bg-white' : 'bg-[var(--color-surface)]/30'}`}>
-                          <td className="px-5 py-4 font-mono text-xs">{instance.id}</td>
-                          <td className="px-5 py-4 text-sm font-medium">{instance.programName}</td>
+                        <tr key={group.id} className={`border-b border-outline-variant/20 last:border-0 ${index % 2 === 0 ? 'bg-white' : 'bg-[var(--color-surface)]/30'}`}>
+                          <td className="px-5 py-4 font-mono text-xs">{group.code}</td>
+                          <td className="px-5 py-4 text-sm font-medium">{group.programName}</td>
                           <td className="px-5 py-4 text-xs">
                             <span className={`text-[10px] px-2 py-0.5 font-label uppercase tracking-wider ${
                               program?.tourType === 'mua_le' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
@@ -819,9 +861,9 @@ export default function TourGenerationRules() {
                               {program?.tourType === 'mua_le' ? 'Mùa lễ' : 'Quanh năm'}
                             </span>
                           </td>
-                          <td className="px-5 py-4 text-sm">{formatDate(instance.departureDate)}</td>
-                          <td className="px-5 py-4 text-sm">1 tour</td>
-                          <td className="px-5 py-4 text-sm">{formatDate(instance.createdAt)}</td>
+                          <td className="px-5 py-4 text-sm">{formatDate(group.nearestDeparture)}</td>
+                          <td className="px-5 py-4 text-sm">{group.instances.length} tour</td>
+                          <td className="px-5 py-4 text-sm">{formatDate(group.createdAt)}</td>
                           <td className="px-5 py-4">
                             <div className="flex justify-end gap-2">
                               <button onClick={() => setViewModal(instance)} className="px-3 py-1.5 border border-outline-variant/50 text-primary/60 text-[10px] uppercase tracking-wider hover:bg-surface transition-colors">

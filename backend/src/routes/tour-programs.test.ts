@@ -16,6 +16,9 @@ const prismaMock = {
   tourInstance: {
     createMany: vi.fn(),
   },
+  specialDay: {
+    findMany: vi.fn(),
+  },
 };
 
 vi.mock('../lib/prisma.js', () => ({
@@ -277,6 +280,7 @@ describe('tour-program routes', () => {
       status: 'ACTIVE',
       publicContentJson: { approvalStatus: 'approved' },
     }));
+    prismaMock.specialDay.findMany.mockResolvedValue([]);
     prismaMock.tourInstance.createMany.mockResolvedValue({ count: 2 });
 
     const response = await request(createTestApp())
@@ -287,7 +291,7 @@ describe('tour-program routes', () => {
     expect(response.status).toBe(200);
     expect(prismaMock.tourInstance.createMany).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.arrayContaining([
-        expect.objectContaining({ code: 'REQ-TP001-2026-08-01', status: 'CHO_DUYET_BAN' }),
+        expect.objectContaining({ code: 'REQ-TP001-2026-08-01', status: 'DANG_MO_BAN' }),
         expect.objectContaining({ code: 'REQ-TP001-2026-08-08', status: 'TU_CHOI_BAN' }),
       ]),
       skipDuplicates: true,

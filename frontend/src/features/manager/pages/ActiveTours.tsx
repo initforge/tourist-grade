@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { message } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { TOUR_INSTANCE_STATUS_LABEL } from '@entities/tour-program/data/tourProgram';
 import type { TourInstance, TourProgram } from '@entities/tour-program/data/tourProgram';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
@@ -460,6 +460,7 @@ function SelectedToursActionPopup({
 
 export default function AdminActiveTours() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const token = useAuthStore(state => state.accessToken);
   const storeInstances = useAppDataStore(state => state.tourInstances);
   const bookings = useAppDataStore(state => state.bookings);
@@ -468,7 +469,9 @@ export default function AdminActiveTours() {
   const specialDays = useAppDataStore(state => state.specialDays);
   const setSpecialDays = useAppDataStore(state => state.setSpecialDays);
   const upsertTourInstance = useAppDataStore(state => state.upsertTourInstance);
-  const [activeTab, setActiveTab] = useState<TourTab>('pending_sell');
+  const tabParam = searchParams.get('tab') as TourTab | null;
+  const initialTab = tabParam && TABS.some((tab) => tab.key === tabParam) ? tabParam : 'pending_sell';
+  const [activeTab, setActiveTabState] = useState<TourTab>(initialTab);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showRejectPopup, setShowRejectPopup] = useState<{ id: string; name: string; mode: 'reject' | 'request_edit' } | null>(null);
   const [showApprovePopup, setShowApprovePopup] = useState<string | null>(null);
@@ -478,6 +481,13 @@ export default function AdminActiveTours() {
   const [instances, setInstances] = useState<TourInstance[]>(storeInstances);
   const guestCounts = Object.fromEntries(instances.map(instance => [instance.id, countConfirmedGuestsForInstance(instance, bookings)])) as Record<string, number>;
   const provinceOptions = provinces.length > 0 ? provinces.map(province => province.name) : ['Hà Nội', 'Quảng Ninh', 'Ninh Bình', 'Đà Nẵng', 'Hồ Chí Minh'];
+  const setActiveTab = (tab: TourTab) => {
+    setActiveTabState(tab);
+    const next = new URLSearchParams(searchParams);
+    if (tab === 'pending_sell') next.delete('tab');
+    else next.set('tab', tab);
+    setSearchParams(next, { replace: true });
+  };
   const pendingSellGroups = useMemo<PendingSellGroup[]>(() => {
     const byRequest = new Map<string, TourInstance[]>();
     instances

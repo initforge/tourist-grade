@@ -83,7 +83,7 @@ export async function expireOverdueDepositBookings(prisma: PrismaClient, now = n
       where: { id: booking.id },
       data: {
         status: 'CANCELLED' satisfies BookingStatus,
-        refundStatus: paidAmount > 0 ? ('PENDING' satisfies RefundStatus) : ('NOT_REQUIRED' satisfies RefundStatus),
+        refundStatus: 'NOT_REQUIRED' satisfies RefundStatus,
         cancellationReason: OVERDUE_DEPOSIT_CANCEL_REASON,
         cancelledAt: now,
       },
@@ -113,12 +113,16 @@ export async function autoConfirmOverdueCancelRequests(prisma: PrismaClient, now
     await prisma.booking.update({
       where: { id: booking.id },
       data: {
-        status: 'CANCELLED' satisfies BookingStatus,
-        cancelledConfirmedAt: now,
+        status: 'CONFIRMED' satisfies BookingStatus,
+        refundStatus: 'NONE' satisfies RefundStatus,
+        cancellationReason: null,
+        cancelledAt: null,
+        refundAmount: null,
         payloadJson: {
           ...existingPayload,
-          cancelledConfirmedBy: AUTO_CANCEL_CONFIRM_ACTOR,
-          cancelledConfirmedAt: now.toISOString(),
+          cancelRequestAutoResolvedBy: AUTO_CANCEL_CONFIRM_ACTOR,
+          cancelRequestAutoResolvedAt: now.toISOString(),
+          cancelRequestAutoResolvedAction: 'returned_to_confirmed',
         },
       },
     });

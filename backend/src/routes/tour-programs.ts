@@ -38,7 +38,8 @@ const pricingConfigSchema = z.object({
   sellPriceAdult: z.number(),
   sellPriceChild: z.number(),
   sellPriceInfant: z.number(),
-  minParticipants: z.number().int().min(1),
+  minParticipants: z.number().int().min(1).default(10),
+  maxGuests: z.number().int().min(1).optional(),
   guideUnitPrice: z.number().optional(),
 });
 
@@ -58,6 +59,8 @@ const tourProgramSchema = z.object({
   routeDescription: z.string().default(''),
   priceIncludes: z.string().default(''),
   priceExcludes: z.string().default(''),
+  image: z.string().optional().nullable(),
+  gallery: z.array(z.string()).optional(),
   holiday: z.string().optional().nullable(),
   selectedDates: z.array(z.string()).optional(),
   weekdays: z.array(z.string()).optional(),
@@ -219,6 +222,9 @@ export function createTourProgramsRouter() {
 
     const publicContent = getProgramPublicContent(existing);
     const now = new Date().toISOString();
+    const cancellationWindows = parseCancellationWindows(await prisma.specialDay.findMany({
+      where: { occasion: CANCELLATION_SCOPE_OCCASION },
+    }));
     const updated = await prisma.$transaction(async (tx) => {
       const approvedProgram = await tx.tourProgram.update({
         where: { id: existing.id },
@@ -234,7 +240,7 @@ export function createTourProgramsRouter() {
         },
       });
 
-      const instanceRows = buildApprovedProgramInstances(existing, req.auth!.sub);
+      const instanceRows = buildApprovedProgramInstances(existing, req.auth!.sub, cancellationWindows);
       if (instanceRows.length > 0) {
         await tx.tourInstance.createMany({
           data: instanceRows,
@@ -307,6 +313,7 @@ function buildProgramPublicContent(
   input: Partial<z.infer<typeof tourProgramSchema>>,
   existing: Record<string, unknown> = {},
 ) {
+  const hasOwn = (key: keyof z.infer<typeof tourProgramSchema>) => Object.prototype.hasOwnProperty.call(input, key);
   return {
     ...existing,
     selectedDates: input.selectedDates ?? existing.selectedDates ?? [],
@@ -322,11 +329,13 @@ function buildProgramPublicContent(
     submittedAt: input.submittedAt ?? existing.submittedAt ?? null,
     approvedAt: input.approvedAt ?? existing.approvedAt ?? null,
     rejectedAt: input.rejectedAt ?? existing.rejectedAt ?? null,
-    coverageWarningStatus: input.coverageWarningStatus ?? existing.coverageWarningStatus ?? null,
-    coverageWarningDate: input.coverageWarningDate ?? existing.coverageWarningDate ?? null,
-    coveragePreviousStatus: input.coveragePreviousStatus ?? existing.coveragePreviousStatus ?? null,
+    coverageWarningStatus: hasOwn('coverageWarningStatus') ? (input.coverageWarningStatus ?? null) : (existing.coverageWarningStatus ?? null),
+    coverageWarningDate: hasOwn('coverageWarningDate') ? (input.coverageWarningDate ?? null) : (existing.coverageWarningDate ?? null),
+    coveragePreviousStatus: hasOwn('coveragePreviousStatus') ? (input.coveragePreviousStatus ?? null) : (existing.coveragePreviousStatus ?? null),
     priceIncludes: input.priceIncludes ?? existing.priceIncludes ?? '',
     priceExcludes: input.priceExcludes ?? existing.priceExcludes ?? '',
+    image: hasOwn('image') ? (input.image ?? null) : (existing.image ?? null),
+    gallery: input.gallery ?? existing.gallery ?? [],
   };
 }
 
@@ -427,9 +436,80 @@ function toNumber(value: unknown, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+const CANCELLATION_SCOPE_OCCASION = 'TOUR_CANCELLATION_SCOPE';
+
+type CancellationWindow = {
+  startDate: string;
+  endDate: string;
+  provinces: string[];
+};
+
+function toDateKey(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+function addDaysKey(value: string, offset: number) {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + offset);
+  return toDateKey(date);
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .trim();
+}
+
+function parseCancellationWindows(days: Array<{ occasion: string; startDate: Date; endDate: Date; note: string | null }>): CancellationWindow[] {
+  return days
+    .filter((day) => day.occasion === CANCELLATION_SCOPE_OCCASION)
+    .map((day) => {
+      try {
+        const meta = JSON.parse(day.note || '{}') as { provinces?: unknown };
+        return {
+          startDate: toDateKey(day.startDate),
+          endDate: toDateKey(day.endDate),
+          provinces: Array.isArray(meta.provinces) ? meta.provinces.filter((item): item is string => typeof item === 'string') : [],
+        };
+      } catch {
+        return {
+          startDate: toDateKey(day.startDate),
+          endDate: toDateKey(day.endDate),
+          provinces: [],
+        };
+      }
+    })
+    .filter((window) => window.provinces.length > 0);
+}
+
+function isBlockedByCancellationWindow(
+  program: Prisma.TourProgramGetPayload<Record<string, never>>,
+  departureDate: string,
+  endDate: string,
+  windows: CancellationWindow[],
+) {
+  const departurePoint = normalizeSearchText(program.departurePoint);
+  const sightseeing = Array.isArray(program.sightseeingSpots)
+    ? program.sightseeingSpots.filter((item): item is string => typeof item === 'string').map(normalizeSearchText)
+    : [];
+  return windows.some((window) => {
+    const overlaps = departureDate <= window.endDate && endDate >= window.startDate;
+    if (!overlaps) return false;
+
+    return window.provinces.some((province) => {
+      const normalizedProvince = normalizeSearchText(province);
+      return departurePoint.includes(normalizedProvince)
+        || sightseeing.some((spot) => spot.includes(normalizedProvince));
+    });
+  });
+}
+
 function buildApprovedProgramInstances(
   program: Prisma.TourProgramGetPayload<Record<string, never>>,
   actorId: string,
+  cancellationWindows: CancellationWindow[] = [],
 ): Prisma.TourInstanceCreateManyInput[] {
   const publicContent = getProgramPublicContent(program);
   const rows = Array.isArray(publicContent.draftPreviewRows)
@@ -437,16 +517,20 @@ function buildApprovedProgramInstances(
     : [];
   const pricingPayload = getProgramPricingPayload(program);
   const pricingConfig = ((pricingPayload.pricingConfig as Record<string, unknown> | undefined) ?? pricingPayload);
-  const minParticipants = Math.max(1, toNumber(pricingConfig.minParticipants, 1));
+  const minParticipants = Math.max(1, toNumber(pricingConfig.minParticipants, 10));
 
   return rows
+    .filter((row) => {
+      const endDate = addDaysKey(row.departureDate, Math.max(0, program.durationDays - 1));
+      return !isBlockedByCancellationWindow(program, row.departureDate, endDate, cancellationWindows);
+    })
     .map((row): Prisma.TourInstanceCreateManyInput => ({
       code: `REQ-${program.code}-${row.departureDate}`,
       programId: program.id,
       programNameSnapshot: program.name,
       departureDate: new Date(row.departureDate),
       bookingDeadlineAt: new Date(row.bookingDeadline),
-      status: row.checked ? 'CHO_DUYET_BAN' : 'TU_CHOI_BAN',
+      status: row.checked ? 'DANG_MO_BAN' : 'TU_CHOI_BAN',
       departurePoint: program.departurePoint,
       arrivalPoint: program.arrivalPoint,
       sightseeingSpots: program.sightseeingSpots as Prisma.InputJsonValue,

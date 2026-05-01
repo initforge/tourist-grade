@@ -93,9 +93,9 @@ const createPrice = (
 
 function createHotelServices(): SupplierServiceLine[] {
   return [
-    { id: 'hotel-single', name: 'Phòng đơn', description: '', unit: 'Phòng', quantity: 1, prices: [createPrice('hotel-single-p1', 1200000)] },
-    { id: 'hotel-double', name: 'Phòng đôi', description: '', unit: 'Phòng', quantity: 1, prices: [createPrice('hotel-double-p1', 1300000)] },
-    { id: 'hotel-triple', name: 'Phòng ba', description: '', unit: 'Phòng', quantity: 1, prices: [createPrice('hotel-triple-p1', 1500000)] },
+    { id: 'hotel-single', name: 'Phòng đơn', description: '', unit: 'Phòng', quantity: 1, prices: [createPrice('hotel-single-p1', 0)] },
+    { id: 'hotel-double', name: 'Phòng đôi', description: '', unit: 'Phòng', quantity: 1, prices: [createPrice('hotel-double-p1', 0)] },
+    { id: 'hotel-triple', name: 'Phòng ba', description: '', unit: 'Phòng', quantity: 1, prices: [createPrice('hotel-triple-p1', 0)] },
   ];
 }
 

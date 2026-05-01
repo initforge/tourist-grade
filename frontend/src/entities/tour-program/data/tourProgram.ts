@@ -16,6 +16,8 @@ export interface TourProgram {
   routeDescription?: string;
   priceIncludes?: string;
   priceExcludes?: string;
+  image?: string;
+  gallery?: string[];
   holiday?: string;
   selectedDates?: string[];
   weekdays?: string[];
@@ -40,7 +42,7 @@ export interface TourProgram {
   approvedAt?: string;
   rejectedAt?: string;
   coverageWarningStatus?: 'ok' | 'warning';
-  coverageWarningDate?: string;
+  coverageWarningDate?: string | null;
   coveragePreviousStatus?: 'ok' | 'warning';
 }
 
@@ -259,6 +261,7 @@ export interface PricingConfig {
   sellPriceChild: number;
   sellPriceInfant: number;
   minParticipants: number;
+  maxGuests?: number;
   guideUnitPrice?: number;
 }
 

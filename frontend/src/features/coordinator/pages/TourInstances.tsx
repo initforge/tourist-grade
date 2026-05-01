@@ -203,8 +203,15 @@ export default function TourInstances() {
   const getStatusLabel = (instance: TourInstance, tab: TabKey) => {
     if (tab === 'phan_cong_hdv') return instance.assignedGuide ? 'Đã phân công' : 'Phân công HDV';
     if (tab === 'dang_khoi_hanh') return 'Đang khởi hành';
+    if (tab === 'cho_du_toan' && instance.cancelReason) return 'Yêu cầu sửa';
     return TOUR_INSTANCE_STATUS_LABEL[instance.status];
   };
+
+  const getStatusStyle = (instance: TourInstance, tab: TabKey) => (
+    tab === 'cho_du_toan' && instance.cancelReason
+      ? TOUR_INSTANCE_STATUS_STYLE.yeu_cau_chinh_sua
+      : TOUR_INSTANCE_STATUS_STYLE[instance.status]
+  );
 
   const renderCell = (instance: TourInstance, col: string, tab: TabKey) => {
     if (col === '') return '';
@@ -250,7 +257,7 @@ export default function TourInstances() {
     if (col === 'Người tạo') return <span className="text-xs text-primary/50">{instance.createdBy}</span>;
     if (col === 'Trạng thái') {
       return (
-        <span className={`border px-2 py-1 text-[10px] font-label uppercase tracking-wider ${TOUR_INSTANCE_STATUS_STYLE[instance.status]}`}>
+        <span className={`border px-2 py-1 text-[10px] font-label uppercase tracking-wider ${getStatusStyle(instance, tab)}`}>
           {getStatusLabel(instance, tab)}
         </span>
       );

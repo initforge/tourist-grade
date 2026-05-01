@@ -56,7 +56,7 @@ export function PublicLayout() {
 
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-[var(--color-surface)] shadow-sm">
         <div className="public-container min-h-[72px] md:h-20 py-3 md:py-0 flex items-center justify-between gap-4">
-          <Link to="/" className="text-xl md:text-2xl font-serif font-semibold tracking-tighter text-[var(--color-tertiary)] flex items-center gap-2 shrink-0">
+          <Link to="/" className="public-brand-link text-xl md:text-2xl font-serif font-semibold tracking-tighter flex items-center gap-2 shrink-0">
             <svg className="w-7 h-7 md:w-8 md:h-8" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2L2 22h20L12 2zm0 3.8L18.4 19H5.6L12 5.8z" />
             </svg>

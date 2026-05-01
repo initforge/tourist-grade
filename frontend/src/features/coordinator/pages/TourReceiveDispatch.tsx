@@ -343,7 +343,7 @@ export default function TourReceiveDispatch() {
                 <table className="w-full min-w-[1080px] text-left">
                   <thead>
                     <tr className="bg-[var(--color-surface)] border-b border-outline-variant/30">
-                      {['STT', 'Khoản mục', 'Đơn vị', 'Đối tượng', 'Số lượng', 'Đêm/Lượt/Bữa', 'Đơn giá áp dụng', 'Thành tiền', 'Thao tác']?.map(header => (
+                      {['STT', 'Khoản mục', 'Nhà cung cấp', 'Đơn vị', 'Đối tượng', 'Số lượng', 'Đêm/Lượt/Bữa', 'Đơn giá áp dụng', 'Thành tiền', 'Thao tác']?.map(header => (
                         <th key={header} className="px-4 py-3 text-[10px] uppercase tracking-widest text-primary/50 font-medium">{header}</th>
                       ))}
                     </tr>
@@ -352,13 +352,14 @@ export default function TourReceiveDispatch() {
                     {groupedEstimateRows?.map(category => (
                       <Fragment key={category?.categoryId}>
                         <tr key={`${category?.categoryId}-header`} className="bg-blue-50 border-t border-outline-variant/20">
-                          <td colSpan={9} className="px-4 py-2 font-bold text-primary">{category?.categoryId}. {category?.categoryName}</td>
+                          <td colSpan={10} className="px-4 py-2 font-bold text-primary">{category?.categoryId}. {category?.categoryName}</td>
                         </tr>
                         {category?.rows?.map((row, index) => (
                           <Fragment key={row?.id}>
                             <tr key={row?.id} className="border-t border-outline-variant/15">
                               <td className="px-4 py-3 text-primary/50">{index + 1}</td>
                               <td className="px-4 py-3 font-medium">{row?.itemName}</td>
+                              <td className="px-4 py-3"><SupplierContactLink supplierName={row?.supplierName} suppliers={suppliers} /></td>
                               <td className="px-4 py-3">{row?.unit}</td>
                               <td className="px-4 py-3">{getTargetLabel(row?.itemName)}</td>
                               <td className="px-4 py-3">{row?.quantity}</td>
@@ -379,7 +380,7 @@ export default function TourReceiveDispatch() {
                             </tr>
                             {expandedItems[row?.id] && (
                               <tr key={`${row?.id}-price`} className="bg-[#FBFBFB] border-t border-outline-variant/15">
-                                <td colSpan={9} className="px-4 py-4">
+                                <td colSpan={10} className="px-4 py-4">
                                   <div className="border border-outline-variant/25 bg-white">
                                     <p className="px-4 py-3 border-b border-outline-variant/20 text-[10px] uppercase tracking-widest text-primary/50 font-bold">Bảng giá đang áp dụng</p>
                                     <table className="w-full text-sm">

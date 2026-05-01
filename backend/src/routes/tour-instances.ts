@@ -467,7 +467,7 @@ export function createTourInstancesRouter() {
           where: { id: booking.id },
           data: {
             status: 'CANCELLED',
-            refundStatus: 'NOT_REQUIRED',
+            refundStatus: refundAmount > 0 ? 'PENDING' : 'REFUNDED',
             cancellationReason: normalizedReason,
             cancelledAt: now,
             refundAmount,
@@ -663,9 +663,5 @@ function normalizeManagerCancellationReason(reason: string) {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
 
-  if (normalized.includes('bat kha')) {
-    return 'Bất khả kháng';
-  }
-
-  return 'Không đủ điều kiện khởi hành';
+  return 'Bất khả kháng';
 }

@@ -7,6 +7,10 @@
   --color-tertiary: #2C5545;
   --color-background: #FBFBFB;
   --color-surface: #F3F3F3;
+  --color-surface-container-low: #F7F4EF;
+  --color-outline: #7B7068;
+  --color-outline-variant: #D0C5AF;
+  --color-on-secondary: #2A2421;
   --color-error: #ba1a1a;
   
   --font-sans: "Inter", system-ui, sans-serif;
@@ -52,6 +56,29 @@
 @layer components {
   .public-page {
     background: var(--color-background);
+  }
+
+  .public-page a {
+    color: inherit;
+  }
+
+  .public-page a:focus-visible,
+  .public-page button:focus-visible {
+    outline: 2px solid var(--color-secondary);
+    outline-offset: 3px;
+  }
+
+  .public-page a.public-brand-link {
+    color: var(--color-tertiary);
+  }
+
+  .public-page header nav a {
+    color: var(--color-primary);
+  }
+
+  .public-page header nav a:hover,
+  .public-page a.public-brand-link:hover {
+    color: var(--color-tertiary);
   }
 
   .public-container {
@@ -107,4 +134,27 @@
   .public-container {
     padding-inline: 2rem;
   }
+}
+
+.public-page a {
+  color: inherit !important;
+}
+
+.public-page a:focus-visible,
+.public-page button:focus-visible {
+  outline: 2px solid var(--color-secondary) !important;
+  outline-offset: 3px;
+}
+
+.public-page a.public-brand-link {
+  color: var(--color-tertiary) !important;
+}
+
+.public-page header nav a {
+  color: var(--color-primary) !important;
+}
+
+.public-page header nav a:hover,
+.public-page a.public-brand-link:hover {
+  color: var(--color-tertiary) !important;
 }

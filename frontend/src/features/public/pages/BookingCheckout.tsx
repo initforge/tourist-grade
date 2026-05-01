@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { Booking, Passenger } from '@entities/booking/data/bookings';
 import type { DepartureScheduleEntry } from '@entities/tour/data/tours';
@@ -50,6 +50,8 @@ type RoomCounts = {
   double: number;
   triple: number;
 };
+
+type PendingDraftRestore = Record<string, unknown> | null;
 
 const LEGACY_BOOKING_DRAFT_STORAGE_KEY = 'travela-public-booking-draft';
 const BOOKING_DRAFT_STORAGE_PREFIX = 'travela-public-booking-draft';
@@ -200,6 +202,11 @@ export default function BookingCheckout() {
   const bookings = useAppDataStore((state) => state.bookings);
   const upsertBooking = useAppDataStore((state) => state.upsertBooking);
   const upsertReview = useAppDataStore((state) => state.upsertReview);
+  const bookingsRef = useRef(bookings);
+
+  useEffect(() => {
+    bookingsRef.current = bookings;
+  }, [bookings]);
 
   const tour = tours.find((item) => item.slug === slug);
   const schedule: DepartureScheduleEntry | undefined = tour?.departureSchedule.find((item) => matchesScheduleId(item, scheduleId));
@@ -229,6 +236,10 @@ export default function BookingCheckout() {
   const [contactErrors, setContactErrors] = useState<ContactErrors>({});
   const [passengerErrors, setPassengerErrors] = useState<PassengerErrors>({});
   const [countError, setCountError] = useState('');
+  const [pendingDraftRestore, setPendingDraftRestore] = useState<PendingDraftRestore>(null);
+  const pendingDraftBooking = (pendingDraftRestore?.booking as Booking | null | undefined) ?? null;
+  const pendingDraftBookingCode = pendingDraftBooking?.bookingCode ?? '';
+  const pendingDraftContact = pendingDraftBooking?.contactInfo.email || pendingDraftBooking?.contactInfo.phone || '';
 
   const effectiveBooking = createdBooking ?? (bookingIdParam ? bookings.find((item) => item.id === bookingIdParam) ?? null : null);
   const checkoutBooking = createdBooking ?? effectiveBooking;
@@ -261,8 +272,49 @@ export default function BookingCheckout() {
     clearDraftFromStorage();
   }, []);
 
+  const restoreDraft = useCallback((draft: Record<string, unknown>) => {
+    const draftBooking = (draft.booking as Booking | null | undefined) ?? null;
+    const draftStep = (draft.activeStep as CheckoutStep | undefined) ?? 0;
+    if (
+      draftStep === 2
+      || isSuccessfulPaymentStatus(draftBooking?.paymentStatus)
+      || isCancelledBookingStatus(draftBooking?.status)
+      || !draftBooking
+      || draftStep === 0
+    ) {
+      clearDraftFromStorage(draftStorageKey);
+      setPendingDraftRestore(null);
+      return;
+    }
+
+    setContact((current) => ({
+      ...current,
+      ...(draft.contact as ContactState | undefined),
+    }));
+    setCounts((draft.counts as Counts | undefined) ?? { adult: 1, child: 0, infant: 0 });
+    setPassengers(buildPassengers((draft.counts as Counts | undefined) ?? { adult: 1, child: 0, infant: 0 }, (draft.passengers as Passenger[] | undefined) ?? []));
+    setRoomCounts((draft.roomCounts as RoomCounts | undefined) ?? { single: 0, double: 1, triple: 0 });
+    setPromoCode(String(draft.promoCode ?? ''));
+    setDiscountAmount(Number(draft.discountAmount ?? 0));
+    setPaymentMethod((draft.paymentMethod as 'bank' | 'card' | undefined) ?? 'bank');
+    setPaymentRatio((draft.paymentRatio as 'deposit' | 'full' | undefined) ?? (isDepositDisabled ? 'full' : 'full'));
+    setCreatedBooking(draftBooking);
+    setActiveStep(draftStep);
+    setPendingDraftRestore(null);
+  }, [draftStorageKey, isDepositDisabled]);
+
+  const startNewDraft = () => {
+    clearDraftFromStorage(draftStorageKey);
+    setPendingDraftRestore(null);
+    setCreatedBooking(null);
+    setActiveStep(0);
+  };
+
   useEffect(() => {
     if (!tour || !schedule) {
+      return;
+    }
+    if (pendingDraftRestore) {
       return;
     }
 
@@ -288,11 +340,15 @@ export default function BookingCheckout() {
     }
 
     const draftBooking = (draft.booking as Booking | null | undefined) ?? null;
+    const storedDraftBooking = draftBooking
+      ? bookingsRef.current.find((booking) => booking.id === draftBooking.id || booking.bookingCode === draftBooking.bookingCode)
+      : null;
+    const effectiveDraftBooking = storedDraftBooking ?? draftBooking;
     const draftStep = (draft.activeStep as CheckoutStep | undefined) ?? 0;
     if (
       draftStep === 2
-      || isSuccessfulPaymentStatus(draftBooking?.paymentStatus)
-      || isCancelledBookingStatus(draftBooking?.status)
+      || isSuccessfulPaymentStatus(effectiveDraftBooking?.paymentStatus)
+      || isCancelledBookingStatus(effectiveDraftBooking?.status)
     ) {
       clearDraftFromStorage(draftStorageKey);
       return;
@@ -304,27 +360,41 @@ export default function BookingCheckout() {
     }
 
     if (!bookingIdParam && !payosState) {
-      const shouldRestore = window.confirm('Bạn có thông tin đặt Tour dang dở. Bạn muốn khôi phục hay đặt mới?');
-      if (!shouldRestore) {
-        clearDraftFromStorage(draftStorageKey);
-        return;
-      }
+      setPendingDraftRestore({ ...draft, booking: effectiveDraftBooking });
+      return;
     }
 
-    setContact((current) => ({
-      ...current,
-      ...(draft.contact as ContactState | undefined),
-    }));
-    setCounts((draft.counts as Counts | undefined) ?? { adult: 1, child: 0, infant: 0 });
-    setPassengers(buildPassengers((draft.counts as Counts | undefined) ?? { adult: 1, child: 0, infant: 0 }, (draft.passengers as Passenger[] | undefined) ?? []));
-    setRoomCounts((draft.roomCounts as RoomCounts | undefined) ?? { single: 0, double: 1, triple: 0 });
-    setPromoCode(String(draft.promoCode ?? ''));
-    setDiscountAmount(Number(draft.discountAmount ?? 0));
-    setPaymentMethod((draft.paymentMethod as 'bank' | 'card' | undefined) ?? 'bank');
-    setPaymentRatio((draft.paymentRatio as 'deposit' | 'full' | undefined) ?? (isDepositDisabled ? 'full' : 'full'));
-    setCreatedBooking(draftBooking);
-    setActiveStep(draftStep);
-  }, [bookingIdParam, draftStorageKey, isDepositDisabled, payosState, schedule, slug, tour, user]);
+    restoreDraft({ ...draft, booking: effectiveDraftBooking });
+  }, [bookingIdParam, draftStorageKey, isDepositDisabled, payosState, pendingDraftRestore, restoreDraft, schedule, slug, tour, user]);
+
+  useEffect(() => {
+    if (!pendingDraftBookingCode || !pendingDraftContact) {
+      return;
+    }
+
+    let cancelled = false;
+    void lookupBooking(pendingDraftBookingCode, pendingDraftContact)
+      .then((response) => {
+        if (cancelled) return;
+        if (
+          isCancelledBookingStatus(response.booking.status)
+          || isSuccessfulPaymentStatus(response.booking.paymentStatus)
+        ) {
+          clearDraftFromStorage(draftStorageKey);
+          setPendingDraftRestore(null);
+          return;
+        }
+        upsertBooking(response.booking);
+        setPendingDraftRestore((current) => current ? { ...current, booking: response.booking } : current);
+      })
+      .catch(() => {
+        // Keep the local draft prompt if lookup is temporarily unavailable.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draftStorageKey, pendingDraftBookingCode, pendingDraftContact, upsertBooking]);
 
   useEffect(() => {
     if (!bookingIdParam || createdBooking || effectiveBooking || !accessToken) {
@@ -527,7 +597,8 @@ export default function BookingCheckout() {
   };
 
   const syncPassengerCounts = (next: Counts) => {
-    if (next.adult + next.child + next.infant > selectableSeatLimit) {
+    const nextTotalGuests = next.adult + next.child + next.infant;
+    if (nextTotalGuests > selectableSeatLimit && nextTotalGuests >= totalGuests) {
       setCountError(`Số lượng hành khách không được vượt quá ${selectableSeatLimit} chỗ trống.`);
       return;
     }
@@ -548,13 +619,16 @@ export default function BookingCheckout() {
     const nextPassengerErrors: PassengerErrors = {};
 
     if (!contact.name.trim()) nextContactErrors.name = 'Cần nhập họ tên liên hệ';
+    else if (contact.name.trim().length < 2) nextContactErrors.name = 'Họ tên liên hệ phải có ít nhất 2 ký tự';
     if (!contact.phone.trim()) nextContactErrors.phone = 'Cần nhập số điện thoại';
     else if (!validatePhoneNumber(contact.phone)) nextContactErrors.phone = 'Số điện thoại không hợp lệ';
     if (!contact.email.trim()) nextContactErrors.email = 'Cần nhập email';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email.trim())) nextContactErrors.email = 'Email không đúng định dạng';
 
     passengers.forEach((passenger, index) => {
       const errors: PassengerErrors[number] = {};
       if (!passenger.name.trim()) errors.name = 'Cần nhập họ tên hành khách';
+      else if (passenger.name.trim().length < 2) errors.name = 'Họ tên hành khách phải có ít nhất 2 ký tự';
       if (!passenger.dob) errors.dob = 'Cần nhập ngày sinh';
       else {
         const ageMessage = validatePassengerAgeByType(passenger, schedule?.date ?? '');
@@ -832,8 +906,8 @@ export default function BookingCheckout() {
                       const errors = passengerErrors[index] ?? {};
 
                       return (
-                        <div key={`${passenger.type}-${index}`} className="grid grid-cols-1 md:grid-cols-2 gap-4 border border-outline-variant/20 p-4">
-                          <div className="md:col-span-2 flex items-center justify-between gap-3">
+                        <div key={`${passenger.type}-${index}`} className="grid grid-cols-1 md:grid-cols-4 gap-3 border border-outline-variant/20 p-4">
+                          <div className="md:col-span-4 flex items-center justify-between gap-3">
                             <div>
                               <p className="font-medium text-primary">{getPassengerTypeLabel(passenger.type)} {getPassengerDisplayNumber(passengers, index)}</p>
                               <p className="text-xs text-primary/45">Đúng theo giấy tờ tùy thân</p>
@@ -846,7 +920,7 @@ export default function BookingCheckout() {
                             )}
                           </div>
 
-                          <label className="space-y-2">
+                          <label className="space-y-2 md:col-span-2">
                             <span className="text-xs font-medium text-primary/70">Họ tên hành khách</span>
                             <input value={passenger.name} onChange={(event) => updatePassenger(index, 'name', event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3 text-sm" placeholder="Đúng theo CCCD/Passport" />
                             {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
@@ -866,7 +940,7 @@ export default function BookingCheckout() {
                             </select>
                           </label>
 
-                          <label className="space-y-2">
+                          <label className="space-y-2 md:col-span-2">
                             <span className="text-xs font-medium text-primary/70">Quốc tịch</span>
                             <select value={passenger.nationality ?? 'Việt Nam'} onChange={(event) => updatePassenger(index, 'nationality', event.target.value)} className="w-full border border-outline-variant/50 px-4 py-3 text-sm bg-white">
                               {NATIONALITY_OPTIONS.map((option) => (
@@ -1003,21 +1077,6 @@ export default function BookingCheckout() {
               </div>
 
               <div className="p-5 space-y-5">
-                <div className="grid grid-cols-3 gap-3">
-                  <label className="space-y-2">
-                    <span className="text-[10px] uppercase tracking-widest text-primary/45 font-label">Đơn</span>
-                    <input value={String(roomCounts.single)} onChange={(event) => setRoomCounts((current) => ({ ...current, single: Number(event.target.value || 0) }))} type="number" min={0} className="border border-outline-variant/50 px-3 py-2 text-sm w-full" />
-                  </label>
-                  <label className="space-y-2">
-                    <span className="text-[10px] uppercase tracking-widest text-primary/45 font-label">Đôi</span>
-                    <input value={String(roomCounts.double)} onChange={(event) => setRoomCounts((current) => ({ ...current, double: Number(event.target.value || 0) }))} type="number" min={0} className="border border-outline-variant/50 px-3 py-2 text-sm w-full" />
-                  </label>
-                  <label className="space-y-2">
-                    <span className="text-[10px] uppercase tracking-widest text-primary/45 font-label">Ba</span>
-                    <input value={String(roomCounts.triple)} onChange={(event) => setRoomCounts((current) => ({ ...current, triple: Number(event.target.value || 0) }))} type="number" min={0} className="border border-outline-variant/50 px-3 py-2 text-sm w-full" />
-                  </label>
-                </div>
-
                 <div className="space-y-2">
                   <p className="text-[10px] uppercase tracking-widest text-primary/50 font-label">Mã giảm giá</p>
                   <div className="flex gap-2">
@@ -1089,6 +1148,32 @@ export default function BookingCheckout() {
           </div>
         </div>
       </main>
+      {pendingDraftRestore && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
+          <div role="dialog" aria-modal="true" className="w-full max-w-md border border-outline-variant/40 bg-white p-6 shadow-2xl">
+            <h2 className="font-headline text-2xl text-primary">Bạn có thông tin đặt tour dang dở</h2>
+            <p className="mt-3 text-sm leading-6 text-primary/65">
+              Bạn muốn khôi phục để thanh toán tiếp đơn đang giữ chỗ, hay đặt mới từ đầu?
+            </p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => restoreDraft(pendingDraftRestore)}
+                className="bg-primary px-4 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-white hover:bg-[var(--color-secondary)]"
+              >
+                Khôi phục
+              </button>
+              <button
+                type="button"
+                onClick={startNewDraft}
+                className="border border-outline-variant/60 px-4 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-primary hover:border-primary"
+              >
+                Đặt mới
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

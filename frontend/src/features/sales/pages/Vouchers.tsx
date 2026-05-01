@@ -539,10 +539,17 @@ export default function SalesVoucherManagement() {
   const getTourName = (tourId: string) => tourPrograms.find((tour) => tour.id === tourId)?.name ?? tourId;
 
   const persist = async (next: Voucher) => {
-    upsertVoucher(next);
-    if (!token) return;
+    if (!token) {
+      upsertVoucher(next);
+      return;
+    }
 
-    const response = next.id.startsWith('tmp-')
+    const isCreate = next.id.startsWith('tmp-');
+    if (!isCreate) {
+      upsertVoucher(next);
+    }
+
+    const response = isCreate
       ? await createVoucher(token, next)
       : await updateVoucher(token, next.id, next);
 

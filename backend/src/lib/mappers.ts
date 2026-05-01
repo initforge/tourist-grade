@@ -83,10 +83,6 @@ function formatVoucherStatus(status: VoucherStatus) {
 }
 
 function mapVoucherStatus(voucher: Pick<Voucher, 'status' | 'startsAt'>) {
-  if (voucher.status === 'ACTIVE' && voucher.startsAt.toISOString().slice(0, 10) > new Date().toISOString().slice(0, 10)) {
-    return 'upcoming';
-  }
-
   return formatVoucherStatus(voucher.status);
 }
 
@@ -130,6 +126,8 @@ export function mapTourProgram(program: TourProgram) {
     routeDescription: program.description ?? '',
     priceIncludes: (publicContent['priceIncludes'] as string | undefined) ?? '',
     priceExcludes: (publicContent['priceExcludes'] as string | undefined) ?? '',
+    image: (publicContent['image'] as string | undefined) ?? undefined,
+    gallery: (publicContent['gallery'] as string[] | undefined) ?? [],
     holiday: program.holidayLabel ?? undefined,
     selectedDates: (publicContent['selectedDates'] as string[] | undefined) ?? [],
     weekdays: (publicContent['weekdays'] as string[] | undefined) ?? [],

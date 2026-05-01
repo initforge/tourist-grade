@@ -132,10 +132,39 @@ describe('voucher routes', () => {
     expect(response.body.voucher.status).toBe('pending_approval');
   });
 
-  it('allows manager approval to activate a pending voucher', async () => {
+  it('stores fixed voucher values with thousands separators as the full amount', async () => {
+    const created = createVoucherFixture({
+      type: 'FIXED',
+      valueAmount: 100000,
+    });
+    prismaMock.voucher.create.mockResolvedValue(created);
+
+    const response = await request(createTestApp())
+      .post('/')
+      .set('Authorization', 'Bearer sales-token')
+      .send({
+        code: 'CASH100',
+        type: 'fixed',
+        value: '100.000',
+        startDate: '2026-06-01',
+        endDate: '2026-06-30',
+        limit: 10,
+        status: 'draft',
+      });
+
+    expect(response.status).toBe(201);
+    expect(prismaMock.voucher.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        type: 'FIXED',
+        valueAmount: 100000,
+      }),
+    }));
+  });
+
+  it('allows manager approval to move a future pending voucher to upcoming', async () => {
     prismaMock.user.findUnique.mockResolvedValue({ id: 'manager-1', status: 'ACTIVE' });
     prismaMock.voucher.findUnique.mockResolvedValue(createVoucherFixture({ status: 'PENDING_APPROVAL' }));
-    prismaMock.voucher.update.mockResolvedValue(createVoucherFixture({ status: 'ACTIVE', approvedById: 'manager-1' }));
+    prismaMock.voucher.update.mockResolvedValue(createVoucherFixture({ status: 'UPCOMING', approvedById: 'manager-1' }));
 
     const response = await request(createTestApp())
       .post('/voucher-1/approve')
@@ -145,7 +174,7 @@ describe('voucher routes', () => {
     expect(prismaMock.voucher.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'voucher-1' },
       data: expect.objectContaining({
-        status: 'ACTIVE',
+        status: 'UPCOMING',
         approvedById: 'manager-1',
         rejectedById: null,
         rejectionReason: null,

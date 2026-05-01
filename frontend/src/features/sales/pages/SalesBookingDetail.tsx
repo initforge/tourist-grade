@@ -639,7 +639,7 @@ export default function SalesBookingDetail() {
     const saved = await persistBooking(prev => ({
       ...prev,
       status: 'cancelled' as const,
-      refundStatus: 'pending' as const,
+      refundStatus: (prev.refundAmount ?? 0) > 0 ? 'pending' as const : 'refunded' as const,
       cancelledConfirmedBy: userName,
       cancelledConfirmedAt: now,
     }));

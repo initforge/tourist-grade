@@ -773,8 +773,16 @@ export default function TourProgramPricingTables({
     const derived = services
       .filter((service) => service.category === 'Vé tham quan')
       .map((service) => {
+      const isCommonPrice = service.setup !== 'Theo độ tuổi';
       const adultPrices = service.prices
-        .filter((price) => !price.note || price.note.toLowerCase().includes('người lớn'))
+        .filter((price) => {
+          const note = price.note.toLowerCase();
+          return isCommonPrice
+            || !price.note
+            || note.includes('người lớn')
+            || note.includes('không có')
+            || note.includes('giá chung');
+        })
         .map((price) => ({ startDate: price.effectiveDate, endDate: price.endDate || undefined, price: price.unitPrice }));
       const childPrices = service.setup === 'Theo độ tuổi'
         ? service.prices
@@ -986,6 +994,10 @@ export default function TourProgramPricingTables({
   const selectedAttractionOptionIds = useMemo(
     () => new Set(Object.values(pricingValue.attractions).flatMap((rows) => rows.map((row) => row.optionId))),
     [pricingValue.attractions],
+  );
+  const selectedOtherOptionIds = useMemo(
+    () => new Set(pricingValue.otherCosts.map((row) => row.optionId)),
+    [pricingValue.otherCosts],
   );
 
   const getHotelDisplayPrices = (selection: BaseSelection, group: HotelGroup, departureDate: string) => {
@@ -1264,12 +1276,12 @@ export default function TourProgramPricingTables({
         columns: [`Mô tả: ${option.description}`, `Địa chỉ: ${option.address}`],
       }));
     }
-    return otherOptions.filter(option => !option.isInsurance).map(option => ({
+    return otherOptions.filter(option => !option.isInsurance && !selectedOtherOptionIds.has(option.id)).map(option => ({
       id: option.id,
       title: option.serviceName,
       columns: [`Nhà cung cấp: ${option.supplierName}`],
     }));
-  }, [attractionOptionsByGroup, flightOptions, hotelOptionsByGroup, mealOptionsByGroup, otherOptions, picker, selectedAttractionOptionIds, selectedMealOptionIds, transportOptions]);
+  }, [attractionOptionsByGroup, flightOptions, hotelOptionsByGroup, mealOptionsByGroup, otherOptions, picker, selectedAttractionOptionIds, selectedMealOptionIds, selectedOtherOptionIds, transportOptions]);
 
   const appendSelections = (kind: PickerKind, selectedIds: string[], groupId?: string) => {
     updateValue(current => {

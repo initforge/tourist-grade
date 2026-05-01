@@ -11,7 +11,7 @@ import type {
   TourProgram,
 } from '@entities/tour-program/data/tourProgram';
 import { addServicePrice } from '@shared/lib/api/services';
-import { addSupplierBulkPrices, addSupplierServicePrice } from '@shared/lib/api/suppliers';
+import { addSupplierServicePrice } from '@shared/lib/api/suppliers';
 import { updateTourInstanceCommand } from '@shared/lib/api/tourInstances';
 import {
   getRetainedAmountFromCancelledBooking,
@@ -25,7 +25,6 @@ import {
   type ServiceRow,
   type SupplierPriceRow,
   type SupplierRow,
-  type SupplierServiceLine,
 } from '@shared/store/useAppDataStore';
 
 type DatedPrice = { startDate: string; endDate?: string; price: number };
@@ -186,7 +185,15 @@ function pickSupplierPrice(prices: SupplierPriceRow[], dateKey: string) {
 
 function pickServicePrice(prices: ServicePriceRow[], targetLabel: RowTarget, dateKey: string) {
   const loweredTarget = targetLabel === 'adult' ? 'người lớn' : targetLabel === 'child' ? 'trẻ em' : '';
-  const matchingPool = loweredTarget ? prices.filter((price) => price.note.toLowerCase().includes(loweredTarget)) : prices;
+  const matchingPool = loweredTarget
+    ? prices.filter((price) => {
+      const note = price.note.trim().toLowerCase();
+      if (!note || note.includes('không có') || note.includes('giá chung')) {
+        return targetLabel === 'adult';
+      }
+      return note.includes(loweredTarget);
+    })
+    : prices;
   const target = parseDateKey(dateKey).getTime();
   const included = matchingPool.find((price) => {
     const start = parseDateKey(price.effectiveDate).getTime();
@@ -196,18 +203,6 @@ function pickServicePrice(prices: ServicePriceRow[], targetLabel: RowTarget, dat
   if (included) return included.unitPrice;
   const openEnded = matchingPool.find((price) => parseDateKey(price.effectiveDate).getTime() <= target && !price.endDate);
   return openEnded?.unitPrice ?? matchingPool.at(-1)?.unitPrice ?? prices.at(-1)?.unitPrice ?? 0;
-}
-
-function closeOpenEndedServicePrices(prices: ServicePriceRow[], effectiveDate: string, targetLabel?: string) {
-  return prices.map((price) => {
-    if (price.endDate) return price;
-    if (targetLabel && !price.note.toLowerCase().includes(targetLabel.toLowerCase())) return price;
-    return { ...price, endDate: effectiveDate };
-  });
-}
-
-function closeOpenEndedSupplierPrices(prices: SupplierPriceRow[], effectiveDate: string) {
-  return prices.map((price) => (!price.toDate ? { ...price, toDate: effectiveDate } : price));
 }
 
 function isListedPriceMode(mode?: string) {
@@ -500,7 +495,10 @@ function serviceChoices(services: ServiceRow[], category: 'Vé tham quan' | 'Cá
     .filter((service) => service.category === category)
     .map((service) => {
       const adultRows = service.prices
-        .filter((price) => !price.note || price.note.toLowerCase().includes('người lớn'))
+        .filter((price) => {
+          const note = price.note.trim().toLowerCase();
+          return !note || note.includes('người lớn') || note.includes('không có') || note.includes('giá chung');
+        })
         .map((price) => ({ startDate: price.effectiveDate, endDate: price.endDate || undefined, price: price.unitPrice }));
       const childRows = service.setup === 'Theo độ tuổi'
         ? service.prices
@@ -987,6 +985,12 @@ function getSelectedChoice(row: EstimateRow) {
     ));
 }
 
+function canUpdateSystemPrice(row: EstimateRow) {
+  if (row.categoryId === 'A' || row.categoryId === 'E') return false;
+  const selectedChoice = getSelectedChoice(row);
+  return Boolean(selectedChoice?.systemManagedPrice && !selectedChoice.unitPriceEditable);
+}
+
 function getPriceRowsForEstimateRow(row: EstimateRow) {
   const choice = getSelectedChoice(row);
   return row.target === 'child' && choice?.childPriceRows?.length
@@ -1018,9 +1022,7 @@ export default function TourEstimate() {
   const tourPrograms = useAppDataStore((state) => state.tourPrograms);
   const bookings = useAppDataStore((state) => state.bookings);
   const suppliers = useAppDataStore((state) => state.suppliers);
-  const setSuppliers = useAppDataStore((state) => state.setSuppliers);
   const services = useAppDataStore((state) => state.services);
-  const setServices = useAppDataStore((state) => state.setServices);
   const role = user?.role || 'guest';
 
   const instance = tourInstances.find((item) => item.id === id);
@@ -1036,17 +1038,21 @@ export default function TourEstimate() {
     () => canDisplayManifest ? relatedBookings.filter(isBookingConfirmedForOperations) : [],
     [canDisplayManifest, relatedBookings],
   );
+  const operationalBookings = useMemo(
+    () => relatedBookings.filter(isBookingConfirmedForOperations),
+    [relatedBookings],
+  );
   const financialBookings = useMemo(
     () => relatedBookings.filter(isBookingFinanciallyRelevantForOperations),
     [relatedBookings],
   );
   const estimateStats = useMemo(() => (
-    instance ? getEstimateStats(instance, financialBookings) : getBookingStats([])
-  ), [financialBookings, instance]);
+    instance ? getEstimateStats(instance, operationalBookings) : getBookingStats([])
+  ), [operationalBookings, instance]);
 
   const [estimateRows, setEstimateRows] = useState<EstimateRow[]>(() => (
     instance && program
-      ? hydrateRows(buildFallbackRows(instance, program, financialBookings, suppliers, services), instance, estimateStats, program.duration.days)
+      ? hydrateRows(buildFallbackRows(instance, program, operationalBookings, suppliers, services), instance, estimateStats, program.duration.days)
       : []
   ));
   const [priceModalRowId, setPriceModalRowId] = useState<string | null>(null);
@@ -1058,11 +1064,11 @@ export default function TourEstimate() {
       setEstimateRows((current) => (
         current.length > 0
           ? current
-          : hydrateRows(buildFallbackRows(instance, program, financialBookings, suppliers, services), instance, estimateStats, program.duration.days)
+          : hydrateRows(buildFallbackRows(instance, program, operationalBookings, suppliers, services), instance, estimateStats, program.duration.days)
       ));
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [estimateStats, financialBookings, instance, program, services, suppliers]);
+  }, [estimateStats, operationalBookings, instance, program, services, suppliers]);
 
   const groupedRows = useMemo(() => getGroupedRows(estimateRows), [estimateRows]);
   const totalCost = estimateRows.reduce((sum, row) => sum + row.total, 0);
@@ -1252,176 +1258,6 @@ export default function TourEstimate() {
     }
   };
 
-  const updatePricesToSystem = async () => {
-    if (!token) {
-      message.error('Phiên đăng nhập đã hết hạn. Không thể cập nhật giá lên hệ thống.');
-      return;
-    }
-
-    const apiEffectiveDate = todayKey();
-    const apiRows = Array.from(new Map(
-      estimateRows
-        .filter((row) => row.unitPriceEditable || row.systemManagedPrice)
-        .map((row) => [`${row.categoryId}|${row.supplierName}|${row.serviceVariant}|${row.target}`, row]),
-    ).values());
-    const supplierPayloads = new Map<string, Record<string, number>>();
-    const serviceCalls: Array<Promise<unknown>> = [];
-    let changedCount = 0;
-
-    apiRows.forEach((row) => {
-      const selectedChoice = row.optionChoices.find((choice) => (
-        choice.supplierName === row.supplierName && choice.serviceVariant === row.serviceVariant
-      ));
-
-      if (selectedChoice?.supplierId && selectedChoice.serviceLineId) {
-        const currentMap = supplierPayloads.get(selectedChoice.supplierId) ?? {};
-        currentMap[selectedChoice.serviceLineId] = row.unitPrice;
-        supplierPayloads.set(selectedChoice.supplierId, currentMap);
-        changedCount += 1;
-        return;
-      }
-
-      if (selectedChoice?.serviceId) {
-        const service = services.find((item) => item.id === selectedChoice.serviceId);
-        const note = service?.setup === 'Theo độ tuổi'
-          ? (row.target === 'child' ? 'Trẻ em' : 'Người lớn')
-          : `Cập nhật từ dự toán ${instance.id}`;
-        serviceCalls.push(addServicePrice(token, selectedChoice.serviceId, {
-          id: '',
-          unitPrice: row.unitPrice,
-          note,
-          effectiveDate: apiEffectiveDate,
-          endDate: '',
-          createdBy: currentUser,
-        }));
-        changedCount += 1;
-      }
-    });
-
-    if (changedCount === 0) {
-      message.warning('Chưa tìm thấy bảng giá hệ thống tương ứng để cập nhật');
-      return;
-    }
-
-    try {
-      await Promise.all([
-        ...Array.from(supplierPayloads.entries()).map(([supplierId, priceMap]) => addSupplierBulkPrices(token, supplierId, {
-          fromDate: apiEffectiveDate,
-          toDate: '',
-          note: `Cập nhật từ dự toán ${instance.id}`,
-          createdBy: currentUser,
-          priceMap,
-        })),
-        ...serviceCalls,
-      ]);
-
-      await initializeProtected();
-      message.success(`Đã cập nhật ${changedCount} bản ghi giá lên hệ thống`);
-      return;
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : 'Không thể cập nhật giá lên hệ thống');
-      return;
-    }
-
-    const effectiveDate = todayKey();
-    let supplierChanged = 0;
-    let serviceChanged = 0;
-
-    const uniqueRows = Array.from(new Map(
-      estimateRows
-        .filter((row) => row.unitPriceEditable || row.systemManagedPrice)
-        .map((row) => [`${row.categoryId}|${row.supplierName}|${row.serviceVariant}|${row.target}`, row]),
-    ).values());
-
-    const nextSuppliers = suppliers.map((supplier) => {
-      const applyLine = (line: SupplierServiceLine, mealLine = false) => {
-        const matchedRows = uniqueRows.filter((row) => row.supplierName === supplier.name && row.serviceVariant === line.name);
-        if (matchedRows.length === 0) return line;
-        supplierChanged += matchedRows.length;
-        const latest = matchedRows.at(-1)!;
-        return {
-          ...line,
-          prices: [
-            ...closeOpenEndedSupplierPrices(line.prices, effectiveDate),
-            {
-              id: `${line.id}-${Date.now()}-${mealLine ? 'meal' : 'main'}`,
-              fromDate: effectiveDate,
-              toDate: '',
-              unitPrice: latest.unitPrice,
-              note: `Cập nhật từ dự toán ${instance!.id}`,
-              createdBy: currentUser,
-            },
-          ],
-        };
-      };
-      return {
-        ...supplier,
-        services: supplier.services.map((line) => applyLine(line)),
-        mealServices: supplier.mealServices.map((line) => applyLine(line, true)),
-      };
-    });
-
-    const nextServices = services.map((service) => {
-      const matchedRows = uniqueRows.filter((row) => row.serviceVariant === service.name);
-      if (matchedRows.length === 0) return service;
-      const latestAdult = matchedRows.findLast((row) => row.target === 'adult' || row.target === 'all');
-      const latestChild = matchedRows.findLast((row) => row.target === 'child');
-      if (!latestAdult && !latestChild) return service;
-      serviceChanged += matchedRows.length;
-      let prices = [...service.prices];
-      if (service.setup === 'Theo độ tuổi') {
-        if (latestAdult) {
-          prices = [
-            ...closeOpenEndedServicePrices(prices, effectiveDate, 'người lớn'),
-            {
-              id: `${service.id}-${Date.now()}-adult`,
-              effectiveDate,
-              endDate: '',
-              unitPrice: latestAdult.unitPrice,
-              note: 'Người lớn',
-              createdBy: currentUser,
-            },
-          ];
-        }
-        if (latestChild) {
-          prices = [
-            ...closeOpenEndedServicePrices(prices, effectiveDate, 'trẻ em'),
-            {
-              id: `${service.id}-${Date.now()}-child`,
-              effectiveDate,
-              endDate: '',
-              unitPrice: latestChild.unitPrice,
-              note: 'Trẻ em',
-              createdBy: currentUser,
-            },
-          ];
-        }
-      } else if (latestAdult) {
-        prices = [
-          ...closeOpenEndedServicePrices(prices, effectiveDate),
-          {
-            id: `${service.id}-${Date.now()}-general`,
-            effectiveDate,
-            endDate: '',
-            unitPrice: latestAdult.unitPrice,
-            note: `Cập nhật từ dự toán ${instance!.id}`,
-            createdBy: currentUser,
-          },
-        ];
-      }
-      return { ...service, prices };
-    });
-
-    if (supplierChanged === 0 && serviceChanged === 0) {
-      message.warning('Chưa tìm thấy bảng giá hệ thống tương ứng để cập nhật');
-      return;
-    }
-
-    setSuppliers(nextSuppliers);
-    setServices(nextServices);
-    message.success(`Đã cập nhật ${supplierChanged + serviceChanged} bản ghi giá lên hệ thống`);
-  };
-
   return (
     <div className="min-h-screen bg-[var(--color-background)] p-8">
       <Breadcrumb
@@ -1475,9 +1311,9 @@ export default function TourEstimate() {
         </div>
       </div>
 
-      {instance.status === 'yeu_cau_chinh_sua' && (
+      {(instance.status === 'yeu_cau_chinh_sua' || instance.cancelReason) && (
         <div className="mb-6 border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Dự toán này đang ở trạng thái yêu cầu chỉnh sửa. Cần rà soát lại danh sách chi phí và cập nhật lại trước khi gửi duyệt.
+          Dự toán này đang ở trạng thái yêu cầu chỉnh sửa. {instance.cancelReason ? `Nội dung quản lý yêu cầu: ${instance.cancelReason}` : 'Cần rà soát lại danh sách chi phí và cập nhật lại trước khi gửi duyệt.'}
         </div>
       )}
 
@@ -1620,19 +1456,27 @@ export default function TourEstimate() {
                         <td colSpan={11} className="px-6 py-3 font-bold text-[var(--color-primary)]">{category.categoryId}. {category.categoryName}</td>
                       </tr>
                       {category.rows.map((row, index) => {
+                        const usedOtherChoiceIds = new Set(
+                          category.categoryId === 'F'
+                            ? category.rows.filter((item) => item.rowId !== row.rowId).map((item) => item.optionId).filter(Boolean)
+                            : [],
+                        );
+                        const visibleChoices = category.categoryId === 'F'
+                          ? row.optionChoices.filter((choice) => choice.id === row.optionId || !usedOtherChoiceIds.has(choice.id))
+                          : row.optionChoices;
                         return (
                           <tr key={row.rowId} className="border-t border-[#D0C5AF]/10 bg-white">
                             <td className="px-4 py-3">{index + 1}</td>
                             <td className="px-4 py-3 font-medium">{row.itemName}</td>
                             <td className="px-4 py-3"><SupplierContactLink row={row} /></td>
                             <td className="px-4 py-3">
-                              {row.optionChoices.length > 1 ? (
+                              {visibleChoices.length > 1 ? (
                                 <select
                                   value={row.optionId}
                                   onChange={(event) => updateRowChoice(row.rowId, event.target.value)}
                                   className="w-full border border-[#D0C5AF]/40 px-2 py-1"
                                 >
-                                  {row.optionChoices.map((choice) => (
+                                  {visibleChoices.map((choice) => (
                                     <option key={choice.id} value={choice.id}>
                                       {choice.serviceVariant}{choice.supplierName !== row.supplierName ? ` - ${choice.supplierName}` : ''}
                                     </option>
@@ -1674,15 +1518,19 @@ export default function TourEstimate() {
                             </td>
                             <td className="px-4 py-3 text-right font-bold">{formatCurrency(row.total)}</td>
                             <td className="px-4 py-3 text-center">
-                              <button
-                                type="button"
-                                onClick={() => openPriceModal(row)}
-                                className="inline-flex h-8 w-8 items-center justify-center border border-[#D0C5AF]/50 text-[var(--color-secondary)] transition-colors hover:border-[var(--color-secondary)] hover:bg-[var(--color-secondary)]/5"
-                                title="Cập nhật bảng giá"
-                                aria-label={`Cập nhật bảng giá ${row.itemName}`}
-                              >
-                                <span className="material-symbols-outlined text-[18px]">edit</span>
-                              </button>
+                              {canUpdateSystemPrice(row) ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openPriceModal(row)}
+                                  className="inline-flex h-8 w-8 items-center justify-center border border-[#D0C5AF]/50 text-[var(--color-secondary)] transition-colors hover:border-[var(--color-secondary)] hover:bg-[var(--color-secondary)]/5"
+                                  title="Cập nhật bảng giá"
+                                  aria-label={`Cập nhật bảng giá ${row.itemName}`}
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">edit</span>
+                                </button>
+                              ) : (
+                                <span className="text-xs text-[var(--color-primary)]/35">-</span>
+                              )}
                             </td>
                           </tr>
                         );

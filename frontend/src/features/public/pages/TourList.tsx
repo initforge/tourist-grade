@@ -176,7 +176,7 @@ export default function TourList() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => navigate(`/tours/${tour.slug}/book`)}
+                      onClick={() => navigate(`/tours/${tour.slug}`)}
                       className="bg-primary text-white px-5 py-3 text-[10px] tracking-[0.2em] font-medium hover:bg-secondary transition-all uppercase shrink-0"
                     >
                       Đặt ngay

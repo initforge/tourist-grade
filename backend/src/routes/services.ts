@@ -35,6 +35,7 @@ const serviceSchema = z.object({
 });
 
 const priceSchema = priceRowSchema;
+type ServiceInput = z.infer<typeof serviceSchema>;
 
 export function createServicesRouter() {
   const router = Router();
@@ -57,27 +58,28 @@ export function createServicesRouter() {
     if (!input.success) {
       throw badRequest('Invalid service payload');
     }
+    const normalized = normalizeServiceInput(input.data);
 
     const service = await prisma.service.create({
       data: {
-        code: input.data.code ?? `SV-${Date.now().toString().slice(-6)}`,
-        name: input.data.name,
-        category: input.data.category,
-        unit: input.data.unit,
-        priceMode: input.data.priceMode,
-        priceSetup: input.data.priceSetup,
-        status: input.data.status,
-        description: input.data.description || null,
-        supplierName: input.data.supplierName || null,
-        contactInfo: input.data.contactInfo || null,
-        province: input.data.province || null,
-        formulaCount: input.data.formulaCount ?? null,
-        formulaCountDefault: input.data.formulaCountDefault || null,
-        formulaQuantity: input.data.formulaQuantity ?? null,
-        formulaQuantityDefault: input.data.formulaQuantityDefault || null,
-        prices: input.data.prices.length > 0
+        code: normalized.code ?? `SV-${Date.now().toString().slice(-6)}`,
+        name: normalized.name,
+        category: normalized.category,
+        unit: normalized.unit,
+        priceMode: normalized.priceMode,
+        priceSetup: normalized.priceSetup,
+        status: normalized.status,
+        description: normalized.description || null,
+        supplierName: normalized.supplierName || null,
+        contactInfo: normalized.contactInfo || null,
+        province: normalized.province || null,
+        formulaCount: normalized.formulaCount ?? null,
+        formulaCountDefault: normalized.formulaCountDefault || null,
+        formulaQuantity: normalized.formulaQuantity ?? null,
+        formulaQuantityDefault: normalized.formulaQuantityDefault || null,
+        prices: normalized.prices.length > 0
           ? {
-              create: input.data.prices.map((price) => ({
+              create: normalized.prices.map((price) => ({
                 unitPrice: price.unitPrice,
                 note: price.note,
                 effectiveDate: new Date(price.effectiveDate),
@@ -113,23 +115,42 @@ export function createServicesRouter() {
       throw notFound('Service not found');
     }
 
+    const merged = normalizeServiceInput({
+      code: existing.code,
+      name: input.data.name ?? existing.name,
+      category: input.data.category ?? existing.category,
+      unit: input.data.unit ?? existing.unit,
+      priceMode: input.data.priceMode ?? existing.priceMode,
+      priceSetup: input.data.priceSetup ?? existing.priceSetup,
+      status: input.data.status ?? existing.status,
+      description: input.data.description === undefined ? existing.description ?? '' : input.data.description,
+      supplierName: input.data.supplierName === undefined ? existing.supplierName ?? '' : input.data.supplierName,
+      contactInfo: input.data.contactInfo === undefined ? existing.contactInfo ?? '' : input.data.contactInfo,
+      province: input.data.province === undefined ? existing.province ?? '' : input.data.province,
+      formulaCount: input.data.formulaCount === undefined ? existing.formulaCount : input.data.formulaCount,
+      formulaCountDefault: input.data.formulaCountDefault === undefined ? existing.formulaCountDefault ?? '' : input.data.formulaCountDefault,
+      formulaQuantity: input.data.formulaQuantity === undefined ? existing.formulaQuantity : input.data.formulaQuantity,
+      formulaQuantityDefault: input.data.formulaQuantityDefault === undefined ? existing.formulaQuantityDefault ?? '' : input.data.formulaQuantityDefault,
+      prices: [],
+    });
+
     const updated = await prisma.service.update({
       where: { id: existing.id },
       data: {
-        name: input.data.name ?? existing.name,
-        category: input.data.category ?? existing.category,
-        unit: input.data.unit ?? existing.unit,
-        priceMode: input.data.priceMode ?? existing.priceMode,
-        priceSetup: input.data.priceSetup ?? existing.priceSetup,
-        status: input.data.status ?? existing.status,
-        description: input.data.description === undefined ? existing.description : (input.data.description || null),
-        supplierName: input.data.supplierName === undefined ? existing.supplierName : (input.data.supplierName || null),
-        contactInfo: input.data.contactInfo === undefined ? existing.contactInfo : (input.data.contactInfo || null),
-        province: input.data.province === undefined ? existing.province : (input.data.province || null),
-        formulaCount: input.data.formulaCount === undefined ? existing.formulaCount : (input.data.formulaCount ?? null),
-        formulaCountDefault: input.data.formulaCountDefault === undefined ? existing.formulaCountDefault : (input.data.formulaCountDefault || null),
-        formulaQuantity: input.data.formulaQuantity === undefined ? existing.formulaQuantity : (input.data.formulaQuantity ?? null),
-        formulaQuantityDefault: input.data.formulaQuantityDefault === undefined ? existing.formulaQuantityDefault : (input.data.formulaQuantityDefault || null),
+        name: merged.name,
+        category: merged.category,
+        unit: merged.unit,
+        priceMode: merged.priceMode,
+        priceSetup: merged.priceSetup,
+        status: merged.status,
+        description: merged.description || null,
+        supplierName: merged.supplierName || null,
+        contactInfo: merged.contactInfo || null,
+        province: merged.province || null,
+        formulaCount: merged.formulaCount ?? null,
+        formulaCountDefault: merged.formulaCountDefault || null,
+        formulaQuantity: merged.formulaQuantity ?? null,
+        formulaQuantityDefault: merged.formulaQuantityDefault || null,
       },
       include: { prices: true },
     });
@@ -252,6 +273,18 @@ export function createServicesRouter() {
   }));
 
   return router;
+}
+
+function normalizeServiceInput<T extends Partial<ServiceInput>>(input: T): T {
+  if (input.category !== 'ATTRACTION_TICKET') {
+    return input;
+  }
+
+  return {
+    ...input,
+    unit: 'Vé',
+    priceMode: 'LISTED',
+  };
 }
 
 type ServicePriceRecord = Awaited<ReturnType<typeof prisma.service.findFirst>> extends infer _T

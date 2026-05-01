@@ -133,7 +133,7 @@ function emptyDraft(category: AddCategory, province: Province = 'Đà Nẵng'): 
   return {
     name: '',
     category,
-    unit: '',
+    unit: category === 'Vé tham quan' ? 'Vé' : '',
     priceMode: 'Giá niêm yết',
     setup: category === 'Vé tham quan' ? 'Theo độ tuổi' : 'Giá chung',
     status: 'Hoạt động',
@@ -215,7 +215,7 @@ function StatusToggle({ value }: { value: ServiceStatus }) {
 function validateDraft(draft: ServiceDraft, requirePrices = true): DraftErrors {
   const errors: DraftErrors = {};
   if (!draft.name.trim()) errors.name = 'Cần nhập tên dịch vụ';
-  if (!draft.unit.trim()) errors.unit = 'Cần nhập đơn vị';
+  if (draft.category !== 'Vé tham quan' && !draft.unit.trim()) errors.unit = 'Cần nhập đơn vị';
   if (!draft.description.trim()) errors.description = 'Cần nhập mô tả';
 
   if (requirePrices && draft.priceMode !== 'Báo giá' && draft.category === 'Vé tham quan') {
@@ -337,7 +337,14 @@ export default function ServiceList() {
   }, [searchQuery, serviceRows]);
 
   const updateDraft = <K extends keyof ServiceDraft>(key: K, value: ServiceDraft[K]) => {
-    setDraft(previous => ({ ...previous, [key]: value }));
+    setDraft(previous => {
+      const next = { ...previous, [key]: value };
+      if (key === 'category' && value === 'Vé tham quan') {
+        next.unit = 'Vé';
+        next.priceMode = 'Giá niêm yết';
+      }
+      return next;
+    });
     setErrors(previous => ({ ...previous, [key]: undefined }));
   };
 
@@ -398,8 +405,8 @@ export default function ServiceList() {
         code: draft.id,
         name: draft.name.trim(),
         category: toApiCategory(draft.category),
-        unit: draft.unit.trim(),
-        priceMode: toApiPriceMode(draft.priceMode),
+        unit: draft.category === 'Vé tham quan' ? 'Vé' : draft.unit.trim(),
+        priceMode: draft.category === 'Vé tham quan' ? 'LISTED' : toApiPriceMode(draft.priceMode),
         priceSetup: toApiPriceSetup(draft.setup),
         status: editingServiceId ? toApiStatus(draft.status) : 'ACTIVE',
         description: draft.description.trim(),
@@ -443,7 +450,7 @@ export default function ServiceList() {
       name: draft.name.trim(),
       category: draft.category,
       unit: draft.unit.trim(),
-      priceMode: draft.priceMode,
+      priceMode: draft.category === 'Vé tham quan' ? 'Giá niêm yết' : draft.priceMode,
       setup: draft.setup,
       status: editingServiceId ? draft.status : 'Hoạt động',
       description: draft.description.trim(),
@@ -652,11 +659,13 @@ export default function ServiceList() {
                 <input value={draft.name} onChange={event => updateDraft('name', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
                 {renderFieldError('name')}
               </label>
-              <label className="space-y-2 text-sm font-medium text-[#2A2421]">
-                <span>Đơn vị</span>
-                <input value={draft.unit} onChange={event => updateDraft('unit', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
-                {renderFieldError('unit')}
-              </label>
+              {draft.category !== 'Vé tham quan' && (
+                <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                  <span>Đơn vị</span>
+                  <input value={draft.unit} onChange={event => updateDraft('unit', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
+                  {renderFieldError('unit')}
+                </label>
+              )}
               <label className="space-y-2 text-sm font-medium text-[#2A2421]">
                 <span>Tên nhà cung cấp</span>
                 <input value={draft.supplierName} onChange={event => updateDraft('supplierName', event.target.value)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none" />
@@ -674,13 +683,15 @@ export default function ServiceList() {
                   </select>
                 </label>
               )}
-              <label className="space-y-2 text-sm font-medium text-[#2A2421]">
-                <span>Hình thức giá</span>
-                <select value={draft.priceMode} onChange={event => updateDraft('priceMode', event.target.value as PriceMode)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none bg-white">
-                  <option>Giá niêm yết</option>
-                  <option>Báo giá</option>
-                </select>
-              </label>
+              {draft.category !== 'Vé tham quan' && (
+                <label className="space-y-2 text-sm font-medium text-[#2A2421]">
+                  <span>Hình thức giá</span>
+                  <select value={draft.priceMode} onChange={event => updateDraft('priceMode', event.target.value as PriceMode)} className="w-full border border-stone-200 px-4 py-3 text-sm outline-none bg-white">
+                    <option>Giá niêm yết</option>
+                    <option>Báo giá</option>
+                  </select>
+                </label>
+              )}
             </div>
 
             <label className="block space-y-2 text-sm font-medium text-[#2A2421]">
@@ -831,8 +842,8 @@ export default function ServiceList() {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Field label="Phân loại" value={selectedService.category} />
-              <Field label="Đơn vị" value={selectedService.unit} />
-              <Field label="Hình thức giá" value={selectedService.priceMode} />
+              {selectedService.category !== 'Vé tham quan' && <Field label="Đơn vị" value={selectedService.unit} />}
+              {selectedService.category !== 'Vé tham quan' && <Field label="Hình thức giá" value={selectedService.priceMode} />}
               <Field label="Thiết lập giá" value={selectedService.setup} />
               <Field label="Trạng thái" value={<StatusToggle value={selectedService.status as ServiceStatus} />} />
               <Field label="Mã dịch vụ" value={selectedService.id} />

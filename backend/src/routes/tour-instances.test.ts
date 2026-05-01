@@ -314,7 +314,7 @@ describe('tour-instance routes', () => {
     prismaMock.booking.update.mockResolvedValue({});
     prismaMock.tourInstance.update.mockResolvedValue(createInstanceFixture({
       status: 'DA_HUY',
-      cancelReason: 'Không đủ điều kiện khởi hành',
+      cancelReason: 'Bất khả kháng',
       cancelledAt: new Date('2026-04-29T02:00:00.000Z'),
       refundTotal: 4500000,
     }));
@@ -337,8 +337,8 @@ describe('tour-instance routes', () => {
       where: { id: 'booking-1' },
       data: expect.objectContaining({
         status: 'CANCELLED',
-        refundStatus: 'NOT_REQUIRED',
-        cancellationReason: 'Không đủ điều kiện khởi hành',
+        refundStatus: 'PENDING',
+        cancellationReason: 'Bất khả kháng',
         refundAmount: 4500000,
       }),
     }));
@@ -346,15 +346,15 @@ describe('tour-instance routes', () => {
       where: { id: 'booking-2' },
       data: expect.objectContaining({
         status: 'CANCELLED',
-        refundStatus: 'NOT_REQUIRED',
-        cancellationReason: 'Không đủ điều kiện khởi hành',
+        refundStatus: 'REFUNDED',
+        cancellationReason: 'Bất khả kháng',
         refundAmount: 0,
       }),
     }));
     expect(prismaMock.tourInstance.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         status: 'DA_HUY',
-        cancelReason: 'Không đủ điều kiện khởi hành',
+        cancelReason: 'Bất khả kháng',
         refundTotal: 4500000,
       }),
     }));
@@ -365,7 +365,7 @@ describe('tour-instance routes', () => {
         recipient: expect.any(String),
         bookingId: expect.any(String),
         payloadJson: expect.objectContaining({
-          cancellationReason: 'Không đủ điều kiện khởi hành',
+          cancellationReason: 'Bất khả kháng',
           cancellationSource: 'manager_tour_cancel',
         }),
       }),
