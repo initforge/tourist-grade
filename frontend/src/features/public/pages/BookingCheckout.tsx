@@ -301,9 +301,14 @@ export default function BookingCheckout() {
   const restoreDraft = useCallback((draft: Record<string, unknown>) => {
     const draftBooking = (draft.booking as Booking | null | undefined) ?? null;
     const draftStep = (draft.activeStep as CheckoutStep | undefined) ?? 0;
+    const storedBooking = draftBooking
+      ? bookingsRef.current.find((b) => b.id === draftBooking.id || b.bookingCode === draftBooking.bookingCode)
+      : null;
+    const isStoredCancelled = storedBooking ? isCancelledBookingStatus(storedBooking.status) : false;
     if (
       draftStep === 2
       || isSuccessfulPaymentStatus(draftBooking?.paymentStatus)
+      || isStoredCancelled
       || isCancelledBookingStatus(draftBooking?.status)
       || !draftBooking
       || draftStep === 0
@@ -378,10 +383,14 @@ export default function BookingCheckout() {
     const effectiveDraftBooking = storedDraftBooking ?? draftBooking;
     const draftStep = (draft.activeStep as CheckoutStep | undefined) ?? 0;
 
+    const isStoredCancelled = storedDraftBooking ? isCancelledBookingStatus(storedDraftBooking.status) : false;
+    const isLocalCancelled = isCancelledBookingStatus(draftBooking?.status);
+
     if (
       draftStep === 2
       || isSuccessfulPaymentStatus(effectiveDraftBooking?.paymentStatus)
-      || isCancelledBookingStatus(effectiveDraftBooking?.status)
+      || (storedDraftBooking && isStoredCancelled)
+      || (storedDraftBooking === null && isLocalCancelled)
     ) {
       clearDraftFromStorage(draftStorageKey);
       return;
@@ -396,7 +405,7 @@ export default function BookingCheckout() {
       if (restoredDraftKeyRef.current === draftStorageKey) {
         return;
       }
-      if (isCancelledBookingStatus(effectiveDraftBooking?.status)) {
+      if (isStoredCancelled || isLocalCancelled) {
         clearDraftFromStorage(draftStorageKey);
         return;
       }
