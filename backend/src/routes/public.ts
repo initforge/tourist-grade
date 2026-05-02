@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { asyncHandler, notFound } from '../lib/http.js';
 import { mapBlogPost } from '../lib/mappers.js';
 import { normalizePayload } from '../lib/text.js';
+import { runBookingLifecycleJobs } from '../lib/booking-lifecycle.js';
 
 const publicInstanceInclude = {
   bookings: {
@@ -25,6 +26,8 @@ export function createPublicRouter() {
   const router = Router();
 
   router.get('/tours', asyncHandler(async (_req, res) => {
+    await runBookingLifecycleJobs(prisma);
+
     const programs = await prisma.tourProgram.findMany({
       where: {
         status: 'ACTIVE',
@@ -53,6 +56,8 @@ export function createPublicRouter() {
   }));
 
   router.get('/tours/:slug', asyncHandler(async (req, res) => {
+    await runBookingLifecycleJobs(prisma);
+
     const slug = String(req.params.slug);
     const program = await prisma.tourProgram.findUnique({
       where: { slug },

@@ -174,13 +174,11 @@ export function createTourInstancesRouter() {
     res.status(201).json({ success: true, tourInstance: mapTourInstance(created) });
   }));
 
-  router.get('/:id', asyncHandler(async (req, res) => {
+  router.get('/:id', asyncHandler(async (req: AuthenticatedRequest, res) => {
     const id = String(req.params.id);
     const instance = await prisma.tourInstance.findFirst({
       include: tourInstanceInclude,
-      where: {
-        OR: [{ id }, { code: id }],
-      },
+      where: buildInstanceAccessWhere(id, req.auth),
     });
 
     if (!instance) {
@@ -193,7 +191,7 @@ export function createTourInstancesRouter() {
     });
   }));
 
-  router.patch('/:id', requireRoles('coordinator', 'manager', 'admin'), asyncHandler(async (req, res) => {
+  router.patch('/:id', requireRoles('coordinator', 'manager', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
     const input = instanceUpsertSchema.partial().safeParse(req.body);
     if (!input.success) {
       throw badRequest('Invalid tour instance payload');
@@ -201,7 +199,7 @@ export function createTourInstancesRouter() {
 
     const existing = await prisma.tourInstance.findFirst({
       include: tourInstanceInclude,
-      where: { OR: [{ id: String(req.params.id) }, { code: String(req.params.id) }] },
+      where: buildInstanceAccessWhere(String(req.params.id), req.auth),
     });
 
     if (!existing) {
@@ -245,9 +243,9 @@ export function createTourInstancesRouter() {
     res.json({ success: true, tourInstance: mapTourInstance(updated) });
   }));
 
-  router.delete('/:id', requireRoles('coordinator', 'manager', 'admin'), asyncHandler(async (req, res) => {
+  router.delete('/:id', requireRoles('coordinator', 'manager', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
     const existing = await prisma.tourInstance.findFirst({
-      where: { OR: [{ id: String(req.params.id) }, { code: String(req.params.id) }] },
+      where: buildInstanceAccessWhere(String(req.params.id), req.auth),
     });
 
     if (!existing) {
@@ -262,7 +260,7 @@ export function createTourInstancesRouter() {
   }));
 
   router.post('/:id/receive', requireRoles('coordinator', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const existing = await getInstance(String(req.params.id));
+    const existing = await getInstance(String(req.params.id), req.auth);
     if (!existing) {
       throw notFound('Tour instance not found');
     }
@@ -286,7 +284,7 @@ export function createTourInstancesRouter() {
       throw badRequest('Invalid guide assignment payload');
     }
 
-    const existing = await getInstance(String(req.params.id));
+    const existing = await getInstance(String(req.params.id), req.auth);
     if (!existing) {
       throw notFound('Tour instance not found');
     }
@@ -327,13 +325,13 @@ export function createTourInstancesRouter() {
     res.json({ success: true, tourInstance: mapTourInstance(updated) });
   }));
 
-  router.post('/:id/estimate', requireRoles('coordinator', 'admin'), asyncHandler(async (req, res) => {
+  router.post('/:id/estimate', requireRoles('coordinator', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
     const input = estimateSchema.safeParse(req.body);
     if (!input.success) {
       throw badRequest('Invalid estimate payload');
     }
 
-    const existing = await getInstance(String(req.params.id));
+    const existing = await getInstance(String(req.params.id), req.auth);
     if (!existing) {
       throw notFound('Tour instance not found');
     }
@@ -358,7 +356,7 @@ export function createTourInstancesRouter() {
   }));
 
   router.post('/:id/estimate/approve', requireRoles('manager', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const existing = await getInstance(String(req.params.id));
+    const existing = await getInstance(String(req.params.id), req.auth);
     if (!existing) {
       throw notFound('Tour instance not found');
     }
@@ -377,13 +375,13 @@ export function createTourInstancesRouter() {
     res.json({ success: true, tourInstance: mapTourInstance(updated) });
   }));
 
-  router.post('/:id/estimate/request-edit', requireRoles('manager', 'admin'), asyncHandler(async (req, res) => {
+  router.post('/:id/estimate/request-edit', requireRoles('manager', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
     const input = reasonSchema.safeParse(req.body);
     if (!input.success) {
       throw badRequest('Edit request reason is required');
     }
 
-    const existing = await getInstance(String(req.params.id));
+    const existing = await getInstance(String(req.params.id), req.auth);
     if (!existing) {
       throw notFound('Tour instance not found');
     }
@@ -400,13 +398,13 @@ export function createTourInstancesRouter() {
     res.json({ success: true, tourInstance: mapTourInstance(updated) });
   }));
 
-  router.post('/:id/estimate/reject', requireRoles('manager', 'admin'), asyncHandler(async (req, res) => {
+  router.post('/:id/estimate/reject', requireRoles('manager', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
     const input = reasonSchema.safeParse(req.body);
     if (!input.success) {
       throw badRequest('Rejection reason is required');
     }
 
-    const existing = await getInstance(String(req.params.id));
+    const existing = await getInstance(String(req.params.id), req.auth);
     if (!existing) {
       throw notFound('Tour instance not found');
     }
@@ -424,13 +422,13 @@ export function createTourInstancesRouter() {
     res.json({ success: true, tourInstance: mapTourInstance(updated) });
   }));
 
-  router.post('/:id/settlement', requireRoles('coordinator', 'admin'), asyncHandler(async (req, res) => {
+  router.post('/:id/settlement', requireRoles('coordinator', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
     const input = settlementSchema.safeParse(req.body);
     if (!input.success) {
       throw badRequest('Invalid settlement payload');
     }
 
-    const existing = await getInstance(String(req.params.id));
+    const existing = await getInstance(String(req.params.id), req.auth);
     if (!existing) {
       throw notFound('Tour instance not found');
     }
@@ -456,7 +454,7 @@ export function createTourInstancesRouter() {
       throw badRequest('Cancellation reason is required');
     }
 
-    const existing = await getInstance(String(req.params.id));
+    const existing = await getInstance(String(req.params.id), req.auth);
     if (!existing) {
       throw notFound('Tour instance not found');
     }
@@ -539,7 +537,7 @@ export function createTourInstancesRouter() {
   }));
 
   router.post('/:id/approve-sale', requireRoles('manager', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const existing = await getInstance(String(req.params.id));
+    const existing = await getInstance(String(req.params.id), req.auth);
     if (!existing) {
       throw notFound('Tour instance not found');
     }
@@ -558,13 +556,13 @@ export function createTourInstancesRouter() {
     res.json({ success: true, tourInstance: mapTourInstance(updated) });
   }));
 
-  router.post('/:id/reject-sale', requireRoles('manager', 'admin'), asyncHandler(async (req, res) => {
+  router.post('/:id/reject-sale', requireRoles('manager', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
     const input = reasonSchema.safeParse(req.body);
     if (!input.success) {
       throw badRequest('Rejection reason is required');
     }
 
-    const existing = await getInstance(String(req.params.id));
+    const existing = await getInstance(String(req.params.id), req.auth);
     if (!existing) {
       throw notFound('Tour instance not found');
     }
@@ -581,13 +579,13 @@ export function createTourInstancesRouter() {
     res.json({ success: true, tourInstance: mapTourInstance(updated) });
   }));
 
-  router.post('/:id/request-edit-sale', requireRoles('manager', 'admin'), asyncHandler(async (req, res) => {
+  router.post('/:id/request-edit-sale', requireRoles('manager', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
     const input = reasonSchema.safeParse(req.body);
     if (!input.success) {
       throw badRequest('Edit request reason is required');
     }
 
-    const existing = await getInstance(String(req.params.id));
+    const existing = await getInstance(String(req.params.id), req.auth);
     if (!existing) {
       throw notFound('Tour instance not found');
     }
@@ -604,13 +602,13 @@ export function createTourInstancesRouter() {
     res.json({ success: true, tourInstance: mapTourInstance(updated) });
   }));
 
-  router.post('/:id/extend-deadline', requireRoles('manager', 'admin'), asyncHandler(async (req, res) => {
+  router.post('/:id/extend-deadline', requireRoles('manager', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
     const input = extendSchema.safeParse(req.body);
     if (!input.success) {
       throw badRequest('Invalid deadline payload');
     }
 
-    const existing = await getInstance(String(req.params.id));
+    const existing = await getInstance(String(req.params.id), req.auth);
     if (!existing) {
       throw notFound('Tour instance not found');
     }
@@ -627,8 +625,8 @@ export function createTourInstancesRouter() {
     res.json({ success: true, tourInstance: mapTourInstance(updated) });
   }));
 
-  router.post('/:id/continue-insufficient', requireRoles('manager', 'admin'), asyncHandler(async (req, res) => {
-    const existing = await getInstance(String(req.params.id));
+  router.post('/:id/continue-insufficient', requireRoles('manager', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const existing = await getInstance(String(req.params.id), req.auth);
     if (!existing) {
       throw notFound('Tour instance not found');
     }
@@ -647,10 +645,19 @@ export function createTourInstancesRouter() {
   return router;
 }
 
-async function getInstance(id: string) {
+function buildInstanceAccessWhere(id: string, auth?: AuthenticatedRequest['auth']): Prisma.TourInstanceWhereInput {
+  return {
+    AND: [
+      { OR: [{ id }, { code: id }] },
+      getVisibleTourInstanceWhere(auth),
+    ],
+  };
+}
+
+async function getInstance(id: string, auth?: AuthenticatedRequest['auth']) {
   return prisma.tourInstance.findFirst({
     include: tourInstanceInclude,
-    where: { OR: [{ id }, { code: id }] },
+    where: buildInstanceAccessWhere(id, auth),
   });
 }
 

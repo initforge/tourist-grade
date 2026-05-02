@@ -11,7 +11,29 @@ export const UNPAID_BOOKING_CANCEL_REASON = 'Quá hạn thanh toán giữ chỗ'
 export const CANCEL_REQUEST_AUTO_CONFIRM_HOURS = 24;
 export const AUTO_CANCEL_CONFIRM_ACTOR = 'Hệ thống';
 export const READY_FOR_OPERATIONS_STATUSES = ['DANG_MO_BAN'] satisfies TourInstanceStatus[];
+export const UNDERFILLED_MONITOR_STATUSES = ['DANG_MO_BAN', 'CHO_NHAN_DIEU_HANH', 'CHO_DU_TOAN'] satisfies TourInstanceStatus[];
 export const MIN_CONFIRMED_DEPARTURE_GUESTS = 10;
+
+type BookingWithPassengers = {
+  status: BookingStatus;
+  passengers: unknown[];
+};
+
+function getActiveBookings<T extends BookingWithPassengers>(bookings: T[]) {
+  return bookings.filter((booking) => booking.status !== 'CANCELLED');
+}
+
+function getConfirmedGuestCount(bookings: BookingWithPassengers[]) {
+  return bookings
+    .filter((booking) => booking.status === 'CONFIRMED' || booking.status === 'COMPLETED')
+    .reduce((sum, booking) => sum + booking.passengers.length, 0);
+}
+
+function areActiveBookingsResolved(bookings: BookingWithPassengers[]) {
+  return bookings.every((booking) => (
+    booking.status === 'CONFIRMED' || booking.status === 'COMPLETED'
+  ));
+}
 
 export async function normalizeLegacyBookedStatuses(prisma: PrismaClient) {
   return prisma.booking.updateMany({
@@ -235,16 +257,11 @@ export async function promoteReadyTourInstances(prisma: PrismaClient, now = new 
 
   const readyIds = candidates
     .filter((instance) => {
-      const relevantBookings = instance.bookings.filter((booking) => booking.status !== 'CANCELLED');
-      const allBookingsResolved = relevantBookings.every((booking) => (
-        booking.status === 'CONFIRMED' || booking.status === 'COMPLETED'
-      ));
-      const confirmedGuestCount = relevantBookings
-        .filter((booking) => booking.status === 'CONFIRMED' || booking.status === 'COMPLETED')
-        .reduce((sum, booking) => sum + booking.passengers.length, 0);
+      const relevantBookings = getActiveBookings(instance.bookings);
+      const confirmedGuestCount = getConfirmedGuestCount(relevantBookings);
 
       return relevantBookings.length > 0
-        && allBookingsResolved
+        && areActiveBookingsResolved(relevantBookings)
         && confirmedGuestCount >= MIN_CONFIRMED_DEPARTURE_GUESTS;
     })
     .map((instance) => instance.id);
@@ -267,7 +284,7 @@ export async function promoteReadyTourInstances(prisma: PrismaClient, now = new 
 export async function markUnderfilledTourInstances(prisma: PrismaClient, now = new Date()) {
   const candidates = await prisma.tourInstance.findMany({
     where: {
-      status: { in: READY_FOR_OPERATIONS_STATUSES },
+      status: { in: UNDERFILLED_MONITOR_STATUSES },
       bookingDeadlineAt: { lte: now },
     },
     include: {
@@ -281,9 +298,14 @@ export async function markUnderfilledTourInstances(prisma: PrismaClient, now = n
 
   const underfilledIds = candidates
     .filter((instance) => {
-      const confirmedGuestCount = instance.bookings
-        .filter((booking) => booking.status === 'CONFIRMED' || booking.status === 'COMPLETED')
-        .reduce((sum, booking) => sum + booking.passengers.length, 0);
+      const relevantBookings = getActiveBookings(instance.bookings);
+      const confirmedGuestCount = getConfirmedGuestCount(relevantBookings);
+      const allActiveBookingsResolved = areActiveBookingsResolved(relevantBookings);
+
+      if (instance.status === 'DANG_MO_BAN') {
+        return allActiveBookingsResolved && confirmedGuestCount < MIN_CONFIRMED_DEPARTURE_GUESTS;
+      }
+
       return confirmedGuestCount < MIN_CONFIRMED_DEPARTURE_GUESTS;
     })
     .map((instance) => instance.id);
@@ -295,12 +317,74 @@ export async function markUnderfilledTourInstances(prisma: PrismaClient, now = n
   return prisma.tourInstance.updateMany({
     where: {
       id: { in: underfilledIds },
-      status: { in: READY_FOR_OPERATIONS_STATUSES },
+      status: { in: UNDERFILLED_MONITOR_STATUSES },
     },
     data: {
       status: 'CHUA_DU_KIEN' satisfies TourInstanceStatus,
     },
   });
+}
+
+export async function advanceTourExecutionStatuses(prisma: PrismaClient, now = new Date()) {
+  const todayKey = getHoChiMinhDateKey(now);
+  const candidates = await prisma.tourInstance.findMany({
+    where: {
+      status: { in: ['SAN_SANG_TRIEN_KHAI', 'DANG_TRIEN_KHAI'] satisfies TourInstanceStatus[] },
+    },
+    include: {
+      program: {
+        select: {
+          durationDays: true,
+        },
+      },
+    },
+  });
+
+  const deployingIds = candidates
+    .filter((instance) => {
+      if (instance.status !== 'SAN_SANG_TRIEN_KHAI') return false;
+      const departureKey = toUtcDateKey(instance.departureDate);
+      const completionKey = getTourCompletionDate(instance.departureDate, instance.program.durationDays);
+      return departureKey <= todayKey && todayKey <= completionKey;
+    })
+    .map((instance) => instance.id);
+
+  const settlementIds = candidates
+    .filter((instance) => {
+      if (instance.status !== 'DANG_TRIEN_KHAI') return false;
+      const completionKey = getTourCompletionDate(instance.departureDate, instance.program.durationDays);
+      return todayKey > completionKey;
+    })
+    .map((instance) => instance.id);
+
+  const deployingResult = deployingIds.length === 0
+    ? { count: 0 }
+    : await prisma.tourInstance.updateMany({
+      where: {
+        id: { in: deployingIds },
+        status: 'SAN_SANG_TRIEN_KHAI' satisfies TourInstanceStatus,
+      },
+      data: {
+        status: 'DANG_TRIEN_KHAI' satisfies TourInstanceStatus,
+      },
+    });
+
+  const settlementResult = settlementIds.length === 0
+    ? { count: 0 }
+    : await prisma.tourInstance.updateMany({
+      where: {
+        id: { in: settlementIds },
+        status: 'DANG_TRIEN_KHAI' satisfies TourInstanceStatus,
+      },
+      data: {
+        status: 'CHO_QUYET_TOAN' satisfies TourInstanceStatus,
+      },
+    });
+
+  return {
+    deploying: deployingResult.count,
+    settlement: settlementResult.count,
+  };
 }
 
 export async function runBookingLifecycleJobs(prisma: PrismaClient, now = new Date()) {
@@ -309,5 +393,6 @@ export async function runBookingLifecycleJobs(prisma: PrismaClient, now = new Da
   await autoConfirmOverdueCancelRequests(prisma, now);
   await markUnderfilledTourInstances(prisma, now);
   await promoteReadyTourInstances(prisma, now);
+  await advanceTourExecutionStatuses(prisma, now);
   await completeFinishedTourBookings(prisma, now);
 }

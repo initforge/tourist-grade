@@ -133,6 +133,13 @@ function formatCurrency(value: number) {
   return `${value.toLocaleString('vi-VN')} đ`;
 }
 
+function formatTarget(value: RowTarget) {
+  if (value === 'adult') return 'Người lớn';
+  if (value === 'child') return 'Trẻ em';
+  if (value === 'infant') return 'Trẻ sơ sinh';
+  return 'Tất cả';
+}
+
 function cleanText(value?: string) {
   return (value ?? '-').replace(/\?\./g, '.').replace(/\s+\?/g, '');
 }
@@ -537,14 +544,18 @@ function mergeChoices(primary: EstimateChoice[], secondary: EstimateChoice[]) {
   });
 }
 
-function selectedChoices(choices: EstimateChoice[], selections: Array<{ optionId: string }>) {
+function selectedChoices(choices: EstimateChoice[], selections: Array<{ optionId: string; manualPrice?: number | null }>) {
   if (selections.length === 0) return [];
   const selectedIds = new Set(selections.map((selection) => selection.optionId));
+  const selectionById = new Map(selections.map((selection) => [selection.optionId, selection]));
   const seen = new Set<string>();
   return choices.filter((choice) => {
     if (!selectedIds.has(choice.id) || seen.has(choice.id)) return false;
     seen.add(choice.id);
     return true;
+  }).map((choice) => {
+    const manualPrice = selectionById.get(choice.id)?.manualPrice;
+    return manualPrice != null ? { ...choice, unitPrice: manualPrice } : choice;
   });
 }
 
@@ -645,60 +656,58 @@ function buildFallbackRows(
   const transportSelections = pricingTables?.transport ?? [];
   const allTransportChoices = mergeChoices(supplierTransportChoices(suppliers, departureDate, 'Xe'), fallbackTransportChoices());
   const transportChoices = selectedChoices(allTransportChoices, transportSelections);
-  transportSelections.forEach((selection, index) => {
-    const selected = transportChoices.find((choice) => choice.id === selection.optionId);
-    if (!selected) return;
+  const selectedTransport = findPreferredChoice(transportChoices, transportSelections);
+  if (selectedTransport) {
     pushRow({
-      rowId: `A-transport-${index}`,
+      rowId: 'A-transport',
       categoryId: 'A',
       categoryName: 'Vận chuyển',
       itemName: 'Xe vận chuyển',
-      supplierName: selected.supplierName,
-      serviceVariant: selected.serviceVariant,
+      supplierName: selectedTransport.supplierName,
+      serviceVariant: selectedTransport.serviceVariant,
       unit: 'chuyến',
       target: 'all',
       quantity: 1,
       occurrences: 1,
       quantityEditable: false,
       occurrencesEditable: false,
-      unitPrice: selection.manualPrice ?? selected.unitPrice,
+      unitPrice: selectedTransport.unitPrice,
       unitPriceEditable: true,
       systemManagedPrice: false,
       total: 0,
       note: '',
-      optionId: selected.id,
+      optionId: selectedTransport.id,
       optionChoices: transportChoices,
     });
-  });
+  }
 
   const flightSelections = pricingTables?.flight ?? [];
   const allFlightChoices = mergeChoices(supplierTransportChoices(suppliers, departureDate, 'Máy bay'), fallbackFlightChoices());
   const flightChoices = selectedChoices(allFlightChoices, flightSelections);
-  flightSelections.forEach((selection, index) => {
-    const selected = flightChoices.find((choice) => choice.id === selection.optionId);
-    if (!selected) return;
+  const selectedFlight = findPreferredChoice(flightChoices, flightSelections);
+  if (selectedFlight) {
     pushRow({
-      rowId: `A-flight-${index}`,
+      rowId: 'A-flight',
       categoryId: 'A',
       categoryName: 'Vận chuyển',
       itemName: 'Vé máy bay',
-      supplierName: selected.supplierName,
-      serviceVariant: selected.serviceVariant,
+      supplierName: selectedFlight.supplierName,
+      serviceVariant: selectedFlight.serviceVariant,
       unit: 'khách',
       target: 'all',
       quantity: Math.max(1, stats.totalGuests),
       occurrences: 1,
       quantityEditable: false,
       occurrencesEditable: false,
-      unitPrice: selection.manualPrice ?? selected.unitPrice,
+      unitPrice: selectedFlight.unitPrice,
       unitPriceEditable: true,
       systemManagedPrice: false,
       total: 0,
       note: '',
-      optionId: selected.id,
+      optionId: selectedFlight.id,
       optionChoices: flightChoices,
     });
-  });
+  }
 
   getGroupedAccommodation(program).forEach((group) => {
     const selections = pricingTables?.hotels?.[group.id] ?? [];
@@ -775,56 +784,57 @@ function buildFallbackRows(
     const day = Number(groupId.split('-')[1] || index + 1);
     const dateKey = addDays(departureDate, day - 1);
     const choices = selectedChoices(mergeChoices(serviceChoices(services, 'Vé tham quan', 'adult', dateKey), fallbackAttractionChoices(dateKey)), selections);
-    const selected = findPreferredChoice(choices, selections);
-    if (!selected) return;
-    if (stats.adults > 0) {
-      pushRow({
-        rowId: `D-${groupId}-adult`,
-        groupId,
-        categoryId: 'D',
-        categoryName: 'Vé thắng cảnh',
-        itemName: `Ngày ${day} - Người lớn`,
-        supplierName: selected.supplierName,
-        serviceVariant: selected.serviceVariant,
-        unit: 'khách',
-        target: 'adult',
-        quantity: stats.adults,
-        occurrences: 1,
-        quantityEditable: false,
-        occurrencesEditable: false,
-        unitPrice: selected.unitPrice,
-        unitPriceEditable: false,
-        systemManagedPrice: true,
-        total: 0,
-        note: '',
-        optionId: selected.id,
-        optionChoices: choices,
-      });
-    }
-    if (stats.children > 0) {
-      pushRow({
-        rowId: `D-${groupId}-child`,
-        groupId,
-        categoryId: 'D',
-        categoryName: 'Vé thắng cảnh',
-        itemName: `Ngày ${day} - Trẻ em`,
-        supplierName: selected.supplierName,
-        serviceVariant: selected.serviceVariant,
-        unit: 'khách',
-        target: 'child',
-        quantity: stats.children,
-        occurrences: 1,
-        quantityEditable: false,
-        occurrencesEditable: false,
-        unitPrice: selected.childUnitPrice ?? selected.unitPrice,
-        unitPriceEditable: false,
-        systemManagedPrice: true,
-        total: 0,
-        note: '',
-        optionId: selected.id,
-        optionChoices: choices,
-      });
-    }
+    choices.forEach((selected) => {
+      const itemGroupId = `${groupId}-${selected.id}`;
+      if (stats.adults > 0) {
+        pushRow({
+          rowId: `D-${itemGroupId}-adult`,
+          groupId: itemGroupId,
+          categoryId: 'D',
+          categoryName: 'Vé thắng cảnh',
+          itemName: `Ngày ${day} - ${selected.serviceVariant} - Người lớn`,
+          supplierName: selected.supplierName,
+          serviceVariant: selected.serviceVariant,
+          unit: 'khách',
+          target: 'adult',
+          quantity: stats.adults,
+          occurrences: 1,
+          quantityEditable: false,
+          occurrencesEditable: false,
+          unitPrice: selected.unitPrice,
+          unitPriceEditable: false,
+          systemManagedPrice: true,
+          total: 0,
+          note: '',
+          optionId: selected.id,
+          optionChoices: [selected],
+        });
+      }
+      if (stats.children > 0) {
+        pushRow({
+          rowId: `D-${itemGroupId}-child`,
+          groupId: itemGroupId,
+          categoryId: 'D',
+          categoryName: 'Vé thắng cảnh',
+          itemName: `Ngày ${day} - ${selected.serviceVariant} - Trẻ em`,
+          supplierName: selected.supplierName,
+          serviceVariant: selected.serviceVariant,
+          unit: 'khách',
+          target: 'child',
+          quantity: stats.children,
+          occurrences: 1,
+          quantityEditable: false,
+          occurrencesEditable: false,
+          unitPrice: selected.childUnitPrice ?? selected.unitPrice,
+          unitPriceEditable: false,
+          systemManagedPrice: true,
+          total: 0,
+          note: '',
+          optionId: selected.id,
+          optionChoices: [selected],
+        });
+      }
+    });
   });
 
   const guideChoices = mergeChoices([
@@ -896,7 +906,7 @@ function buildFallbackRows(
       total: 0,
       note: selection.note ?? '',
       optionId: selected.id,
-      optionChoices: otherChoices,
+      optionChoices: [selected],
     });
   });
 
@@ -1124,13 +1134,13 @@ export default function TourEstimate() {
       if (!sourceRow) return previous;
       const selectedChoice = sourceRow.optionChoices.find((choice) => choice.id === nextChoiceId);
       if (!selectedChoice) return previous;
-      const affectedGroupId = sourceRow.categoryId === 'B' || sourceRow.categoryId === 'D' ? sourceRow.groupId : undefined;
+      const affectedGroupId = sourceRow.categoryId === 'B' ? sourceRow.groupId : undefined;
       return previous.map((row) => {
         const shouldUpdate = row.rowId === rowId || (affectedGroupId && row.groupId === affectedGroupId);
         if (!shouldUpdate) return row;
-        const sameGroupChoice = row.optionChoices.find((choice) => (
-          choice.supplierName === selectedChoice.supplierName && choice.serviceVariant === selectedChoice.serviceVariant
-        )) ?? selectedChoice;
+        const sameGroupChoice = row.optionChoices.find((choice) => choice.id === selectedChoice.id)
+          ?? row.optionChoices.find((choice) => choice.supplierName === selectedChoice.supplierName)
+          ?? selectedChoice;
         return applyChoice(row, sameGroupChoice, estimateStats, program.duration.days);
       });
     });
@@ -1444,10 +1454,10 @@ export default function TourEstimate() {
 
           <div className="mb-6 overflow-hidden border border-[#D0C5AF]/40 bg-white shadow-sm">
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left">
+              <table className="w-full min-w-[1180px] border-collapse text-left">
                 <thead>
                   <tr className="bg-[#D4AF37] text-white shadow-sm">
-                    {['STT', 'Khoản mục', 'Nhà cung cấp', 'Dịch vụ', 'Đơn vị', 'Đối tượng', 'Số lượng', 'Số lần', 'Đơn giá áp dụng', 'Thành tiền', 'Thao tác'].map((header) => (
+                    {['Khoản mục', 'Nhà cung cấp', 'Đơn vị', 'Đối tượng', 'Số lượng', 'Đêm/Lượt/Bữa', 'Đơn giá áp dụng', 'Thành tiền', 'Thao tác'].map((header) => (
                       <th key={header} className="whitespace-nowrap px-4 py-4 text-[10px] font-bold uppercase tracking-widest">{header}</th>
                     ))}
                   </tr>
@@ -1456,39 +1466,39 @@ export default function TourEstimate() {
                   {groupedRows.map((category) => (
                     <React.Fragment key={category.categoryId}>
                       <tr className="border-t border-[#D0C5AF]/30 bg-[var(--color-surface)]">
-                        <td colSpan={11} className="px-6 py-3 font-bold text-[var(--color-primary)]">{category.categoryId}. {category.categoryName}</td>
+                        <td colSpan={9} className="px-6 py-3 font-bold text-[var(--color-primary)]">{category.categoryId}. {category.categoryName}</td>
                       </tr>
                       {category.rows.map((row, index) => {
-                        const usedOtherChoiceIds = new Set(
-                          category.categoryId === 'F'
-                            ? category.rows.filter((item) => item.rowId !== row.rowId).map((item) => item.optionId).filter(Boolean)
-                            : [],
+                        const firstHotelRowIndex = row.categoryId === 'B'
+                          ? category.rows.findIndex((item) => item.groupId === row.groupId)
+                          : -1;
+                        const canSelectChoice = row.optionChoices.length > 1 && (
+                          row.categoryId === 'A'
+                          || row.categoryId === 'C'
+                          || (row.categoryId === 'B' && index === firstHotelRowIndex)
                         );
-                        const visibleChoices = category.categoryId === 'F'
-                          ? row.optionChoices.filter((choice) => choice.id === row.optionId || !usedOtherChoiceIds.has(choice.id))
-                          : row.optionChoices;
                         return (
                           <tr key={row.rowId} className="border-t border-[#D0C5AF]/10 bg-white">
-                            <td className="px-4 py-3">{index + 1}</td>
                             <td className="px-4 py-3 font-medium">{row.itemName}</td>
-                            <td className="px-4 py-3"><SupplierContactLink row={row} /></td>
                             <td className="px-4 py-3">
-                              {visibleChoices.length > 1 ? (
+                              {canSelectChoice ? (
                                 <select
                                   value={row.optionId}
                                   onChange={(event) => updateRowChoice(row.rowId, event.target.value)}
                                   className="w-full border border-[#D0C5AF]/40 px-2 py-1"
                                 >
-                                  {visibleChoices.map((choice) => (
+                                  {row.optionChoices.map((choice) => (
                                     <option key={choice.id} value={choice.id}>
-                                      {choice.serviceVariant}{choice.supplierName !== row.supplierName ? ` - ${choice.supplierName}` : ''}
+                                      {choice.supplierName} - {choice.serviceVariant}
                                     </option>
                                   ))}
                                 </select>
-                              ) : row.serviceVariant}
+                              ) : (
+                                <SupplierContactLink row={row} />
+                              )}
                             </td>
                             <td className="px-4 py-3">{row.unit}</td>
-                            <td className="px-4 py-3">{row.target}</td>
+                            <td className="px-4 py-3">{formatTarget(row.target)}</td>
                             <td className="px-4 py-3">
                               <input
                                 type="number"
@@ -1543,7 +1553,7 @@ export default function TourEstimate() {
                 </tbody>
                 <tfoot className="bg-[var(--color-surface)]">
                   <tr className="border-t-2 border-[#D0C5AF]/50">
-                    <td colSpan={9} className="px-6 py-5 text-right text-[11px] font-bold uppercase tracking-widest text-[var(--color-primary)]">Tổng dự chi:</td>
+                    <td colSpan={7} className="px-6 py-5 text-right text-[11px] font-bold uppercase tracking-widest text-[var(--color-primary)]">Tổng dự chi:</td>
                     <td className="px-6 py-5 text-right text-lg font-bold text-[var(--color-primary)]">{formatCurrency(totalCost)}</td>
                     <td />
                   </tr>

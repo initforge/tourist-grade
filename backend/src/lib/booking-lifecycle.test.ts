@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   completeFinishedTourBookings,
+  advanceTourExecutionStatuses,
   getTourCompletionDate,
+  markUnderfilledTourInstances,
   promoteReadyTourInstances,
   shouldMarkBookingCompleted,
 } from './booking-lifecycle.js';
@@ -107,5 +109,98 @@ describe('booking lifecycle', () => {
       },
     });
     expect(result).toEqual({ count: 1 });
+  });
+
+  it('does not mark open-sale tours underfilled until active bookings are resolved', async () => {
+    const prisma = {
+      tourInstance: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'pending-sale-instance',
+            status: 'DANG_MO_BAN',
+            bookings: [
+              { status: 'CONFIRMED', passengers: Array.from({ length: 4 }, (_, index) => ({ id: `P${index}` })) },
+              { status: 'PENDING', passengers: [{ id: 'P5' }] },
+            ],
+          },
+          {
+            id: 'underfilled-sale-instance',
+            status: 'DANG_MO_BAN',
+            bookings: [
+              { status: 'CONFIRMED', passengers: Array.from({ length: 4 }, (_, index) => ({ id: `Q${index}` })) },
+              { status: 'CANCELLED', passengers: Array.from({ length: 8 }, (_, index) => ({ id: `C${index}` })) },
+            ],
+          },
+          {
+            id: 'underfilled-estimate-instance',
+            status: 'CHO_DU_TOAN',
+            bookings: [
+              { status: 'CONFIRMED', passengers: Array.from({ length: 8 }, (_, index) => ({ id: `R${index}` })) },
+              { status: 'CANCELLED', passengers: Array.from({ length: 4 }, (_, index) => ({ id: `D${index}` })) },
+            ],
+          },
+        ]),
+        updateMany: vi.fn().mockResolvedValue({ count: 2 }),
+      },
+    };
+
+    const result = await markUnderfilledTourInstances(prisma as never, new Date('2026-04-29T08:00:00.000Z'));
+
+    expect(prisma.tourInstance.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ['underfilled-sale-instance', 'underfilled-estimate-instance'] },
+        status: { in: ['DANG_MO_BAN', 'CHO_NHAN_DIEU_HANH', 'CHO_DU_TOAN'] },
+      },
+      data: {
+        status: 'CHUA_DU_KIEN',
+      },
+    });
+    expect(result).toEqual({ count: 2 });
+  });
+
+  it('advances deployment and settlement statuses based on the tour calendar', async () => {
+    const prisma = {
+      tourInstance: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'deploying-instance',
+            status: 'SAN_SANG_TRIEN_KHAI',
+            departureDate: new Date('2026-05-01T00:00:00.000Z'),
+            program: { durationDays: 3 },
+          },
+          {
+            id: 'settlement-instance',
+            status: 'DANG_TRIEN_KHAI',
+            departureDate: new Date('2026-04-25T00:00:00.000Z'),
+            program: { durationDays: 3 },
+          },
+        ]),
+        updateMany: vi.fn()
+          .mockResolvedValueOnce({ count: 1 })
+          .mockResolvedValueOnce({ count: 1 }),
+      },
+    };
+
+    const result = await advanceTourExecutionStatuses(prisma as never, new Date('2026-05-02T08:00:00.000Z'));
+
+    expect(prisma.tourInstance.updateMany).toHaveBeenNthCalledWith(1, {
+      where: {
+        id: { in: ['deploying-instance'] },
+        status: 'SAN_SANG_TRIEN_KHAI',
+      },
+      data: {
+        status: 'DANG_TRIEN_KHAI',
+      },
+    });
+    expect(prisma.tourInstance.updateMany).toHaveBeenNthCalledWith(2, {
+      where: {
+        id: { in: ['settlement-instance'] },
+        status: 'DANG_TRIEN_KHAI',
+      },
+      data: {
+        status: 'CHO_QUYET_TOAN',
+      },
+    });
+    expect(result).toEqual({ deploying: 1, settlement: 1 });
   });
 });

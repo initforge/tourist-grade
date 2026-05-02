@@ -54,7 +54,24 @@ export default function BookingHistory() {
     cancelled: bookings.filter((booking) => booking.userId === user?.id && statusMap.cancelled.includes(booking.status)).length,
   };
 
-  const getBookingImage = (tourId: string) => publicTours.find((tour) => tour.id === tourId)?.image || BOOKING_IMAGE_FALLBACK;
+  const normalizeTourName = (value?: string) => (value ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+  const getBookingImage = (booking: Booking) => {
+    const bookingName = normalizeTourName(booking.tourName);
+    const matchedTour = publicTours.find((tour) => {
+      const tourName = normalizeTourName(tour.title);
+      return tour.id === booking.tourId
+        || tour.slug === booking.tourId
+        || tourName === bookingName
+        || (bookingName.length > 0 && (tourName.includes(bookingName) || bookingName.includes(tourName)));
+    });
+    return matchedTour?.image || matchedTour?.gallery?.[0] || BOOKING_IMAGE_FALLBACK;
+  };
 
   const handlePay = async (booking: Booking) => {
     setPayBookingId(booking.id);
@@ -112,7 +129,7 @@ export default function BookingHistory() {
               <div key={booking.id} className="bg-white border border-[#D0C5AF]/40 shadow-sm flex flex-col md:flex-row group transition-colors hover:border-[var(--color-secondary)]/50">
                 <div className="md:w-64 h-48 md:h-auto overflow-hidden relative shrink-0">
                   <img
-                    src={getBookingImage(booking.tourId)}
+                    src={getBookingImage(booking)}
                     alt={booking.tourName}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                   />

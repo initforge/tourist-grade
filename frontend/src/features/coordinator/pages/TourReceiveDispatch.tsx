@@ -6,6 +6,7 @@ import type { Booking } from '@entities/booking/data/bookings';
 import { useAppDataStore, type SupplierRow } from '@shared/store/useAppDataStore';
 import { useAuthStore } from '@shared/store/useAuthStore';
 import { updateTourInstanceCommand } from '@shared/lib/api/tourInstances';
+import { isBookingConfirmedForOperations } from '@shared/lib/bookingLifecycle';
 
 type Tab = 'tong_quan' | 'ds_kh' | 'lichtrinh' | 'dutoan';
 
@@ -16,6 +17,7 @@ type ReceiveEstimateRow = {
   itemName: string;
   unit: string;
   quantity: number;
+  occurrences: number;
   unitPrice: number;
   total: number;
   supplierName: string;
@@ -31,12 +33,12 @@ function cleanText(value?: string) {
   return (value ?? '-').replace(/\?\./g, '.').replace(/\s+\?/g, '');
 }
 
-function getUsageMetric(unit: string, quantity: number) {
+function getUsageMetric(unit: string, occurrences: number) {
   const normalizedUnit = unit?.toLowerCase();
-  if (normalizedUnit?.includes('đêm')) return `${quantity} đêm`;
-  if (normalizedUnit?.includes('bữa') || normalizedUnit?.includes('bàn')) return `${quantity} bữa`;
-  if (normalizedUnit?.includes('lượt') || normalizedUnit?.includes('chuyến')) return `${quantity} lượt`;
-  return `${quantity} lượt`;
+  if (normalizedUnit?.includes('đêm')) return `${occurrences} đêm`;
+  if (normalizedUnit?.includes('bữa') || normalizedUnit?.includes('bàn')) return `${occurrences} bữa`;
+  if (normalizedUnit?.includes('lượt') || normalizedUnit?.includes('chuyến')) return `${occurrences} lượt`;
+  return `${occurrences} lượt`;
 }
 
 function getTargetLabel(itemName: string) {
@@ -87,12 +89,14 @@ export default function TourReceiveDispatch() {
       b?.instanceCode === instance.id || (!b?.instanceCode && b?.tourId === instance.id)
     ))
     : [];
+  const activeBookings = bookings.filter((booking) => booking.status !== 'cancelled');
+  const manifestBookings = bookings.filter(isBookingConfirmedForOperations);
   const createdByName = program?.createdBy ?? '-';
   const hasReceived = Boolean(isReceived || instance?.receivedAt || (instance && instance.status !== 'cho_nhan_dieu_hanh'));
 
   const TABS: { key: Tab; label: string }[] = [
     { key: 'tong_quan', label: 'Tổng quan' },
-    { key: 'ds_kh', label: 'Danh sách khách hàng' },
+    { key: 'ds_kh', label: readOnly ? 'Danh sách khách hàng' : 'Danh sách booking' },
     { key: 'lichtrinh', label: 'Lịch trình' },
     { key: 'dutoan', label: 'Dự toán' },
   ];
@@ -110,8 +114,9 @@ export default function TourReceiveDispatch() {
               itemName: item?.name,
               unit: item?.unit,
               quantity: item?.quantity,
-              unitPrice: supplier?.quotedPrice,
-              total: supplier?.quotedPrice * item?.quantity,
+              occurrences: item?.nightsOrRuns ?? 1,
+              unitPrice: item?.unitPrice ?? supplier?.quotedPrice,
+              total: item?.total,
               supplierName: supplier?.supplierName,
               serviceVariant: supplier?.serviceVariant,
               note: supplier?.notes ?? '',
@@ -121,12 +126,12 @@ export default function TourReceiveDispatch() {
     }
 
     return [
-      { id: 'A-1', categoryId: 'A', categoryName: 'Vận chuyển', itemName: 'Xe tham quan', unit: 'Xe', quantity: 1, unitPrice: 8100000, total: 8100000, supplierName: 'NCC A', serviceVariant: 'Xe 29 chỗ', note: 'Không có' },
-      { id: 'B-1', categoryId: 'B', categoryName: 'Khách sạn', itemName: 'Phòng đôi - Đêm 1, Đêm 2', unit: 'Phòng', quantity: 9, unitPrice: 1300000, total: 23400000, supplierName: 'Khách sạn A', serviceVariant: 'Phòng đôi', note: 'Kế thừa từ dự toán chương trình' },
-      { id: 'C-1', categoryId: 'C', categoryName: 'Chi phí ăn', itemName: 'Ngày 1 - Bữa trưa', unit: 'Người', quantity: instance?.expectedGuests ?? 1, unitPrice: 120000, total: (instance?.expectedGuests ?? 1) * 120000, supplierName: 'Nhà hàng A', serviceVariant: 'Set 1', note: '' },
-      { id: 'D-1', categoryId: 'D', categoryName: 'Vé thắng cảnh', itemName: 'Ngày 1 - Vé tham quan Sunworld', unit: 'Người', quantity: instance?.expectedGuests ?? 1, unitPrice: 250000, total: (instance?.expectedGuests ?? 1) * 250000, supplierName: 'NCC A', serviceVariant: 'Vé tham quan', note: '' },
-      { id: 'E-1', categoryId: 'E', categoryName: 'Hướng dẫn viên', itemName: 'Hướng dẫn viên', unit: 'Ngày', quantity: program?.duration?.days ?? 1, unitPrice: 400000, total: (program?.duration?.days ?? 1) * 400000, supplierName: 'HDV nội địa', serviceVariant: 'Hướng dẫn viên', note: '' },
-      { id: 'F-1', categoryId: 'F', categoryName: 'Chi phí khác', itemName: 'Bảo hiểm du lịch', unit: 'Người', quantity: instance?.expectedGuests ?? 1, unitPrice: 200000, total: (instance?.expectedGuests ?? 1) * 200000, supplierName: 'NCC V', serviceVariant: 'Bảo hiểm du lịch', note: '' },
+      { id: 'A-1', categoryId: 'A', categoryName: 'Vận chuyển', itemName: 'Xe tham quan', unit: 'Xe', quantity: 1, occurrences: 1, unitPrice: 8100000, total: 8100000, supplierName: 'NCC A', serviceVariant: 'Xe 29 chỗ', note: 'Không có' },
+      { id: 'B-1', categoryId: 'B', categoryName: 'Khách sạn', itemName: 'Phòng đôi - Đêm 1, Đêm 2', unit: 'Phòng', quantity: 9, occurrences: 2, unitPrice: 1300000, total: 23400000, supplierName: 'Khách sạn A', serviceVariant: 'Phòng đôi', note: 'Kế thừa từ dự toán chương trình' },
+      { id: 'C-1', categoryId: 'C', categoryName: 'Chi phí ăn', itemName: 'Ngày 1 - Bữa trưa', unit: 'Người', quantity: instance?.expectedGuests ?? 1, occurrences: 1, unitPrice: 120000, total: (instance?.expectedGuests ?? 1) * 120000, supplierName: 'Nhà hàng A', serviceVariant: 'Set 1', note: '' },
+      { id: 'D-1', categoryId: 'D', categoryName: 'Vé thắng cảnh', itemName: 'Ngày 1 - Vé tham quan Sunworld', unit: 'Người', quantity: instance?.expectedGuests ?? 1, occurrences: 1, unitPrice: 250000, total: (instance?.expectedGuests ?? 1) * 250000, supplierName: 'NCC A', serviceVariant: 'Vé tham quan', note: '' },
+      { id: 'E-1', categoryId: 'E', categoryName: 'Hướng dẫn viên', itemName: 'Hướng dẫn viên', unit: 'Ngày', quantity: 1, occurrences: program?.duration?.days ?? 1, unitPrice: 400000, total: (program?.duration?.days ?? 1) * 400000, supplierName: 'HDV nội địa', serviceVariant: 'Hướng dẫn viên', note: '' },
+      { id: 'F-1', categoryId: 'F', categoryName: 'Chi phí khác', itemName: 'Bảo hiểm du lịch', unit: 'Người', quantity: instance?.expectedGuests ?? 1, occurrences: 1, unitPrice: 200000, total: (instance?.expectedGuests ?? 1) * 200000, supplierName: 'NCC V', serviceVariant: 'Bảo hiểm du lịch', note: '' },
     ];
   }, [instance, program]);
 
@@ -253,12 +258,43 @@ export default function TourReceiveDispatch() {
           {activeTab === 'ds_kh' && (
             <div>
               <div className="flex items-center justify-between mb-5">
-                <h3 className="font-headline text-lg text-primary">Danh sách booking</h3>
+                <h3 className="font-headline text-lg text-primary">{readOnly ? 'Danh sách khách hàng' : 'Danh sách booking'}</h3>
                 <span className="text-xs bg-[var(--color-surface)] px-3 py-1 text-primary/60 font-mono">
-                  {bookings?.length} đơn đặt
+                  {readOnly ? manifestBookings.reduce((sum, booking) => sum + booking.passengers.length, 0) : activeBookings.length} {readOnly ? 'khách' : 'đơn đặt'}
                 </span>
               </div>
-              {bookings.length === 0 ? (
+              {readOnly ? (
+                manifestBookings.length === 0 ? (
+                  <div className="text-center py-16 text-primary/40">
+                    <span className="material-symbols-outlined text-5xl block mb-3">person_off</span>
+                    <p className="text-sm">Chưa có danh sách khách hàng đủ điều kiện vận hành</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-[var(--color-surface)] border-b border-outline-variant/30">
+                          {['Mã booking', 'STT khách', 'Họ tên', 'Ngày sinh', 'Giới tính', 'Quốc tịch']?.map(h => (
+                            <th key={h} className="text-left text-[10px] uppercase tracking-widest text-primary/50 font-medium px-4 py-3">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {manifestBookings.flatMap((booking) => booking.passengers.map((passenger, index) => (
+                          <tr key={`${booking.id}-${index}`} className="border-b border-outline-variant/20 hover:bg-surface-container-low transition-colors">
+                            <td className="px-4 py-3.5 font-mono text-xs">{booking.bookingCode}</td>
+                            <td className="px-4 py-3.5 text-xs">{index + 1}</td>
+                            <td className="px-4 py-3.5 text-sm">{passenger.name}</td>
+                            <td className="px-4 py-3.5 text-xs text-primary/60">{passenger.dob}</td>
+                            <td className="px-4 py-3.5 text-xs">{passenger.gender === 'male' ? 'Nam' : 'Nữ'}</td>
+                            <td className="px-4 py-3.5 text-xs">{passenger.nationality ?? 'Việt Nam'}</td>
+                          </tr>
+                        )))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              ) : activeBookings.length === 0 ? (
                 <div className="text-center py-16 text-primary/40">
                   <span className="material-symbols-outlined text-5xl block mb-3">person_off</span>
                   <p className="text-sm">Chưa có khách đặt tour này</p>
@@ -274,7 +310,7 @@ export default function TourReceiveDispatch() {
                       </tr>
                     </thead>
                     <tbody>
-                      {bookings?.map((b: Booking) => (
+                      {activeBookings?.map((b: Booking) => (
                         <tr key={b?.id} className="border-b border-outline-variant/20 hover:bg-surface-container-low transition-colors">
                           <td className="px-4 py-3.5 font-mono text-xs">{b?.bookingCode}</td>
                           <td className="px-4 py-3.5 text-sm">{b?.contactInfo?.name}</td>
@@ -348,7 +384,7 @@ export default function TourReceiveDispatch() {
                 <table className="w-full min-w-[1080px] text-left">
                   <thead>
                     <tr className="bg-[var(--color-surface)] border-b border-outline-variant/30">
-                      {['STT', 'Khoản mục', 'Nhà cung cấp', 'Đơn vị', 'Đối tượng', 'Số lượng', 'Đêm/Lượt/Bữa', 'Đơn giá áp dụng', 'Thành tiền', 'Thao tác']?.map(header => (
+                      {['Khoản mục', 'Nhà cung cấp', 'Đơn vị', 'Đối tượng', 'Số lượng', 'Đêm/Lượt/Bữa', 'Đơn giá áp dụng', 'Thành tiền', 'Thao tác']?.map(header => (
                         <th key={header} className="px-4 py-3 text-[10px] uppercase tracking-widest text-primary/50 font-medium">{header}</th>
                       ))}
                     </tr>
@@ -357,18 +393,17 @@ export default function TourReceiveDispatch() {
                     {groupedEstimateRows?.map(category => (
                       <Fragment key={category?.categoryId}>
                         <tr key={`${category?.categoryId}-header`} className="bg-blue-50 border-t border-outline-variant/20">
-                          <td colSpan={10} className="px-4 py-2 font-bold text-primary">{category?.categoryId}. {category?.categoryName}</td>
+                          <td colSpan={9} className="px-4 py-2 font-bold text-primary">{category?.categoryId}. {category?.categoryName}</td>
                         </tr>
-                        {category?.rows?.map((row, index) => (
+                        {category?.rows?.map((row) => (
                           <Fragment key={row?.id}>
                             <tr key={row?.id} className="border-t border-outline-variant/15">
-                              <td className="px-4 py-3 text-primary/50">{index + 1}</td>
                               <td className="px-4 py-3 font-medium">{row?.itemName}</td>
                               <td className="px-4 py-3"><SupplierContactLink supplierName={row?.supplierName} suppliers={suppliers} /></td>
                               <td className="px-4 py-3">{row?.unit}</td>
                               <td className="px-4 py-3">{getTargetLabel(row?.itemName)}</td>
                               <td className="px-4 py-3">{row?.quantity}</td>
-                              <td className="px-4 py-3">{getUsageMetric(row?.unit, row?.quantity)}</td>
+                              <td className="px-4 py-3">{getUsageMetric(row?.unit, row?.occurrences)}</td>
                               <td className="px-4 py-3 text-right">{formatCurrency(row?.unitPrice)}</td>
                               <td className="px-4 py-3 text-right font-bold">{formatCurrency(row?.total)}</td>
                               <td className="px-4 py-3 text-right">
@@ -385,7 +420,7 @@ export default function TourReceiveDispatch() {
                             </tr>
                             {expandedItems[row?.id] && (
                               <tr key={`${row?.id}-price`} className="bg-[#FBFBFB] border-t border-outline-variant/15">
-                                <td colSpan={10} className="px-4 py-4">
+                                <td colSpan={9} className="px-4 py-4">
                                   <div className="border border-outline-variant/25 bg-white">
                                     <p className="px-4 py-3 border-b border-outline-variant/20 text-[10px] uppercase tracking-widest text-primary/50 font-bold">Bảng giá đang áp dụng</p>
                                     <table className="w-full text-sm">

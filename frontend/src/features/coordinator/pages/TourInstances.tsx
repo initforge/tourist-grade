@@ -105,26 +105,27 @@ function buildGuideCommonDocument(instance: TourInstance, itineraryLines: string
 }
 
 function buildGuidePassengerWorkbook(bookings: Booking[]) {
-  const bookingRows = bookings.flatMap((booking) => (
-    booking.passengers.map((passenger, index) => [
-      index === 0 ? booking.bookingCode : '',
-      index === 0 ? booking.contactInfo.name : '',
-      index === 0 ? booking.contactInfo.phone : '',
-      index === 0 ? getRoomSummary(booking) : '',
-      String(index + 1),
-      passenger.name,
-      passenger.dob,
-      passenger.gender === 'male' ? 'Nam' : 'Nữ',
-      passenger.nationality ?? 'Việt Nam',
-    ])
-  ));
+  const rows = bookings.map((booking) => {
+    const passengers = booking.passengers.length > 0 ? booking.passengers : [{ name: '', dob: '', gender: 'male', nationality: 'Việt Nam' }];
+    const bookingInfo = [
+      `<div><strong>Mã booking:</strong> ${escapeHtml(booking.bookingCode)}</div>`,
+      `<div><strong>Người đặt:</strong> ${escapeHtml(booking.contactInfo.name)}</div>`,
+      `<div><strong>Liên hệ:</strong> ${escapeHtml(booking.contactInfo.phone)}</div>`,
+      `<div><strong>Số phòng:</strong> ${escapeHtml(getRoomSummary(booking))}</div>`,
+      booking.contactInfo.note ? `<div><strong>Ghi chú:</strong> ${escapeHtml(booking.contactInfo.note)}</div>` : '',
+    ].filter(Boolean).join('');
 
-  const rows = bookingRows.map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('');
+    return passengers.map((passenger, index) => (
+      `<tr>${
+        index === 0 ? `<td colspan="4" rowspan="${passengers.length}">${bookingInfo}</td>` : ''
+      }<td>${escapeHtml(index + 1)}</td><td>${escapeHtml(passenger.name)}</td><td>${escapeHtml(passenger.dob)}</td><td>${escapeHtml(passenger.gender === 'male' ? 'Nam' : 'Nữ')}</td><td>${escapeHtml(passenger.nationality ?? 'Việt Nam')}</td></tr>`
+    )).join('');
+  }).join('');
 
   return buildHtmlDocument('Danh sách khách hàng', [
     '<h1>Danh sách khách hàng</h1>',
     '<table><thead><tr>',
-    '<th>Mã booking</th><th>Người đặt</th><th>Liên hệ</th><th>Số phòng</th><th>STT khách</th><th>Họ tên</th><th>Ngày sinh</th><th>Giới tính</th><th>Quốc tịch</th>',
+    '<th colspan="4">Thông tin booking</th><th>STT khách</th><th>Họ tên</th><th>Ngày sinh</th><th>Giới tính</th><th>Quốc tịch</th>',
     '</tr></thead><tbody>',
     rows || '<tr><td colspan="9">Chưa có khách hàng</td></tr>',
     '</tbody></table>',
@@ -186,6 +187,8 @@ export default function TourInstances() {
   const getTourBookings = (instance: TourInstance) => bookings.filter((booking) => isBookingConfirmedForOperations(booking) && (
     booking.instanceCode === instance.id || (!booking.instanceCode && booking.tourId === instance.id)
   ));
+
+  const getActualGuestCount = (instance: TourInstance) => getGuestCount(getTourBookings(instance));
 
   const getRequiredLanguages = (instance: TourInstance) => {
     const required = new Set<string>();
@@ -255,7 +258,7 @@ export default function TourInstances() {
       if (col === 'Mã tour') return <span className="font-mono text-xs">{instance.id}</span>;
       if (col === 'Tên chương trình') return instance.programName;
       if (col === 'Ngày KH') return formatDate(instance.departureDate);
-      if (col === 'Số KH') return instance.expectedGuests;
+      if (col === 'Số KH') return getActualGuestCount(instance);
       if (col === 'Doanh thu thực tế') return formatCurrency(instance.settlement?.revenue);
       if (col === 'Chi phí thực tế') return formatCurrency(instance.settlement?.totalActualCost);
       if (col === 'Lợi nhuận') {
@@ -287,7 +290,7 @@ export default function TourInstances() {
       const program = getProgram(instance.programId);
       return program ? `${program.duration.days}N${program.duration.nights}Đ` : '—';
     }
-    if (col === 'Số KH') return instance.expectedGuests;
+    if (col === 'Số KH') return getActualGuestCount(instance);
     if (col === 'Hướng dẫn viên') return <span className="text-xs">{instance.assignedGuide?.name ?? '—'}</span>;
     if (col === 'Người tạo') return <span className="text-xs text-primary/50">{instance.createdBy}</span>;
     if (col === 'Trạng thái') {

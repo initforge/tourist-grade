@@ -232,6 +232,7 @@ export default function BookingCheckout() {
   const upsertBooking = useAppDataStore((state) => state.upsertBooking);
   const upsertReview = useAppDataStore((state) => state.upsertReview);
   const bookingsRef = useRef(bookings);
+  const restoredDraftKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     bookingsRef.current = bookings;
@@ -312,6 +313,9 @@ export default function BookingCheckout() {
       return;
     }
 
+    restoredDraftKeyRef.current = draftStorageKey;
+    clearDraftFromStorage(draftStorageKey);
+    setPendingDraftRestore(null);
     setContact((current) => ({
       ...current,
       ...(draft.contact as ContactState | undefined),
@@ -325,10 +329,10 @@ export default function BookingCheckout() {
     setPaymentRatio((draft.paymentRatio as 'deposit' | 'full' | undefined) ?? (isDepositDisabled ? 'full' : 'full'));
     setCreatedBooking(draftBooking);
     setActiveStep(draftStep);
-    setPendingDraftRestore(null);
   }, [draftStorageKey, isDepositDisabled]);
 
   const startNewDraft = () => {
+    restoredDraftKeyRef.current = null;
     clearDraftFromStorage(draftStorageKey);
     setPendingDraftRestore(null);
     setCreatedBooking(null);
@@ -345,6 +349,9 @@ export default function BookingCheckout() {
 
     const draft = loadDraftFromStorage(draftStorageKey);
     if (!draft || draft.slug !== slug || draft.scheduleId !== schedule.id) {
+      if (restoredDraftKeyRef.current === draftStorageKey) {
+        return;
+      }
       if (!bookingIdParam && !payosState) {
         clearDraftFromStorage(draftStorageKey);
         setContact(getDefaultContact(user));
@@ -385,6 +392,9 @@ export default function BookingCheckout() {
     }
 
     if (!bookingIdParam && !payosState) {
+      if (restoredDraftKeyRef.current === draftStorageKey) {
+        return;
+      }
       setPendingDraftRestore({ ...draft, booking: effectiveDraftBooking });
       return;
     }

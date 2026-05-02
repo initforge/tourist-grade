@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { CostCategory, CostItem } from '@entities/tour-program/data/tourProgram';
+import type { Booking } from '@entities/booking/data/bookings';
 import { useAppDataStore } from '@shared/store/useAppDataStore';
 import { useAuthStore } from '@shared/store/useAuthStore';
 import { updateTourInstanceCommand } from '@shared/lib/api/tourInstances';
+import { getRetainedAmountFromCancelledBooking, isBookingConfirmedForOperations } from '@shared/lib/bookingLifecycle';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -77,11 +79,27 @@ export default function ManagerTourEstimateApproval() {
   const [showApprove, setShowApprove] = useState(false);
   const token = useAuthStore(state => state.accessToken);
   const tourInstances = useAppDataStore(state => state.tourInstances);
+  const bookings = useAppDataStore(state => state.bookings);
   const upsertTourInstance = useAppDataStore(state => state.upsertTourInstance);
 
   const instance = tourInstances?.find(i => i.id === id);
   const estimate = instance?.costEstimate;
   const canReviewEstimate = instance?.status === 'cho_duyet_du_toan';
+  const relatedBookings = instance
+    ? bookings.filter((booking: Booking) => booking.instanceCode === instance.id || (!booking.instanceCode && booking.tourId === instance.id))
+    : [];
+  const confirmedRevenue = relatedBookings
+    .filter(isBookingConfirmedForOperations)
+    .reduce((sum, booking) => sum + booking.passengers.reduce((bookingSum, passenger) => {
+      if (passenger.type === 'child') return bookingSum + instance!.priceChild;
+      if (passenger.type === 'infant') return bookingSum + (instance!.priceInfant ?? 0);
+      return bookingSum + instance!.priceAdult;
+    }, 0), 0);
+  const retainedCancelledRevenue = relatedBookings
+    .filter((booking) => booking.status === 'cancelled')
+    .reduce((sum, booking) => sum + getRetainedAmountFromCancelledBooking(booking), 0);
+  const expectedRevenue = confirmedRevenue + retainedCancelledRevenue;
+  const expectedProfit = expectedRevenue - (estimate?.totalCost ?? 0);
 
   const handleApprove = async () => {
     if (!canReviewEstimate) return;
@@ -232,19 +250,19 @@ export default function ManagerTourEstimateApproval() {
                   <p className="text-[10px] text-[#2A2421]/40 mt-1">VND</p>
                 </div>
                 <div className="bg-[#FAFAF5] p-4 border border-[#D0C5AF]/20">
-                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold mb-2">Giá bán đề xuất</p>
-                  <p className="font-['Noto_Serif'] text-xl font-bold text-[#D4AF37]">{fmtCurrency(estimate?.pricingConfig?.sellPriceAdult * estimate?.estimatedGuests)}</p>
+                  <p className="text-[9px] uppercase tracking-widest text-[#2A2421]/40 font-bold mb-2">Doanh thu dự kiến</p>
+                  <p className="font-['Noto_Serif'] text-xl font-bold text-[#D4AF37]">{fmtCurrency(expectedRevenue)}</p>
                   <p className="text-[10px] text-[#2A2421]/40 mt-1">VND</p>
                 </div>
                 <div className="bg-emerald-50 p-4 border border-emerald-200">
                   <p className="text-[9px] uppercase tracking-widest text-emerald-600 font-bold mb-2">Lợi nhuận dự kiến</p>
                   <p className="font-['Noto_Serif'] text-xl font-bold text-emerald-700">
-                    {fmtCurrency(estimate?.pricingConfig?.sellPriceAdult * estimate?.estimatedGuests - estimate?.totalCost)}
+                    {fmtCurrency(expectedProfit)}
                   </p>
                   <p className="text-[10px] text-emerald-600 mt-1">
                     <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold">
                       {estimate?.totalCost > 0
-                        ? (((estimate?.pricingConfig?.sellPriceAdult * estimate?.estimatedGuests - estimate?.totalCost) / estimate?.totalCost * 100))?.toFixed(1)
+                        ? ((expectedProfit / estimate?.totalCost * 100))?.toFixed(1)
                         : 0}%
                     </span>
                   </p>
