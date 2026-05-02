@@ -687,7 +687,7 @@ function normalizeManagerCancellationReason(reason: string) {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
 
-  if (normalized.includes('khong du') || normalized.includes('du dieu kien')) {
+  if (normalized.includes('khong du') || normalized.includes('du dieu kien') || normalized.includes('it nhat')) {
     return 'Tour không đủ điều kiện khởi hành';
   }
 

@@ -20,7 +20,9 @@ type BookingWithPassengers = {
 };
 
 function getActiveBookings<T extends BookingWithPassengers>(bookings: T[]) {
-  return bookings.filter((booking) => booking.status !== 'CANCELLED');
+  return bookings.filter((booking) =>
+    booking.status !== 'CANCELLED' && booking.status !== 'PENDING_CANCEL'
+  );
 }
 
 function getConfirmedGuestCount(bookings: BookingWithPassengers[]) {
