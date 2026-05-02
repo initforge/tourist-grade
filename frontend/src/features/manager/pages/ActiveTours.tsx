@@ -15,7 +15,7 @@ type TourTab = 'pending_sell' | 'insufficient' | 'pending_estimate' | 'deployed'
 
 const TAB_STATUS_MAP: Record<TourTab, string[]> = {
   pending_sell: ['cho_duyet_ban'],
-  insufficient: ['chua_du_kien', 'dang_mo_ban'],
+  insufficient: ['chua_du_kien', 'dang_mo_ban', 'cho_nhan_dieu_hanh'],
   pending_estimate: ['cho_duyet_du_toan'],
   deployed: ['dang_trien_khai', 'san_sang_trien_khai', 'cho_nhan_dieu_hanh'],
   completed: ['hoan_thanh', 'cho_quyet_toan'],

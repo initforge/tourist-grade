@@ -248,9 +248,8 @@ function buildEmailMessage(template: string, payload: Record<string, unknown>) {
     lines.push(`Anh/chị được phân công phụ trách tour ${tourName || valueToText(payload.tourCode, 'mới')}.`);
     lines.push(`Hướng dẫn viên: ${valueToText(payload.guideName, 'HDV được phân công')}`);
     if (payload.commonFileName) lines.push(`File thông tin chung và lịch trình: ${valueToText(payload.commonFileName)}`);
-    if (payload.commonFileContent) lines.push(valueToText(payload.commonFileContent));
     if (payload.passengerFileName) lines.push(`File danh sách khách hàng: ${valueToText(payload.passengerFileName)}`);
-    if (payload.passengerFileContent) lines.push(valueToText(payload.passengerFileContent));
+    lines.push('Noi dung file duoc xuat tu man hinh Phan cong HDV cua dieu phoi.');
   } else {
     lines.push('Travela gửi thông báo mới liên quan đến đơn đặt tour của quý khách.');
   }
@@ -301,8 +300,8 @@ function buildTemplateParams(input: QueueEmailInput, subject: string, message: s
     has_refund_amount: hasValue(payload.refundAmount),
     has_refund_bill_url: Boolean(refundBillUrl),
     has_refund_bill_note: hasValue(payload.refundBillUrl),
-    has_common_file: hasValue(payload.commonFileName) && hasValue(payload.commonFileContent),
-    has_passenger_file: hasValue(payload.passengerFileName) && hasValue(payload.passengerFileContent),
+    has_common_file: hasValue(payload.commonFileName),
+    has_passenger_file: hasValue(payload.passengerFileName),
     booking_code: getBookingCode(payload),
     tour_name: getTourName(payload),
     tour_date: getTourDate(payload),
@@ -314,9 +313,9 @@ function buildTemplateParams(input: QueueEmailInput, subject: string, message: s
     refund_bill_url: refundBillUrl,
     refund_bill_note: getRefundBillNote(payload),
     common_file_name: valueToText(payload.commonFileName),
-    common_file_content: valueToText(payload.commonFileContent),
+    common_file_content: '',
     passenger_file_name: valueToText(payload.passengerFileName),
-    passenger_file_content: valueToText(payload.passengerFileContent),
+    passenger_file_content: '',
     template: input.template,
   };
 }

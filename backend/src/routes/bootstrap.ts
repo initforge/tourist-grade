@@ -15,6 +15,7 @@ import {
   mapVoucher,
 } from '../lib/mappers.js';
 import { prisma } from '../lib/prisma.js';
+import { getVisibleTourInstanceWhere } from '../lib/tour-instance-access.js';
 import { normalizePayload } from '../lib/text.js';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
 
@@ -41,7 +42,11 @@ export function createBootstrapRouter() {
     ] = await Promise.all([
       prisma.user.findMany({ orderBy: { createdAt: 'asc' } }),
       prisma.tourProgram.findMany({ orderBy: { code: 'asc' } }),
-      prisma.tourInstance.findMany({ include: { program: true }, orderBy: { code: 'asc' } }),
+      prisma.tourInstance.findMany({
+        where: getVisibleTourInstanceWhere(req.auth),
+        include: { program: true },
+        orderBy: { code: 'asc' },
+      }),
       prisma.supplier.findMany({
         include: {
           serviceVariants: {

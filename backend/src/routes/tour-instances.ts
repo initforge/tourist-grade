@@ -6,6 +6,7 @@ import { asyncHandler, badRequest, notFound } from '../lib/http.js';
 import { mapTourInstance } from '../lib/mappers.js';
 import { toPrismaJson, unwrapEstimatePayload, wrapEstimatePayload } from '../lib/coordinator.js';
 import { queueEmail } from '../lib/email-outbox.js';
+import { getVisibleTourInstanceWhere } from '../lib/tour-instance-access.js';
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js';
 
 const estimateSchema = z.object({
@@ -107,8 +108,9 @@ export function createTourInstancesRouter() {
 
   router.use(authenticate);
 
-  router.get('/', asyncHandler(async (_req, res) => {
+  router.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
     const instances = await prisma.tourInstance.findMany({
+      where: getVisibleTourInstanceWhere(req.auth),
       include: tourInstanceInclude,
       orderBy: { departureDate: 'asc' },
     });

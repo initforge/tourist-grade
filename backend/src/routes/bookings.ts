@@ -420,8 +420,12 @@ async function resolveInstanceForSchedule(programId: string, schedule: { date: s
   return instance;
 }
 
-async function resolveInstanceForPublicScheduleId(programId: string, scheduleId: string) {
+async function resolveInstanceForPublicScheduleId(programId: string, scheduleId: string, programCode?: string) {
   const candidates = [scheduleId];
+  const programPrefix = programCode ? `${programCode}-` : '';
+  if (programPrefix && scheduleId.startsWith(programPrefix)) {
+    candidates.push(scheduleId.slice(programPrefix.length));
+  }
   if (scheduleId.includes('-')) {
     candidates.push(scheduleId.split('-').at(-1) ?? scheduleId);
   }
@@ -512,7 +516,7 @@ async function buildBookingDraft(
   const { publicContent, schedule } = resolveScheduleFromPublicContent(program, input.scheduleId);
   const instance = schedule
     ? await resolveInstanceForSchedule(program.id, schedule)
-    : await resolveInstanceForPublicScheduleId(program.id, input.scheduleId);
+    : await resolveInstanceForPublicScheduleId(program.id, input.scheduleId, program.code);
   if (!isPubliclyBookableInstance(instance)) {
     throw badRequest('Tour da het han dat hoac khong con mo ban');
   }
@@ -600,6 +604,12 @@ function buildBookingPayloadJson(
   } satisfies Prisma.InputJsonObject;
 }
 
+function shouldSyncPayOSBooking(booking: Pick<BookingWithInclude, 'paymentMethod' | 'paymentStatus' | 'remainingAmount'>) {
+  return booking.paymentMethod === 'PAYOS'
+    && (booking.paymentStatus === 'UNPAID' || booking.paymentStatus === 'PARTIAL')
+    && Number(booking.remainingAmount) > 0;
+}
+
 export function createBookingsRouter() {
   const router = Router();
 
@@ -627,7 +637,7 @@ export function createBookingsRouter() {
       throw notFound('Booking not found');
     }
 
-    if (booking.paymentMethod === 'PAYOS' && booking.paymentStatus === 'UNPAID') {
+    if (shouldSyncPayOSBooking(booking)) {
       await syncBookingPaymentWithPayOS(prisma, booking.id);
       booking = await prisma.booking.findFirst({
         where: { id: booking.id },
@@ -921,7 +931,7 @@ export function createBookingsRouter() {
       orderBy: { createdAt: 'desc' },
     });
 
-    const unpaidPayOSBookings = bookings.filter((booking) => booking.paymentMethod === 'PAYOS' && booking.paymentStatus === 'UNPAID');
+    const unpaidPayOSBookings = bookings.filter(shouldSyncPayOSBooking);
     if (unpaidPayOSBookings.length > 0) {
       await Promise.allSettled(unpaidPayOSBookings.map((booking) => syncBookingPaymentWithPayOS(prisma, booking.id)));
       bookings = await prisma.booking.findMany({
@@ -950,7 +960,7 @@ export function createBookingsRouter() {
       throw unauthorized();
     }
 
-    if (booking.paymentMethod === 'PAYOS' && booking.paymentStatus === 'UNPAID') {
+    if (shouldSyncPayOSBooking(booking)) {
       await syncBookingPaymentWithPayOS(prisma, booking.id);
       booking = await findBookingByIdOrCode(booking.id) ?? booking;
     }

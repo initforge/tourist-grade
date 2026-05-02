@@ -5,6 +5,7 @@ import type { Booking } from '@entities/booking/data/bookings';
 import {
   TOUR_INSTANCE_STATUS_LABEL,
   TOUR_INSTANCE_STATUS_STYLE,
+  type TourProgram,
   type TourInstance,
   type TourInstanceStatus,
 } from '@entities/tour-program/data/tourProgram';
@@ -137,6 +138,32 @@ function buildGuidePacketPayload(instance: TourInstance, itineraryLines: string[
     passengerFileName: `${instance.id}-danh-sach-khach.xls`,
     passengerFileContent: buildGuidePassengerWorkbook(bookings),
   };
+}
+
+function downloadGuideFile(fileName: string, content: string, mimeType: string) {
+  const blob = new Blob([content], { type: `${mimeType};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportGuidePacket(instance: TourInstance, program: TourProgram | undefined, bookings: Booking[]) {
+  const itineraryLines = (program?.itinerary ?? []).map((day) => (
+    `${day.day}|${day.title}|${(day.description ?? '').replace(/[|]/g, '/')}`
+  ));
+  const packet = buildGuidePacketPayload(
+    instance,
+    itineraryLines,
+    bookings,
+    instance.assignedGuide?.name ?? 'Chua phan cong',
+  );
+  downloadGuideFile(packet.commonFileName, packet.commonFileContent, 'application/msword');
+  downloadGuideFile(packet.passengerFileName, packet.passengerFileContent, 'application/vnd.ms-excel');
 }
 
 export default function TourInstances() {
@@ -304,12 +331,20 @@ export default function TourInstances() {
     }
     if (tab === 'phan_cong_hdv') {
       return (
-        <button
-          onClick={() => openDispatchFlow(instance)}
-          className="bg-blue-600 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white transition-colors hover:bg-blue-700"
-        >
-          {instance.assignedGuide ? 'Thay đổi HDV' : 'Phân công HDV'}
-        </button>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={() => exportGuidePacket(instance, getProgram(instance.programId), getTourBookings(instance))}
+            className="border border-blue-600 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-blue-700 transition-colors hover:bg-blue-50"
+          >
+            Export file
+          </button>
+          <button
+            onClick={() => openDispatchFlow(instance)}
+            className="bg-blue-600 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white transition-colors hover:bg-blue-700"
+          >
+            {instance.assignedGuide ? 'Thay đổi HDV' : 'Phân công HDV'}
+          </button>
+        </div>
       );
     }
     if (tab === 'dang_khoi_hanh') {

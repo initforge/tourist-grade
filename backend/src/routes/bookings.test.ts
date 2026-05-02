@@ -271,6 +271,89 @@ describe('bookings routes', () => {
     expect(response.body.booking.paymentStatus).toBe('paid');
   });
 
+  it('synchronizes the second 50 percent PayOS payment during lookup', async () => {
+    const partialBooking = {
+      ...createBookingFixture(),
+      id: 'B501',
+      bookingCode: 'BK-501000',
+      paymentMethod: 'PAYOS',
+      paymentStatus: 'PARTIAL',
+      paidAmount: 28000000,
+      remainingAmount: 28000000,
+      totalAmount: 56000000,
+      paymentTransactions: [],
+    };
+    prismaMock.booking.findFirst
+      .mockResolvedValueOnce(partialBooking)
+      .mockResolvedValueOnce({
+        ...partialBooking,
+        paymentStatus: 'PAID',
+        paidAmount: 56000000,
+        remainingAmount: 0,
+      });
+    prismaMock.paymentTransaction.findFirst.mockResolvedValue({
+      id: 'TX501',
+      bookingId: 'B501',
+      status: 'UNPAID',
+      orderCode: '501001',
+      transactionRef: 'plink_501',
+      amount: 28000000,
+      booking: {
+        id: 'B501',
+        bookingCode: 'BK-501000',
+        contactEmail: 'LeVanC@Example.com',
+        status: 'PENDING',
+        paidAmount: 28000000,
+        totalAmount: 56000000,
+      },
+    });
+    payosClientMock.getPaymentLinkInformation.mockResolvedValue({
+      id: 'plink_501',
+      orderCode: 501001,
+      amount: 28000000,
+      amountPaid: 28000000,
+      amountRemaining: 0,
+      status: 'PAID',
+      createdAt: '2026-04-28T10:00:00.000Z',
+      transactions: [{
+        reference: 'PAYOS-501',
+        amount: 28000000,
+        transactionDateTime: '2026-04-28T10:01:00.000Z',
+      }],
+      cancellationReason: null,
+      canceledAt: null,
+    });
+    prismaMock.booking.update.mockResolvedValue({
+      id: 'B501',
+      bookingCode: 'BK-501000',
+      contactEmail: 'LeVanC@Example.com',
+      status: 'PENDING',
+      paidAmount: 56000000,
+      remainingAmount: 0,
+      paymentStatus: 'PAID',
+      totalAmount: 56000000,
+    });
+
+    const response = await request(createTestApp())
+      .get('/lookup')
+      .query({ bookingCode: 'BK-501000', contact: 'levanc@example.com' });
+
+    expect(response.status).toBe(200);
+    expect(prismaMock.paymentTransaction.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'TX501' },
+      data: expect.objectContaining({ status: 'PAID' }),
+    }));
+    expect(prismaMock.booking.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'B501' },
+      data: expect.objectContaining({
+        paidAmount: 56000000,
+        remainingAmount: 0,
+        paymentStatus: 'PAID',
+      }),
+    }));
+    expect(response.body.booking.paymentStatus).toBe('paid');
+  });
+
   it('creates a cancel request with the expected refund amount and default reason', async () => {
     const booking = {
       ...createBookingFixture(),
@@ -573,6 +656,108 @@ describe('bookings routes', () => {
       }),
     }));
     expect(response.body.booking.totalAmount).toBe(7200000);
+  });
+
+  it('creates a public booking when the UI sends a program-prefixed generated tour code', async () => {
+    prismaMock.tourProgram.findFirst.mockResolvedValue({
+      id: 'program-5',
+      code: 'TP005',
+      slug: 'test-chuong-trinh-tour-moi-tp005',
+      publicContentJson: {
+        id: 'TP005',
+        slug: 'test-chuong-trinh-tour-moi-tp005',
+        departureSchedule: [],
+      },
+    });
+    prismaMock.tourInstance.findFirst.mockResolvedValue({
+      id: 'instance-5',
+      code: 'REQ-TP005-2026-06-10',
+      programId: 'program-5',
+      status: 'DANG_MO_BAN',
+      departureDate: new Date('2026-06-10T00:00:00.000Z'),
+      bookingDeadlineAt: new Date('2026-06-01T00:00:00.000Z'),
+      expectedGuests: 20,
+      minParticipants: 10,
+      priceAdult: { toNumber: () => 5000000 },
+      priceChild: { toNumber: () => 2500000 },
+      priceInfant: { toNumber: () => 0 },
+      bookings: [],
+    });
+    prismaMock.booking.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+      ...createBookingFixture(),
+      id: 'B905',
+      bookingCode: 'BK-905001',
+      status: 'PENDING',
+      paymentStatus: 'UNPAID',
+      tourInstance: {
+        ...createBookingFixture().tourInstance,
+        id: 'instance-5',
+        code: 'REQ-TP005-2026-06-10',
+        programNameSnapshot: 'Test chuong trinh tour moi TP005',
+        departureDate: new Date('2026-06-10T00:00:00.000Z'),
+        program: {
+          ...createBookingFixture().tourInstance.program,
+          code: 'TP005',
+          slug: 'test-chuong-trinh-tour-moi-tp005',
+          durationDays: 3,
+          durationNights: 2,
+          publicContentJson: { id: 'TP005' },
+        },
+      },
+      totalAmount: 5000000,
+      remainingAmount: 5000000,
+      paidAmount: 0,
+      payloadJson: data.payloadJson,
+      passengers: [
+        {
+          id: 'P905',
+          bookingId: 'B905',
+          type: 'ADULT',
+          fullName: 'Nguyen Van A',
+          dateOfBirth: new Date('1990-01-01T00:00:00.000Z'),
+          gender: 'MALE',
+          cccd: '001090123456',
+          nationality: 'Viá»‡t Nam',
+          singleRoomSupplement: 0,
+          createdAt: new Date('2026-04-28T00:00:00.000Z'),
+        },
+      ],
+    }));
+
+    const response = await request(createTestApp())
+      .post('/public')
+      .send({
+        tourSlug: 'test-chuong-trinh-tour-moi-tp005',
+        scheduleId: 'TP005-REQ-TP005-2026-06-10',
+        contact: {
+          name: 'Nguyen Van A',
+          phone: '0901234567',
+          email: 'nguyenvana@example.com',
+          note: '',
+        },
+        passengers: [
+          {
+            type: 'adult',
+            name: 'Nguyen Van A',
+            dob: '1990-01-01',
+            gender: 'male',
+            cccd: '001090123456',
+            nationality: 'Viá»‡t Nam',
+          },
+        ],
+        roomCounts: { single: 0, double: 1, triple: 0 },
+        promoCode: '',
+        paymentRatio: 'full',
+        paymentMethod: 'bank',
+      });
+
+    expect(response.status).toBe(201);
+    expect(prismaMock.tourInstance.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        code: { in: expect.arrayContaining(['TP005-REQ-TP005-2026-06-10', 'REQ-TP005-2026-06-10']) },
+      }),
+    }));
+    expect(response.body.booking.bookingCode).toBe('BK-905001');
   });
 
   it('allows checkout updates to reuse seats already held by the same booking', async () => {

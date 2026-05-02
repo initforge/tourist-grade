@@ -18,8 +18,9 @@ export default function BookingDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams<{ id: string }>();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const lookupContact = searchParams.get('contact')?.trim() ?? '';
+  const payosState = searchParams.get('payos');
   const user = useAuthStore((state) => state.user);
   const accessToken = useAuthStore((state) => state.accessToken);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -53,6 +54,55 @@ export default function BookingDetail() {
       setIsLoadingBooking(false);
     }
   }, [booking]);
+
+  useEffect(() => {
+    if (!id || !payosState) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingBooking(true);
+    setBookingError('');
+
+    const syncBooking = isPublicLookupView
+      ? lookupBooking(id, lookupContact)
+      : accessToken
+        ? getBookingDetail(id, accessToken)
+        : null;
+
+    if (!syncBooking) {
+      setIsLoadingBooking(false);
+      return;
+    }
+
+    void syncBooking
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+        if (isPublicLookupView) {
+          setPublicBooking(response.booking);
+        }
+        upsertBooking(response.booking);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBookingError(payosState === 'cancel' ? 'Thanh toÃ¡n chÆ°a hoÃ n táº¥t.' : 'KhÃ´ng thá»ƒ Ä‘á»“ng bá»™ káº¿t quáº£ thanh toÃ¡n.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          const next = new URLSearchParams(searchParams);
+          next.delete('payos');
+          setSearchParams(next, { replace: true });
+          setIsLoadingBooking(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, id, isPublicLookupView, lookupContact, payosState, searchParams, setSearchParams, upsertBooking]);
 
   useEffect(() => {
     if (!id || !accessToken || !user) {
@@ -378,7 +428,7 @@ export default function BookingDetail() {
             </section>
 
             <section className="space-y-3">
-              {!isPublicLookupView && canCustomerPay(booking) && (
+              {canCustomerPay(booking) && (
                 <button
                   onClick={() => void handlePay()}
                   disabled={isPaying}

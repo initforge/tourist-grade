@@ -521,7 +521,9 @@ export default function SalesBookingDetail() {
   const hasAssignedRooms = Object.values(parsedRoomCounts)?.some(count => count > 0);
   const canConfirm = booking.status === 'pending' && hasValidPassengerData && hasAssignedRooms && persistCount === 0;
   const isManagerTourCancellation = booking.cancellationSource === 'manager_tour_cancel';
-  const canRefund = booking.status === 'cancelled' && booking.refundStatus === 'pending';
+  const hasRefundToProcess = (booking.refundAmount ?? 0) > 0 && !booking.refundBillUrl;
+  const canRefund = booking.status === 'cancelled'
+    && (booking.refundStatus === 'pending' || (isManagerTourCancellation && hasRefundToProcess));
 
   // ── Actions ──────────────────────────────────────────────────────────────
 

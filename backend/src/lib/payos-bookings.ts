@@ -2,7 +2,7 @@ import type { Booking, PaymentTransaction, Prisma, PrismaClient } from '@prisma/
 import { queueEmail } from './email-outbox.js';
 import { getPayOSClient } from './payos.js';
 
-type Writer = Pick<PrismaClient, 'booking' | 'paymentTransaction' | 'emailOutbox' | '$transaction'> | Prisma.TransactionClient;
+type Writer = Pick<PrismaClient, 'booking' | 'paymentTransaction' | 'emailOutbox' | 'voucher' | '$transaction'> | Prisma.TransactionClient;
 
 type PayOSTransactionWithBooking = PaymentTransaction & {
   booking: Booking;
@@ -40,7 +40,7 @@ function resolvePaidAt(value?: string | null) {
 }
 
 export async function applySuccessfulPayOSTransaction(
-  writer: Pick<Prisma.TransactionClient, 'booking' | 'paymentTransaction' | 'emailOutbox'> | Prisma.TransactionClient,
+  writer: Pick<Prisma.TransactionClient, 'booking' | 'paymentTransaction' | 'emailOutbox' | 'voucher'> | Prisma.TransactionClient,
   transaction: PayOSTransactionWithBooking,
   paymentData: PayOSSyncPayload,
   rawPayload: unknown,
@@ -57,6 +57,7 @@ export async function applySuccessfulPayOSTransaction(
   const currentPaidAmount = Number(transaction.booking.paidAmount);
   const totalAmount = Number(transaction.booking.totalAmount);
   const nextPaidAmount = Math.min(totalAmount, currentPaidAmount + paymentAmount);
+  const promoCode = String(((transaction.booking.payloadJson as { promoCode?: unknown } | null)?.promoCode) ?? '').trim().toUpperCase();
   const nextBookingStatus =
     transaction.booking.status === 'PENDING'
       ? 'PENDING'
@@ -81,6 +82,13 @@ export async function applySuccessfulPayOSTransaction(
       paymentStatus: nextPaidAmount >= totalAmount ? 'PAID' : 'PARTIAL',
     },
   });
+
+  if (promoCode && currentPaidAmount <= 0 && paymentAmount > 0) {
+    await writer.voucher.updateMany({
+      where: { code: promoCode },
+      data: { usedCount: { increment: 1 } },
+    });
+  }
 
   await queueEmail(writer, {
     template: 'booking_payment_received',

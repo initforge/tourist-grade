@@ -19,6 +19,9 @@ const prismaMock = {
   emailOutbox: {
     create: vi.fn(),
   },
+  voucher: {
+    updateMany: vi.fn(),
+  },
 };
 
 const payosClientMock = {
@@ -57,6 +60,7 @@ describe('payments routes', () => {
     prismaMock.booking.updateMany.mockResolvedValue({ count: 0 });
     prismaMock.booking.findMany.mockResolvedValue([]);
     prismaMock.paymentTransaction.findMany.mockResolvedValue([]);
+    prismaMock.voucher.updateMany.mockResolvedValue({ count: 0 });
     prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => Promise<unknown>) => callback(prismaMock));
   });
 
@@ -288,6 +292,93 @@ describe('payments routes', () => {
         bookingId: 'B001',
       }),
     }));
+  });
+
+  it('increments voucher usage only on the first successful PayOS payment', async () => {
+    payosClientMock.verifyPaymentWebhookData.mockReturnValue({
+      orderCode: 123456789,
+      amount: 4500000,
+      code: '00',
+      transactionDateTime: '2026-04-24T10:00:00.000Z',
+      reference: 'PAYOS-REF-1',
+    });
+    prismaMock.paymentTransaction.findFirst.mockResolvedValue({
+      id: 'TX001',
+      bookingId: 'B001',
+      amount: 4500000,
+      status: 'UNPAID',
+      booking: {
+        id: 'B001',
+        bookingCode: 'BK-582910',
+        contactEmail: 'nguyenvana@gmail.com',
+        status: 'PENDING',
+        paidAmount: 0,
+        totalAmount: 9000000,
+        payloadJson: { promoCode: 'TRAVELA10' },
+      },
+    });
+    prismaMock.booking.update.mockResolvedValue({
+      id: 'B001',
+      bookingCode: 'BK-582910',
+      contactEmail: 'nguyenvana@gmail.com',
+      status: 'PENDING',
+      paidAmount: 4500000,
+      remainingAmount: 4500000,
+      paymentStatus: 'PARTIAL',
+      totalAmount: 9000000,
+    });
+
+    const response = await request(createTestApp())
+      .post('/payos/webhook')
+      .send({ data: 'payload' });
+
+    expect(response.status).toBe(200);
+    expect(prismaMock.voucher.updateMany).toHaveBeenCalledWith({
+      where: { code: 'TRAVELA10' },
+      data: { usedCount: { increment: 1 } },
+    });
+  });
+
+  it('does not increment voucher usage on the second 50 percent PayOS payment', async () => {
+    payosClientMock.verifyPaymentWebhookData.mockReturnValue({
+      orderCode: 123456789,
+      amount: 4500000,
+      code: '00',
+      transactionDateTime: '2026-04-24T10:00:00.000Z',
+      reference: 'PAYOS-REF-2',
+    });
+    prismaMock.paymentTransaction.findFirst.mockResolvedValue({
+      id: 'TX002',
+      bookingId: 'B001',
+      amount: 4500000,
+      status: 'UNPAID',
+      booking: {
+        id: 'B001',
+        bookingCode: 'BK-582910',
+        contactEmail: 'nguyenvana@gmail.com',
+        status: 'PENDING',
+        paidAmount: 4500000,
+        totalAmount: 9000000,
+        payloadJson: { promoCode: 'TRAVELA10' },
+      },
+    });
+    prismaMock.booking.update.mockResolvedValue({
+      id: 'B001',
+      bookingCode: 'BK-582910',
+      contactEmail: 'nguyenvana@gmail.com',
+      status: 'PENDING',
+      paidAmount: 9000000,
+      remainingAmount: 0,
+      paymentStatus: 'PAID',
+      totalAmount: 9000000,
+    });
+
+    const response = await request(createTestApp())
+      .post('/payos/webhook')
+      .send({ data: 'payload' });
+
+    expect(response.status).toBe(200);
+    expect(prismaMock.voucher.updateMany).not.toHaveBeenCalled();
   });
 
   it('does not apply webhook money twice for an already paid transaction', async () => {

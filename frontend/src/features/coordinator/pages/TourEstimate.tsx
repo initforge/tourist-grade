@@ -1034,9 +1034,12 @@ export default function TourEstimate() {
     booking.instanceCode === instance.id || (!booking.instanceCode && booking.tourId === instance.id)
   )) : [], [bookings, instance]);
   const canDisplayManifest = instance ? canShowPassengerManifest(instance, relatedBookings) : false;
+  const isOperationalEstimateStatus = instance
+    ? ['cho_du_toan', 'cho_duyet_du_toan', 'san_sang_trien_khai', 'dang_trien_khai', 'cho_quyet_toan', 'hoan_thanh'].includes(instance.status)
+    : false;
   const manifestBookings = useMemo(
-    () => canDisplayManifest ? relatedBookings.filter(isBookingConfirmedForOperations) : [],
-    [canDisplayManifest, relatedBookings],
+    () => (canDisplayManifest || isOperationalEstimateStatus) ? relatedBookings.filter(isBookingConfirmedForOperations) : [],
+    [canDisplayManifest, isOperationalEstimateStatus, relatedBookings],
   );
   const operationalBookings = useMemo(
     () => relatedBookings.filter(isBookingConfirmedForOperations),

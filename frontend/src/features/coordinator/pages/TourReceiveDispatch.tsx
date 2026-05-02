@@ -82,8 +82,13 @@ export default function TourReceiveDispatch() {
 
   const instance: TourInstance | undefined = tourInstances?.find(i => i.id === id);
   const program = instance ? tourPrograms?.find(p => p.id === instance?.programId) : undefined;
-  const bookings = allBookings?.filter((b: Booking) => b?.tourName?.includes(instance?.programName ?? ''));
+  const bookings = instance
+    ? allBookings?.filter((b: Booking) => (
+      b?.instanceCode === instance.id || (!b?.instanceCode && b?.tourId === instance.id)
+    ))
+    : [];
   const createdByName = program?.createdBy ?? '-';
+  const hasReceived = Boolean(isReceived || instance?.receivedAt || (instance && instance.status !== 'cho_nhan_dieu_hanh'));
 
   const TABS: { key: Tab; label: string }[] = [
     { key: 'tong_quan', label: 'Tổng quan' },
@@ -168,7 +173,7 @@ export default function TourReceiveDispatch() {
           </div>
 
           {/* Receive button — only show if not yet received */}
-          {!readOnly && !isReceived && (
+          {!readOnly && !hasReceived && (
             <button
               onClick={async () => {
                 if (token && instance) {
@@ -183,7 +188,7 @@ export default function TourReceiveDispatch() {
               Nhận điều hành
             </button>
           )}
-          {!readOnly && isReceived && (
+          {!readOnly && hasReceived && (
             <span className="flex items-center gap-2 px-5 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold uppercase tracking-wider">
               <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
               Đã nhận điều hành

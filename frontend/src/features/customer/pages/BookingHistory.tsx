@@ -158,6 +158,19 @@ export default function BookingHistory() {
                           )}
                         </p>
                       )}
+                      {activeTab === 'cancelled' && booking.refundBillUrl && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            window.open(booking.refundBillUrl, '_blank', 'noopener,noreferrer');
+                          }}
+                          className="mt-2 block overflow-hidden border border-outline-variant/30 bg-surface"
+                          aria-label="Xem anh bill hoan tien"
+                        >
+                          <img src={booking.refundBillUrl} alt="Bill hoan tien" className="h-20 w-32 object-cover" />
+                        </button>
+                      )}
                     </div>
                     <div className="text-right shrink-0 hidden md:block">
                       <p className="font-serif text-xl text-[var(--color-primary)]">{formatCurrency(booking.totalAmount)}</p>

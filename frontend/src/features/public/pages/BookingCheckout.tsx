@@ -499,6 +499,9 @@ export default function BookingCheckout() {
     if (!tour || !schedule) {
       return;
     }
+    if (pendingDraftRestore) {
+      return;
+    }
 
     if (
       activeStep === 2
@@ -510,6 +513,10 @@ export default function BookingCheckout() {
     }
 
     if (activeStep === 0 && !checkoutBooking) {
+      const stored = loadDraftFromStorage(draftStorageKey);
+      if (stored && stored.slug === slug && stored.scheduleId === schedule.id && stored.booking) {
+        return;
+      }
       clearDraftFromStorage(draftStorageKey);
       return;
     }
@@ -528,7 +535,7 @@ export default function BookingCheckout() {
       booking: checkoutBooking,
       activeStep,
     });
-  }, [activeStep, checkoutBooking, contact, counts, discountAmount, draftStorageKey, passengers, paymentMethod, paymentRatio, promoCode, roomCounts, schedule, slug, tour]);
+  }, [activeStep, checkoutBooking, contact, counts, discountAmount, draftStorageKey, passengers, paymentMethod, paymentRatio, pendingDraftRestore, promoCode, roomCounts, schedule, slug, tour]);
 
   useEffect(() => {
     if (!bookingIdParam || !payosState) {
