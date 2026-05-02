@@ -111,13 +111,13 @@ describe('booking lifecycle', () => {
     expect(result).toEqual({ count: 1 });
   });
 
-  it('does not mark open-sale tours underfilled until active bookings are resolved', async () => {
+  it('marks only underfilled estimate/coordinator instances, not open-sale ones', async () => {
     const prisma = {
       tourInstance: {
         findMany: vi.fn().mockResolvedValue([
           {
             id: 'pending-sale-instance',
-            status: 'DANG_MO_BAN',
+            status: 'CHO_DU_TOAN',
             bookings: [
               { status: 'CONFIRMED', passengers: Array.from({ length: 4 }, (_, index) => ({ id: `P${index}` })) },
               { status: 'PENDING', passengers: [{ id: 'P5' }] },
@@ -125,7 +125,7 @@ describe('booking lifecycle', () => {
           },
           {
             id: 'underfilled-sale-instance',
-            status: 'DANG_MO_BAN',
+            status: 'CHO_NHAN_DIEU_HANH',
             bookings: [
               { status: 'CONFIRMED', passengers: Array.from({ length: 4 }, (_, index) => ({ id: `Q${index}` })) },
               { status: 'CANCELLED', passengers: Array.from({ length: 8 }, (_, index) => ({ id: `C${index}` })) },
@@ -148,8 +148,8 @@ describe('booking lifecycle', () => {
 
     expect(prisma.tourInstance.updateMany).toHaveBeenCalledWith({
       where: {
-        id: { in: ['underfilled-sale-instance', 'underfilled-estimate-instance'] },
-        status: { in: ['DANG_MO_BAN', 'CHO_NHAN_DIEU_HANH', 'CHO_DU_TOAN'] },
+        id: { in: ['pending-sale-instance', 'underfilled-sale-instance', 'underfilled-estimate-instance'] },
+        status: { in: ['CHO_NHAN_DIEU_HANH', 'CHO_DU_TOAN'] },
       },
       data: {
         status: 'CHUA_DU_KIEN',

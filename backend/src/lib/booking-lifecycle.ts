@@ -11,7 +11,7 @@ export const UNPAID_BOOKING_CANCEL_REASON = 'Quá hạn thanh toán giữ chỗ'
 export const CANCEL_REQUEST_AUTO_CONFIRM_HOURS = 24;
 export const AUTO_CANCEL_CONFIRM_ACTOR = 'Hệ thống';
 export const READY_FOR_OPERATIONS_STATUSES = ['DANG_MO_BAN'] satisfies TourInstanceStatus[];
-export const UNDERFILLED_MONITOR_STATUSES = ['DANG_MO_BAN', 'CHO_NHAN_DIEU_HANH', 'CHO_DU_TOAN'] satisfies TourInstanceStatus[];
+export const UNDERFILLED_MONITOR_STATUSES = ['CHO_NHAN_DIEU_HANH', 'CHO_DU_TOAN'] satisfies TourInstanceStatus[];
 export const MIN_CONFIRMED_DEPARTURE_GUESTS = 10;
 
 type BookingWithPassengers = {
@@ -300,11 +300,6 @@ export async function markUnderfilledTourInstances(prisma: PrismaClient, now = n
     .filter((instance) => {
       const relevantBookings = getActiveBookings(instance.bookings);
       const confirmedGuestCount = getConfirmedGuestCount(relevantBookings);
-      const allActiveBookingsResolved = areActiveBookingsResolved(relevantBookings);
-
-      if (instance.status === 'DANG_MO_BAN') {
-        return allActiveBookingsResolved && confirmedGuestCount < MIN_CONFIRMED_DEPARTURE_GUESTS;
-      }
 
       return confirmedGuestCount < MIN_CONFIRMED_DEPARTURE_GUESTS;
     })

@@ -377,6 +377,7 @@ export default function BookingCheckout() {
       : null;
     const effectiveDraftBooking = storedDraftBooking ?? draftBooking;
     const draftStep = (draft.activeStep as CheckoutStep | undefined) ?? 0;
+
     if (
       draftStep === 2
       || isSuccessfulPaymentStatus(effectiveDraftBooking?.paymentStatus)
@@ -393,6 +394,10 @@ export default function BookingCheckout() {
 
     if (!bookingIdParam && !payosState) {
       if (restoredDraftKeyRef.current === draftStorageKey) {
+        return;
+      }
+      if (isCancelledBookingStatus(effectiveDraftBooking?.status)) {
+        clearDraftFromStorage(draftStorageKey);
         return;
       }
       setPendingDraftRestore({ ...draft, booking: effectiveDraftBooking });

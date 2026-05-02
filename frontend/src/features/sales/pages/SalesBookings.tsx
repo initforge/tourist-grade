@@ -166,7 +166,13 @@ export default function BookingManagement() {
   // Sub-filter: "Cần xác nhận" → phân biệt đơn đặt vs đơn hủy
   const subFiltered = useMemo(() => {
     if (activeTab !== 'pending_confirm') return tabFiltered;
-    if (confirmSubFilter === 'all') return tabFiltered;
+    if (confirmSubFilter === 'all') {
+      const pendingBookings = tabFiltered?.filter(b => b.status === 'pending') ?? [];
+      const pendingCancelBookings = tabFiltered
+        ?.filter(b => b.status === 'pending_cancel')
+        .sort((left, right) => pendingCancelSortTime(left) - pendingCancelSortTime(right)) ?? [];
+      return [...pendingBookings, ...pendingCancelBookings];
+    }
     if (confirmSubFilter === 'pending_cancel') {
       return tabFiltered
         ?.filter(b => b.status === 'pending_cancel')
