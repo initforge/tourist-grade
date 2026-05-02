@@ -27,7 +27,7 @@ export function SalesLayout() {
           {!collapsed && (
             <div>
               <h1 className="font-['Noto_Serif'] font-bold text-xl tracking-tighter text-[#D4AF37]">Travela</h1>
-              <p className="text-[10px] uppercase tracking-widest text-[#2A2421]/50 mt-0.5">NV Kinh doanh</p>
+              <p className="text-[10px] uppercase tracking-widest text-[#D4AF37]/80 mt-0.5">NV Kinh doanh</p>
             </div>
           )}
           {collapsed && (
@@ -50,7 +50,7 @@ export function SalesLayout() {
             <Link
               to="/sales/dashboard"
               title="Dashboard"
-              className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-colors ${collapsed ? 'justify-center' : ''} ${isActive('/sales/dashboard') ? 'bg-[#D4AF37]/10 text-[#D4AF37] font-medium' : 'hover:bg-gray-50 text-[#2A2421]/70'}`}
+              className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-colors ${collapsed ? 'justify-center' : ''} ${isActive('/sales/dashboard') ? 'bg-[#D4AF37]/10 !text-[#D4AF37] font-medium' : '!text-[#D4AF37] hover:bg-[#D4AF37]/10'}`}
             >
               <span className="material-symbols-outlined text-[20px] shrink-0">dashboard</span>
               {!collapsed && <span>Dashboard</span>}
@@ -59,7 +59,7 @@ export function SalesLayout() {
             <Link
               to="/sales/bookings"
               title="Quản lý Booking"
-              className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-colors ${collapsed ? 'justify-center' : ''} ${isActive('/sales/bookings') ? 'bg-[#D4AF37]/10 text-[#D4AF37] font-medium' : 'hover:bg-gray-50 text-[#2A2421]/70'}`}
+              className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-colors ${collapsed ? 'justify-center' : ''} ${isActive('/sales/bookings') ? 'bg-[#D4AF37]/10 !text-[#D4AF37] font-medium' : '!text-[#D4AF37] hover:bg-[#D4AF37]/10'}`}
             >
               <span className="material-symbols-outlined text-[20px] shrink-0">receipt_long</span>
               {!collapsed && <span>Quản lý Booking</span>}
@@ -68,7 +68,7 @@ export function SalesLayout() {
             <Link
               to="/sales/vouchers"
               title="Quản lý Voucher"
-              className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-colors ${collapsed ? 'justify-center' : ''} ${isActive('/sales/vouchers') ? 'bg-[#D4AF37]/10 text-[#D4AF37] font-medium' : 'hover:bg-gray-50 text-[#2A2421]/70'}`}
+              className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-colors ${collapsed ? 'justify-center' : ''} ${isActive('/sales/vouchers') ? 'bg-[#D4AF37]/10 !text-[#D4AF37] font-medium' : '!text-[#D4AF37] hover:bg-[#D4AF37]/10'}`}
             >
               <span className="material-symbols-outlined text-[20px] shrink-0">sell</span>
               {!collapsed && <span>Quản lý Voucher</span>}
@@ -81,7 +81,7 @@ export function SalesLayout() {
           <Link
             to="/"
             title="Về Trang Chủ"
-            className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-gray-50 transition-colors text-red-500 ${collapsed ? 'justify-center' : ''}`}
+            className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-[#D4AF37]/10 transition-colors !text-[#D4AF37] ${collapsed ? 'justify-center' : ''}`}
           >
             <span className="material-symbols-outlined text-[20px] shrink-0">logout</span>
             {!collapsed && <span>Về Trang Chủ</span>}
