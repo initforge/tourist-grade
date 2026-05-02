@@ -283,7 +283,7 @@ function hasBookingDeadlinePassed(instance: TourInstance) {
 }
 
 function isBookingResolvedForManifestGate(booking: Booking) {
-  return booking.status === 'confirmed' || booking.status === 'completed' || booking.status === 'cancelled';
+  return booking.status === 'confirmed' || booking.status === 'completed' || booking.status === 'cancelled' || booking.status === 'pending_cancel';
 }
 
 function canShowPassengerManifest(instance: TourInstance, relatedBookings: Booking[]) {

@@ -14,7 +14,7 @@ export function isBookingPendingCancellation(booking: Booking) {
 }
 
 export function isBookingConfirmedForOperations(booking: Booking) {
-  return booking.status === 'confirmed' || booking.status === 'completed';
+  return booking.status === 'confirmed' || booking.status === 'completed' || booking.status === 'pending_cancel';
 }
 
 export function isBookingFinanciallyRelevantForOperations(booking: Booking) {
